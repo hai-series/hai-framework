@@ -5,23 +5,23 @@
  * @module kit-types
  */
 
-import type { core, HaiError, HaiResult, RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
+import type { HttpContractHandler } from '@h-ai/api-contract'
+import type { core, HaiError, HaiResult, HttpA2AHandler, HttpCorsConfig, HttpCorsConfigInput, HttpCorsOptions, HttpHostA2AConfig, HttpHostA2AConfigInput, HttpRateLimitConfig, HttpRateLimitConfigInput, HttpRateLimitContext, HttpRateLimitOptions, HttpSession, HttpVerifyToken, RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
 import type { CryptoFunctions, TransportKeyStore, TransportServerKeyRing } from '@h-ai/crypto'
 import type { ApiKeyCredentials, AuthnOperations, AuthRequestContext, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
 
 import type { createKitAuthActions } from './client/kit-client-auth.js'
 import type { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
-import type { defineCrud } from './crud/kit-crud.js'
-import type { hasPermission, requirePermission } from './guards/kit-permission.js'
+import type { defineCrud, resolveOptions, resolveText } from './crud/kit-crud.js'
+import type { hasPermission, matchPermission, requirePermission } from './guards/kit-permission.js'
 import type { requireSensitiveOperation } from './guards/kit-sensitive.js'
 import type { createHandle, sequence } from './hooks/kit-handle.js'
-import type { createAuthApi } from './kit-auth-api.js'
+import type { createAuthApi, createSessionFingerprint } from './kit-auth-api.js'
 import type { createFeedbackHandler } from './kit-feedback.js'
 import type { handler } from './kit-handler.js'
 import type { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
 import type { IdParamSchema, PaginationQuerySchema, validateFormOrFail, validateParamsOrFail, validateQueryOrFail } from './kit-validation.js'
-import type { MemoryRateLimitStore, RateLimitCache, RateLimitStore } from './middleware/kit-ratelimit.js'
 
 /**
  * 当前请求的认证 Cookie 写入契约；不持有跨请求状态。
@@ -60,24 +60,10 @@ export interface AuthCookieWriter {
  * ```
  */
 export interface KitFunctions {
-  /** 服务端 A2A 集成；浏览器入口不提供此操作组。 */
-  a2a: {
-    createApiKeyAuthenticator: typeof import('./modules/a2a/kit-a2a-auth.js').createA2AApiKeyAuthenticator
-    createHandler: typeof import('./modules/a2a/kit-a2a-helpers.js').createA2AHandler
-    createAgentCardHandler: typeof import('./modules/a2a/kit-a2a-helpers.js').createAgentCardHandler
-    handleRequest: typeof import('./modules/a2a/kit-a2a-handle.js').handleA2ARequest
-    resolveConfig: typeof import('./modules/a2a/kit-a2a-handle.js').resolveA2AConfig
-  }
   /** 服务端传输加密中间件；浏览器安装入口仍使用 client。 */
   crypto: {
     transportEncryptionMiddleware: typeof import('./modules/crypto/kit-transport-middleware.js').transportEncryptionMiddleware
   }
-  /** 通用权限匹配。 */
-  matchPermission: typeof import('./guards/kit-permission.js').matchPermission
-  /** 按既有规则解析资源选项。 */
-  resolveOptions: typeof import('./crud/kit-crud.js').resolveOptions
-  /** 按当前语言解析资源文案。 */
-  resolveText: typeof import('./crud/kit-crud.js').resolveText
   /** 校验并应用 Kit 配置默认值。 */
   resolveConfig: typeof import('./kit-config.js').resolveKitConfig
   /** 解析公开传输配置。 */
@@ -85,8 +71,6 @@ export interface KitFunctions {
   createFeedbackHandler: typeof createFeedbackHandler
   middleware: {
     rateLimit: (config: RateLimitConfig) => Middleware
-    createCacheRateLimitStore: (backend: RateLimitCache, options: { namespace: string, allowMemory?: boolean }) => RateLimitStore
-    createMemoryRateLimitStore: () => MemoryRateLimitStore
   }
   createHandle: typeof createHandle
   sequence: typeof sequence
@@ -95,6 +79,7 @@ export interface KitFunctions {
     requireSensitive: typeof requireSensitiveOperation
     require: typeof requirePermission
     check: typeof hasPermission
+    matchPermission: typeof matchPermission
   }
   response: {
     ok: typeof ok
@@ -128,6 +113,7 @@ export interface KitFunctions {
   auth: {
     publicPaths: string[]
     createApi: typeof createAuthApi
+    sessionFingerprint: typeof createSessionFingerprint
     login: (cookies: AuthCookieWriter, credentials: PasswordCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
     loginWithOtp: (cookies: AuthCookieWriter, credentials: OtpCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
     loginWithLdap: (cookies: AuthCookieWriter, credentials: LdapCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
@@ -139,6 +125,8 @@ export interface KitFunctions {
   }
   crud: {
     define: typeof defineCrud
+    resolveOptions: typeof resolveOptions
+    resolveText: typeof resolveText
   }
   i18n: {
     setLocale: (locale: string) => void
@@ -158,16 +146,13 @@ export interface KitFunctions {
  * ```
  */
 export interface BrowserKitFunctions {
-  /** 通用权限匹配。 */
-  matchPermission: typeof import('./guards/kit-permission.js').matchPermission
-  /** 按既有规则解析资源选项。 */
-  resolveOptions: typeof import('./crud/kit-crud.js').resolveOptions
-  /** 按当前语言解析资源文案。 */
-  resolveText: typeof import('./crud/kit-crud.js').resolveText
   /** 校验并应用 Kit 配置默认值。 */
   resolveConfig: typeof import('./kit-config.js').resolveKitConfig
   /** 解析公开传输配置。 */
   resolveTransportConfig: typeof import('./kit-config.js').resolveKitTransportConfig
+  guard: {
+    matchPermission: typeof matchPermission
+  }
   client: {
     create: typeof createKitClient
     createAuthActions: typeof createKitAuthActions
@@ -176,6 +161,8 @@ export interface BrowserKitFunctions {
   }
   crud: {
     define: typeof defineCrud
+    resolveOptions: typeof resolveOptions
+    resolveText: typeof resolveText
   }
   auth: {
     setBrowserToken: (token: string) => void
@@ -219,7 +206,7 @@ export type KitServerConfigInput = Partial<KitServerConfig>
  * ```ts
  * import type { KitTransportConfig } from '@h-ai/kit'
  *
- * const value: KitTransportConfig = { keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/health'] }
+ * const value: KitTransportConfig = { keyExchangePath: '/api/v1/_hai/key-exchange', excludePaths: ['/api/health'] }
  * void value
  * ```
  */
@@ -237,22 +224,50 @@ export interface KitTransportConfig {
 }
 
 /**
+ * Kit HTTP 策略配置；按真实请求路径执行访问规则和限流。
+ * @example
+ * ```ts
+ * import type { KitHttpConfig } from '@h-ai/kit'
+ * const http: KitHttpConfig = { trustedProxies: [], access: false, rateLimit: false }
+ * void http
+ * ```
+ */
+export interface KitHttpConfig {
+  /** auto 仅在受管私有容器入口采用容器网段；普通宿主忽略转发头。 */
+  readonly trustedProxies: TrustedProxies
+  /** 每次请求的地址、时间和路径限制；静态服务器直接提供的资源不经过 Handle。 */
+  readonly access: RequestAccessConfigInput
+  /** 固定窗口参数；运行时另行注入原子计数存储。 */
+  readonly rateLimit: HttpRateLimitConfig
+}
+
+/**
+ * Kit HTTP 策略输入；默认自动选择可信代理，关闭访问策略与限流。
+ * @example
+ * ```ts
+ * import type { KitHttpConfigInput } from '@h-ai/kit'
+ * const http: KitHttpConfigInput = { trustedProxies: ['192.0.2.10'] }
+ * void http
+ * ```
+ */
+export type KitHttpConfigInput = Omit<Partial<KitHttpConfig>, 'rateLimit'> & { readonly rateLimit?: HttpRateLimitConfigInput }
+
+/**
  * `config/_kit.yml` 的顶层配置结构。
  * @example
  * ```ts
  * import type { KitConfig } from '@h-ai/kit'
  *
- * const value: KitConfig = { server: { host: '127.0.0.1', port: 3000 }, transport: false, trustedProxies: 'auto', access: false }
+ * const value: KitConfig = { a2a: false, cors: false, server: { host: '127.0.0.1', port: 3000 }, transport: false, http: { trustedProxies: 'auto', access: false, rateLimit: false } }
  * void value
  * ```
  */
 export interface KitConfig {
+  readonly cors: HttpCorsConfig
+  readonly a2a: HttpHostA2AConfig
   readonly server: KitServerConfig
   readonly transport: false | KitTransportConfig
-  /** auto 仅在受管私有容器入口采用容器网段；普通宿主忽略转发头。 */
-  readonly trustedProxies: TrustedProxies
-  /** 每次请求的地址/时间/路径限制，默认 false；不会限制由静态服务器直接提供的资源。 */
-  readonly access: RequestAccessConfigInput
+  readonly http: KitHttpConfig
 }
 
 /**
@@ -285,10 +300,11 @@ export type KitTransportConfigInput = Partial<{
  * ```
  */
 export interface KitConfigInput {
+  readonly cors?: HttpCorsConfigInput
+  readonly a2a?: HttpHostA2AConfigInput
   readonly server?: KitServerConfigInput
   readonly transport?: false | KitTransportConfigInput
-  readonly trustedProxies?: TrustedProxies
-  readonly access?: RequestAccessConfigInput
+  readonly http?: KitHttpConfigInput
 }
 
 /**
@@ -302,10 +318,10 @@ export interface KitConfigInput {
 export type KitPublicConfig = Pick<KitConfig, 'transport'>
 
 /**
- * kit.auth 认证操作（由 createHandle auth.operations 注入）
+ * kit.auth 认证操作（由 createHandle auth.iam 注入）
  *
  * 注入后，kit.auth.login / kit.auth.logout 等函数自动委托到 iam.auth 对应方法。
- * 传入 `iam.auth` 即可，kit 会自动提取所需方法。
+ * 传入 `iam` 即可，kit 会自动提取所需方法。
  * @example
  * ```ts
  * import type { AuthOperations } from '@h-ai/kit'
@@ -319,17 +335,17 @@ export type KitPublicConfig = Pick<KitConfig, 'transport'>
 export type AuthOperations = Pick<AuthnOperations, 'login' | 'loginWithOtp' | 'loginWithLdap' | 'loginWithApiKey' | 'registerAndLogin' | 'logout'>
 
 /**
- * 认证操作提供器：支持直接传对象或按需返回最新对象的工厂函数
+ * Kit 所需的 IAM 验证与 Cookie 认证操作。
  * @example
  * ```ts
- * import type { AuthOperationsProvider } from '@h-ai/kit'
  * import { iam } from '@h-ai/iam'
- *
- * const operations: AuthOperationsProvider = () => iam.auth
- * void operations
+ * import type { KitIam } from '@h-ai/kit'
+ * const identity: KitIam = iam
  * ```
  */
-export type AuthOperationsProvider = AuthOperations | (() => AuthOperations)
+export interface KitIam {
+  readonly auth: AuthOperations & { readonly verifyToken: HttpVerifyToken }
+}
 
 /**
  * 会话数据最小接口
@@ -372,20 +388,7 @@ export interface SessionLike {
  * void value
  * ```
  */
-export interface SessionData {
-  /** 用户 ID */
-  userId: string
-  /** 用户名 */
-  username?: string
-  /** 角色列表 */
-  roles: string[]
-  /** 权限列表 */
-  permissions: string[]
-  /** 自定义数据 */
-  data?: Record<string, unknown>
-  /** 允许任意扩展字段 */
-  [key: string]: unknown
-}
+export type SessionData = HttpSession
 
 /**
  * 扩展的请求事件
@@ -523,22 +526,18 @@ export interface GuardConfig {
  * 非 API 路径未认证时重定向到 `loginUrl`（若配置）或返回 401。
  * @example
  * ```ts
+ * import { core, HaiCommonError } from '@h-ai/core'
  * import type { HandleAuthConfig } from '@h-ai/kit'
  *
- * const value: HandleAuthConfig = { verifyToken: async () => null, protectedPaths: ['/admin/**'], loginUrl: '/auth/login' }
+ * const value: HandleAuthConfig = { verifyToken: async () => core.err(HaiCommonError.UNAUTHORIZED), protectedPaths: ['/admin/**'], loginUrl: '/auth/login' }
  * void value
  * ```
  */
 export interface HandleAuthConfig {
-  /** 令牌验证函数，返回 SessionData 或 null */
-  verifyToken: (token: string) => Promise<SessionData | null>
-  /**
-   * 认证操作。
-   *
-   * - 直接对象：`operations: iam.auth`
-   * - 工厂函数：`operations: () => iam.auth`（推荐，避免模块加载阶段捕获旧引用）
-   */
-  operations?: AuthOperationsProvider
+  /** 注入 IAM 验证令牌，并供 Cookie 认证操作使用。 */
+  iam?: KitIam
+  /** 自定义令牌验证器，优先于 iam.auth.verifyToken。 */
+  verifyToken?: HttpVerifyToken
   /** 未认证时 UI 路由重定向地址（如 `'/auth/login'`） */
   loginUrl?: string
   /** Token Cookie 名（默认 `'hai_access_token'`） */
@@ -556,23 +555,25 @@ export interface HandleAuthConfig {
  *
  * 自动完成：
  * 1. 生成 requestId 并注入 `event.locals`
- * 2. 根据 `auth` 配置解析会话
- * 3. 执行路由守卫
- * 4. 执行中间件链（logging / rateLimit / 自定义）
+ * 2. 检查访问策略和默认地址限流，处理可选传输及 A2A 端点
+ * 3. 根据 `auth` 配置解析会话并执行路由守卫
+ * 4. 执行日志、自定义键限流和业务中间件
  * 5. 调用 resolve + 附加 `X-Request-Id` 响应头
  * @example
  * ```ts
+ * import { core, HaiCommonError } from '@h-ai/core'
  * import type { HandleConfig } from '@h-ai/kit'
  *
- * const value: HandleConfig = { logging: true, auth: { verifyToken: async () => null, protectedPaths: ['/admin/**'] } }
+ * const value: HandleConfig = { logging: true, auth: { verifyToken: async () => core.err(HaiCommonError.UNAUTHORIZED), protectedPaths: ['/admin/**'] } }
  * void value
  * ```
  */
 export interface HandleConfig {
-  /** 可信入口地址；auto 只信任受管私有容器网段，空数组忽略转发头。 */
-  trustedProxies?: TrustedProxies
-  /** 每次请求的 IP/时间/路径策略；独立文件在创建 Handle 时读取并验证一次。 */
-  access?: RequestAccessConfigInput
+  /** 可信代理、请求访问策略及限流；独立规则文件在创建 Handle 时读取并验证一次。 */
+  http?: Omit<KitHttpConfigInput, 'rateLimit'> & {
+    /** 省略或 false 关闭。默认按可信地址在传输前计数，自定义键于会话解析和路由守卫后计算。 */
+    rateLimit?: false | RateLimitConfig
+  }
   /**
    * 认证配置
    *
@@ -580,96 +581,30 @@ export interface HandleConfig {
    * 不提供则不做认证处理。
    */
   auth?: HandleAuthConfig
-  /**
-   * 速率限制配置
-   *
-   * 提供对象启用速率限制；设为 `false` 显式禁用。
-   * 不提供则不开启速率限制。
-   */
-  rateLimit?: Omit<RateLimitConfig, 'windowMs' | 'maxRequests'> & { windowMs?: number, maxRequests?: number } | false
+  /** 跨域 HTTP 配置。省略或 false 关闭。 */
+  cors?: false | HttpCorsOptions
   /**
    * 请求日志配置
    *
    * - `true`（默认）：启用日志中间件
-   * - `{ logBody: true }`：启用并记录请求体
+   * - `{ logBody: true }`：启用并记录是否带有正文
    * - `false`：禁用日志
    */
   logging?: boolean | { logBody?: boolean }
-  /**
-   * 加密配置（传输加密 + Cookie 加密）
-   *
-   * 启用后 kit 自动在 Handle 中完成：
-   * - 传输加密：请求体解密 / 响应体加密 / 密钥交换端点
-   * - Cookie 加密：对指定 Cookie 的 get/set 使用 SM4-CBC 加解密并验证 HMAC-SHA256 认证
-   */
+  /** HTTP 请求和响应加密；false 或省略时关闭。 */
+  transport?: false | TransportEncryptionOptions
+  /** 对指定 Cookie 进行带认证的加密。 */
   crypto?: HookCryptoConfig
   /** 自定义错误处理（不提供则使用内置的 500 JSON 响应） */
   onError?: (error: unknown, event: RequestEvent) => Response | Promise<Response>
   /** 自定义守卫（在 auth 自动守卫之后执行） */
   guards?: GuardConfig[]
-  /** 自定义中间件（在内置 logging / rateLimit 之后执行） */
+  /** 自定义中间件（在日志及自定义键限流后执行） */
   middleware?: Middleware[]
-  /**
-   * A2A 协议集成
-   *
-   * 传入 `ai.a2a` 操作对象后，自动挂载 Agent Card 发现端点和 JSON-RPC 处理端点。
-   *
-   * - 简单模式：`a2a: ai.a2a`（使用默认路径）
-   * - 配置模式：`a2a: { operations: ai.a2a, rpcPath: '/api/a2a' }`
-   */
-  a2a?: HandleA2AOperations | HandleA2AConfig
-}
-
-// ─── A2A Handle 集成类型 ───
-
-/**
- * A2A 操作接口（用于 Handle 集成）
- *
- * 与 `ai.a2a` 结构兼容，可直接传入 `ai.a2a` 对象。
- * @example
- * ```ts
- * import type { HandleA2AOperations } from '@h-ai/kit'
- * import { ai } from '@h-ai/ai'
- *
- * function operationsAfterInit(): HandleA2AOperations { return ai.a2a }
- * ```
- */
-export interface HandleA2AOperations {
-  /** 获取 Agent Card（返回 HaiResult 对象） */
-  getAgentCard: () => { success: boolean, data?: unknown, error?: unknown }
-  /** 处理 JSON-RPC 请求 */
-  handleRequest: (body: unknown, context?: Record<string, unknown>) => Promise<{
-    streaming: boolean
-    body?: unknown
-    stream?: AsyncGenerator<unknown, void, undefined>
-  }>
-}
-
-/**
- * A2A Handle 配置（高级模式）
- * @example
- * ```ts
- * import type { HandleA2AConfig } from '@h-ai/kit'
- * import { ai } from '@h-ai/ai'
- *
- * function configAfterInit(): HandleA2AConfig { return { operations: ai.a2a, authenticate: async () => null } }
- * ```
- */
-export interface HandleA2AConfig {
-  /** A2A 操作接口（通常传入 `ai.a2a`） */
-  operations: HandleA2AOperations
-  /** Agent Card 端点路径（默认 `/.well-known/agent-card.json`） */
-  cardPath?: string
-  /** JSON-RPC 端点路径（默认 `/a2a`） */
-  rpcPath?: string
-  /**
-   * A2A 认证
-   *
-   * - `'apiKey'`：使用 IAM API Key 认证（读取 Agent Card.securitySchemes.apiKey）
-   * - 函数：自定义认证回调；返回 null/undefined 拒绝请求（401）
-   * 未配置此项才允许匿名请求。
-   */
-  authenticate?: 'apiKey' | ((event: RequestEvent) => Promise<Record<string, unknown> | null | undefined>)
+  /** 在请求访问和会话检查后分发契约。启用 transport 时，契约 apiPrefix 加入默认保护范围。 */
+  contract?: HttpContractHandler
+  /** 挂载由 ai.a2a.createHttpHandler() 创建的 Fetch 处理器。 */
+  a2a?: false | HttpA2AHandler
 }
 
 /**
@@ -677,14 +612,16 @@ export interface HandleA2AConfig {
  * @example
  * ```ts
  * import type { TransportEncryptionOptions } from '@h-ai/kit'
- * import type { TransportServerKeyRing, TransportKeyStore } from '@h-ai/crypto'
+ * import { type TransportServerKeyRing, type TransportKeyStore, crypto } from '@h-ai/crypto'
  *
  * function transport(serverKeyRing: TransportServerKeyRing, keyStore: TransportKeyStore): TransportEncryptionOptions {
- *   return { serverKeyRing, keyStore, excludePaths: ['/api/health'] }
+ *   return { crypto, serverKeyRing, keyStore, excludePaths: ['/api/health'] }
  * }
  * ```
  */
 export interface TransportEncryptionOptions {
+  /** 宿主提供的已初始化加密模块。 */
+  crypto: CryptoFunctions
   /** 宿主构建挂载目录，默认空字符串；SvelteKit 传入 paths.relative=false 时的 resolve('/').replace(/\/$/, '')。 */
   basePath?: string
   /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
@@ -697,8 +634,8 @@ export interface TransportEncryptionOptions {
   routePlaintextBytes?: Readonly<Record<string, number>>
   /** 受管服务端版本化密钥环，不进入公开 YAML/客户端配置。 */
   serverKeyRing: TransportServerKeyRing
-  /** 密钥交换端点路径（默认 `'/api/_hai/key-exchange'`） */
-  keyExchangePath?: string
+  /** 实际请求绝对路径；默认 `/api/v1/_hai/key-exchange`。子目录挂载显式指定。 */
+  keyExchangePath?: `/${string}`
   /** 排除路径（不加密），支持精确匹配和前缀匹配 */
   excludePaths?: readonly string[]
   /** 共享客户端公钥存储；适用于多节点部署。 */
@@ -706,26 +643,20 @@ export interface TransportEncryptionOptions {
 }
 
 /**
- * Handle Hook 加密配置
+ * Handle Hook 的 Cookie 加密配置。
  *
  * 在 `kit.createHandle({ crypto: { ... } })` 中使用。
  * @example
  * ```ts
- * import type { HookCryptoConfig, TransportEncryptionOptions } from '@h-ai/kit'
+ * import type { HookCryptoConfig } from '@h-ai/kit'
  * import { crypto } from '@h-ai/crypto'
  *
- * function config(transport: TransportEncryptionOptions): HookCryptoConfig { return { crypto, transport } }
+ * const config: HookCryptoConfig = { crypto, encryptedCookies: ['preferences'] }
  * ```
  */
 export interface HookCryptoConfig {
   /** 注入 @h-ai/crypto 实例 */
   crypto: CryptoFunctions
-  /**
-   * 启用传输加密。
-   * - `false` 或省略：关闭
-   * - 对象：必填受管 serverKeyRing / keyStore，可附加公开路径配置
-   */
-  transport?: false | TransportEncryptionOptions
   /**
    * 需要加密的 Cookie 名称列表
    *
@@ -826,29 +757,15 @@ export interface FormValidationResult<T> {
  * @example
  * ```ts
  *
- * import { type RateLimitConfig, kit } from '@h-ai/kit'
+ * import { core } from '@h-ai/core'
+ * import type { RateLimitConfig } from '@h-ai/kit'
  * import { cache } from '@h-ai/cache'
  *
- * const config: RateLimitConfig = { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'api' }) }
+ * const config: RateLimitConfig = { windowMs: 60_000, maxRequests: 100, store: core.access.createCacheRateLimitStore(cache, { namespace: 'api' }) }
  * void config
  * ```
  */
-export interface RateLimitConfig {
-  /** 时间窗口 (ms) */
-  windowMs: number
-  /** 最大请求数 */
-  maxRequests: number
-  /** 自定义 key 生成 */
-  keyGenerator?: (event: RequestEvent) => string
-  /** 超限处理 */
-  onLimitReached?: (event: RequestEvent) => Response
-  /**
-   * 自定义存储实现
-   *
-   * 必须提供原子 increment；不支持 get+set 回退。共享缓存由调用方初始化和关闭。
-   */
-  store: RateLimitStore
-}
+export type RateLimitConfig = HttpRateLimitOptions<HttpRateLimitContext>
 
 /**
  * CORS 中间件配置
@@ -862,19 +779,4 @@ export interface RateLimitConfig {
  * void value
  * ```
  */
-export interface CorsConfig {
-  /** 允许的源（支持通配符，如 `*.example.com`） */
-  origin?: string | string[] | ((origin: string) => boolean)
-  /** 允许的方法 */
-  methods?: string[]
-  /** 允许的头 */
-  allowedHeaders?: string[]
-  /** 暴露的头 */
-  exposedHeaders?: string[]
-  /** 是否允许凭证 */
-  credentials?: boolean
-  /** 预检缓存时间 (秒) */
-  maxAge?: number
-  /** 是否自动允许 Capacitor WebView origin（默认 true） */
-  capacitor?: boolean
-}
+export type CorsConfig = HttpCorsOptions

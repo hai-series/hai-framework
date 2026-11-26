@@ -8,32 +8,10 @@
  * @module kit-config
  */
 
-import type { KitConfig, KitConfigInput, KitServerConfig, KitServerConfigInput, KitTransportConfig, KitTransportConfigInput } from './kit-types.js'
-import { RequestAccessConfigSchema, TrustedProxiesSchema } from '@h-ai/core'
-import { crypto } from '@h-ai/crypto'
+import type { KitConfig, KitConfigInput, KitHttpConfig, KitHttpConfigInput, KitServerConfig, KitServerConfigInput, KitTransportConfig, KitTransportConfigInput } from './kit-types.js'
+import { HttpAccessConfigSchema, HttpCorsConfigSchema, HttpHostA2AConfigSchema } from '@h-ai/core'
+import { TransportConfigSchema } from '@h-ai/crypto'
 import { z } from 'zod'
-
-const AbsolutePathSchema = z.custom<`/${string}`>(
-  value => typeof value === 'string' && value.startsWith('/'),
-  'path must start with /',
-)
-
-const KitTransportConfigInputSchema = z.union([
-  z.literal(false),
-  z.object({
-    maxPlaintextBytes: z.union([
-      z.number().int().min(crypto.transport.plaintextRange.min).max(crypto.transport.plaintextRange.max),
-      z.literal('auto'),
-    ]).transform(value => value === 'auto'
-      ? undefined
-      : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
-    maxFutureSkewSeconds: z.number().int().min(0).max(crypto.transport.timeLimits.maxFutureSkewSeconds).optional().describe('允许客户端请求时间领先服务器的秒数').meta({ default: crypto.transport.protocol.CLOCK_SKEW_MS / 1000 }),
-    maxRequestAgeSeconds: z.number().int().min(crypto.transport.timeLimits.minRequestAgeSeconds).max(crypto.transport.timeLimits.maxRequestAgeSeconds).optional().describe('请求从签发起的有效秒数').meta({ default: crypto.transport.protocol.REQUEST_WINDOW_MS / 1000 }),
-    routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(crypto.transport.plaintextRange.min).max(crypto.transport.plaintextRange.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
-    keyExchangePath: AbsolutePathSchema.default('/api/_hai/key-exchange'),
-    excludePaths: z.array(AbsolutePathSchema).default([]),
-  }),
-])
 
 const ServerConfigInputSchema = z.object({
   host: z.string().min(1).default('127.0.0.1'),
@@ -50,17 +28,52 @@ const ServerConfigInputSchema = z.object({
  * void config
  *```
  */
-export const KitConfigSchema = z.object({
+export const KitConfigSchema = z.looseObject({
   server: ServerConfigInputSchema.optional(),
-  transport: KitTransportConfigInputSchema.optional(),
-  trustedProxies: TrustedProxiesSchema.default('auto'),
-  access: RequestAccessConfigSchema.default(false),
-}).transform(({ server, transport, trustedProxies, access }) => ({
+  transport: TransportConfigSchema,
+  http: HttpAccessConfigSchema.optional(),
+  cors: HttpCorsConfigSchema,
+  a2a: HttpHostA2AConfigSchema,
+}).superRefine((input, context) => {
+  // 未迁移的访问设置必须显式报错，避免未知字段被丢弃后套用开放默认值。
+  for (const key of ['access', 'trustedProxies', 'rateLimit'] as const) {
+    if (Object.hasOwn(input, key)) {
+      context.addIssue({
+        code: 'custom',
+        path: [key],
+        message: `Use http.${key} in Kit configuration`,
+      })
+    }
+  }
+  // eslint-disable-next-line node/prefer-global/process -- 浏览器也能读取 Kit Schema。
+  const environment = globalThis.process?.env
+  const legacyVariable = Object.keys(environment ?? {}).find(name => /^(?:HAI_KIT_ACCESS|HAI_KIT_TRUSTEDPROXIES|HAI_KIT_RATELIMIT)(?:_|$)/.test(name))
+  if (legacyVariable) {
+    context.addIssue({
+      code: 'custom',
+      path: ['http'],
+      message: `Replace ${legacyVariable} with the HAI_KIT_HTTP_* configuration form`,
+    })
+  }
+}).transform(({ server, transport, http, cors, a2a }) => ({
   server: resolveKitServerConfig(server ?? {}),
-  transport: resolveKitTransportConfig(transport ?? false),
-  trustedProxies,
-  access,
+  transport,
+  http: http ?? resolveKitHttpConfig(),
+  cors,
+  a2a,
 }))
+
+/**
+ * 校验直接传给 Handle 的 HTTP 配置，使用与 `_kit.yml` 相同的策略默认值。
+ * @example 模块内部上下文
+ * ```ts
+ * const options = resolveKitHttpConfig({ trustedProxies: [], access: false })
+ * void options.access
+ * ```
+ */
+export function resolveKitHttpConfig(input: KitHttpConfigInput = {}): KitHttpConfig {
+  return HttpAccessConfigSchema.parse(input)
+}
 
 /**
  * 读取 `HOST` / `PORT` 环境变量覆盖（环境变量高于配置文件）。
@@ -120,7 +133,7 @@ export function resolveKitServerConfig(input: KitServerConfigInput = {}): KitSer
 export function resolveKitTransportConfig(
   input: false | KitTransportConfigInput = false,
 ): false | KitTransportConfig {
-  return KitTransportConfigInputSchema.parse(input)
+  return TransportConfigSchema.parse(input)
 }
 
 /**

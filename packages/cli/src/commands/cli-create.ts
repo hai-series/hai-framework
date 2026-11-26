@@ -474,9 +474,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       let envExample = isApiWorkspace
         ? envContents
         : isFullstack
-          ? `${envContents}\n# First-start administrator password; must satisfy the IAM password policy.\nHAI_ADMIN_DEFAULT_PASSWORD=\n# Independent first-start audit/configuration administrator passwords.\nHAI_AUDIT_ADMIN_PASSWORD=\nHAI_CONFIG_ADMIN_PASSWORD=\nHAI_BUSINESS_OPERATOR_PASSWORD=\n\n# Public API origin; never include credentials.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
+          ? `${envContents}\n# First-start administrator password; must satisfy the IAM password policy.\nHAI_ADMIN_DEFAULT_PASSWORD=\n# Independent first-start audit/configuration administrator passwords.\nHAI_AUDIT_ADMIN_PASSWORD=\nHAI_CONFIG_ADMIN_PASSWORD=\nHAI_BUSINESS_OPERATOR_PASSWORD=\n\n# Leave empty for the browser's same-origin gateway. Set explicitly for native or cross-origin clients.\nPUBLIC_API_BASE=\n`
           : context.isSvelteOnlyApp
-            ? `${envContents}\n# Browser development API URL; Android emulator uses http://10.0.2.2:3000/api/v1.\nPUBLIC_API_BASE=http://localhost:3000/api/v1\n`
+            ? `${envContents}\n# Leave empty for the browser's same-origin proxy. Android emulator: http://10.0.2.2:3000/api/v1.\nPUBLIC_API_BASE=\n`
             : envContents
 
       const runtimeVariables = new Map<string, ConfigEnvironmentVariable>()
@@ -1447,7 +1447,7 @@ GitHub Pages选择Actions发布静态build目录；上传步骤显式include-hid
 页面统一继承根布局的 header/footer。${appType === 'mobile-app'
   ? '页面放 src/lib/pages/**/*.svelte，hash 路由自动发现，刷新与前进后退恢复当前页。'
   : '使用 SvelteKit 自动文件路由，新增 +page.svelte 无需维护路由表；刷新定位与服务端鉴权保持一致。'}${appType === 'mobile-app'
-  ? '\n\n选择 IAM 或 crypto 的移动客户端默认启用加密 transport，先初始化 crypto，再初始化 typed API client；结束时按相反顺序关闭。仅明确连接匹配的明文 API 时设置 PUBLIC_API_TRANSPORT=off；PUBLIC_API_KEY_EXCHANGE_PATH 仅覆盖公开协商子路径。握手失败不会退回明文，服务端私钥不进入客户端。未选择 crypto 的客户端保留明文 API 模式。'
+  ? '\n\n浏览器开发与预览默认从同源 `/api/v1` 访问 API。服务监听非默认端口时，为 Vite 进程设置 SERVICE_BASE_URL。原生客户端用 PUBLIC_API_BASE 指定包含业务前缀的外部地址，例如 Android 模拟器使用 http://10.0.2.2:3000/api/v1。\n\n选择 IAM 或 crypto 的移动客户端默认启用加密 transport，先初始化 crypto，再初始化 typed API client；结束时按相反顺序关闭。仅明确连接匹配的明文 API 时设置 PUBLIC_API_TRANSPORT=off；PUBLIC_API_KEY_EXCHANGE_PATH 覆盖公开密钥交换路径，从站点根开始。握手失败不会退回明文，服务端私钥不进入客户端。未选择 crypto 的客户端保留明文 API 模式。'
   : ''}
 
 ### 开发
@@ -1606,7 +1606,7 @@ CLI 在根目录 .env.dev.local、.env.test.local、.env.prod.local 中为 admin
 
 安全策略的配置位置、默认开关、逐项启用步骤及使用影响见[配置化安全使用指南](docs/security-configuration.md)。
 
-本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
+浏览器默认通过同源 Vite 代理访问 API。服务运行在其他本地端口时，设置代理进程的 \`SERVICE_BASE_URL\`。直接连接公网 API 时再设置 \`PUBLIC_API_BASE\`。例如 Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000/api/v1\`。自定义密钥交换时，服务端设置 \`transport.keyExchangePath\`，自管前端通过 \`PUBLIC_API_KEY_EXCHANGE_PATH\` 或公开运行配置使用同一绝对路径。托管网关会在公开运行配置中发布该路径。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 
 服务端传输密钥环在创建时按环境分别生成：开发和测试示例值写入可提交的 \`.env.dev\`、\`.env.test\`，克隆后可直接使用；生产值只写入不提交 Git 的 \`.env.prod.local\`。变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`，运行时不生成密钥。同一环境的所有节点使用同一 ring 和共享 registry。生产密钥由受保护配置或 Secret Manager 分发，不能进入 PUBLIC_/VITE_、日志或浏览器。
 

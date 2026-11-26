@@ -12,6 +12,7 @@
   "apiClient_alreadyInitialized": "API 客户端已初始化，请先调用 apiClient.close() 再重新初始化",
   "apiClient_configError": "API 客户端配置错误：{error}",
   "apiClient_invalidBaseUrl": "请输入 HTTP(S) API 地址或浏览器同源根路径。地址不能包含凭据、查询参数或片段。",
+  "apiClient_invalidKeyExchangePath": "密钥协商路径必须是固定的站点绝对路径，不能包含点路径段、通配符、编码、查询或片段。",
   "apiClient_responseValidationFailed": "响应数据校验失败",
   "apiClient_unknown": "未知错误"
 }

@@ -29,6 +29,8 @@ export type {
 export interface TransportEncryptionConfig {
   /** 宿主构建挂载目录，默认空字符串；仅作用于 API/data 保护范围。 */
   basePath?: string
+  /** 契约 API 的完整站点前缀，包含宿主子目录。由 createHandle 从 contract.apiPrefix 取得。 */
+  contractApiPrefix?: `/${string}`
   /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
   maxPlaintextBytes?: number
   /** 请求时间允许领先服务器的秒数，默认 30，整数范围 0～1800。 */
@@ -43,8 +45,8 @@ export interface TransportEncryptionConfig {
   enabled: boolean
   /** @h-ai/crypto 服务实例 */
   crypto: CryptoFunctions
-  /** 密钥交换端点路径（默认 `/api/_hai/key-exchange`） */
-  keyExchangePath?: string
+  /** 密钥交换端点路径（默认 `/api/v1/_hai/key-exchange`） */
+  keyExchangePath?: `/${string}`
   /** 排除路径（不加密），支持精确匹配和前缀匹配 */
   excludePaths?: readonly string[]
   /** 显式客户端公钥存储；生产使用共享 Redis/reldb，内存仅供开发/测试。 */

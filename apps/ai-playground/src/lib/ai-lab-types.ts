@@ -92,17 +92,19 @@ export interface RememberResult {
 }
 
 /** 能力状态：连接、模型、可用音色与记忆模式，用于首页状态卡片 */
-export interface LabStatus {
-  ready: boolean
-  provider: string
-  llmModel: string
-  ttsModel: string
-  asrModel: string
-  imageProvider: string
-  imageModel: string
-  ttsVoices: string[]
-  memoryMode: 'persistent' | 'ephemeral'
-}
+export const LabStatusSchema = z.object({
+  ready: z.boolean(),
+  provider: z.string(),
+  llmModel: z.string(),
+  ttsModel: z.string(),
+  asrModel: z.string(),
+  imageProvider: z.string(),
+  imageModel: z.string(),
+  ttsVoices: z.array(z.string()),
+  memoryMode: z.enum(['persistent', 'ephemeral']),
+})
+
+export type LabStatus = z.infer<typeof LabStatusSchema>
 
 /** 记忆视图（暴露给前端的记忆条目子集） */
 export interface MemoryView extends Pick<MemoryEntry, 'id' | 'content' | 'importance' | 'createdAt'> {

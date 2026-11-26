@@ -50,22 +50,6 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
 // 会话验证
 // =============================================================================
 
-async function validateSession(token: string) {
-  const result = await iam.auth.verifyToken(token)
-  if (!result.success)
-    return null
-
-  const s = result.data
-  return {
-    userId: s.userId,
-    username: s.username,
-    displayName: s.displayName,
-    avatarUrl: s.avatarUrl,
-    roles: s.roles,
-    permissions: s.permissions,
-  }
-}
-
 // =============================================================================
 // hai Handle
 // =============================================================================
@@ -78,20 +62,24 @@ const haiHandle: Handle = async (input) => {
       throw new Error(loaded.error.message)
     if (loaded.data.transport !== false)
       throw new Error('This example does not install transport encryption; use admin-console or a crypto-enabled CLI template for the complete server and browser assembly')
+    const { http } = loaded.data
     configuredHandle = kit.createHandle({
-      trustedProxies: loaded.data.trustedProxies,
-      access: loaded.data.access,
+      cors: loaded.data.cors,
+      http: {
+        ...http,
+        rateLimit: http.rateLimit && {
+          ...http.rateLimit,
+          store: core.access.createCacheRateLimitStore(cache, {
+            namespace: 'h5-app',
+            allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1',
+          }),
+        },
+      },
       auth: {
-        verifyToken: validateSession,
+        iam,
         cookieName: 'h5_access_token',
         protectedPaths: ['/api/user/*', '/api/vision/*', '/api/upload/*'],
         publicPaths: kit.auth.publicPaths,
-        operations: () => iam.auth,
-      },
-      rateLimit: {
-        windowMs: 60000,
-        maxRequests: 200,
-        store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'h5-app', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }),
       },
     })
   }

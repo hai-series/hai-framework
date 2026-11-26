@@ -22,6 +22,8 @@ declare global {
 {{#if features.iam}}
       /** 会话信息 */
       session?: import('@h-ai/kit').SessionData
+      /** 当前请求已验证的服务端访问令牌。 */
+      accessToken?: string
 {{/if}}
     }
   }

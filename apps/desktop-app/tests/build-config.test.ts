@@ -19,12 +19,17 @@ describe('desktop build environment', () => {
   it('源码构建省略模式时不读取环境覆盖文件', () => {
     const load = vi.spyOn(core.config, 'loadEnvFiles')
     expect(JSON.parse(desktopBuildConfig())).toEqual({
-      transport: { keyExchangePath: '/_hai/key-exchange' },
+      transport: { keyExchangePath: '/api/v1/_hai/key-exchange' },
     })
     expect(load).not.toHaveBeenCalled()
   })
   it('公开字段过滤之前拒绝非法 transport 类型及路径', () => {
-    for (const value of ['true', 'invalid', '{keyExchangePath: relative}']) {
+    for (const value of [
+      'true',
+      'invalid',
+      '{keyExchangePath: relative}',
+      '{keyExchangePath: "/invalid/*"}',
+    ]) {
       vi.stubEnv('HAI_CRYPTO_TRANSPORT', value)
       expect(() => desktopBuildConfig('test')).toThrow()
     }

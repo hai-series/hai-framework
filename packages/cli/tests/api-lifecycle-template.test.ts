@@ -1,7 +1,7 @@
 /** 渲染并执行 API 初始化模板，验证 HaiResult 关闭失败与功能条件分支。 */
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
-import { core } from '@h-ai/core'
+import { core, HaiConfigError } from '@h-ai/core'
 import Handlebars from 'handlebars'
 import ts from 'typescript'
 import { describe, expect, it, vi } from 'vitest'
@@ -14,7 +14,7 @@ interface ApplicationLifecycle {
 const template = readFileSync(new URL('../templates/apps/api/apps/{{projectName}}-serv/src/lib/server/init.ts.hbs', import.meta.url), 'utf8')
 
 /** 执行实际生成代码；仅框架依赖替换为可控结果，不替换应用生命周期实现。 */
-function instantiate(features: Record<string, boolean>) {
+function instantiate(features: Record<string, boolean>, a2a = false, apikey = false) {
   const source = Handlebars.compile(template)({ projectName: 'lifecycle', features })
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -47,7 +47,9 @@ function instantiate(features: Record<string, boolean>) {
     require(name: string) {
       if (name === '@h-ai/core') {
         return {
+          HaiConfigError,
           core: {
+            err: core.err,
             module: core.module,
             init: () => undefined,
             logger: {
@@ -60,6 +62,7 @@ function instantiate(features: Record<string, boolean>) {
                 ? {}
                 : undefined,
               getOrThrow: () => ({
+                a2a,
                 transport: features.crypto
                   ? {}
                   : false,
@@ -70,7 +73,14 @@ function instantiate(features: Record<string, boolean>) {
         }
       }
       return {
-        [name.slice('@h-ai/'.length)]: clients.get(name.slice('@h-ai/'.length)),
+        [name.slice('@h-ai/'.length)]: name === '@h-ai/iam'
+          ? {
+              ...clients.get('iam'),
+              config: {
+                login: { apikey },
+              },
+            }
+          : clients.get(name.slice('@h-ai/'.length)),
         // 本文件验证资源编排；配置 Schema 的真实校验另由 production-state 和生成工程门禁覆盖。
         ...Object.fromEntries([
           'AIConfigSchema',
@@ -113,6 +123,36 @@ describe('generated API lifecycle', () => {
     const { application } = instantiate(features)
     await application.initApp()
     await application.closeApp()
+  })
+
+  it.each([
+    {
+      features: {},
+      apikey: false,
+      fields: ['serv.a2a', 'ai.a2a'],
+    },
+    {
+      features: { ai: true },
+      apikey: false,
+      fields: ['serv.a2a', 'iam.login.apikey'],
+    },
+    {
+      features: { ai: true, iam: true },
+      apikey: false,
+      fields: ['iam.login.apikey'],
+    },
+    {
+      features: { ai: true, iam: true },
+      apikey: true,
+      fields: ['serv.a2a', 'createA2AExecutor'],
+    },
+  ])('启用 A2A 时启动阶段报告缺少的配置或执行器项 $fields', async ({ features, apikey, fields }) => {
+    const { application } = instantiate(features, true, apikey)
+    await expect(application.initApp()).rejects.toMatchObject({
+      cause: {
+        ext: { module: 'a2a-http', phase: 'start', fields },
+      },
+    })
   })
 
   it('retains dependencies on returned cleanup failure and retries cleanup before reinit', async () => {

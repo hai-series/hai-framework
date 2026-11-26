@@ -1,4 +1,4 @@
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { Hono } from 'hono'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountRefreshCookieRoutes } from '../src/serv-cookie-auth.js'
@@ -79,6 +79,83 @@ describe('refresh HTTP error boundary', () => {
     expect(response.status).toBe(503)
     expect(response.headers.get('set-cookie')).toBeNull()
     expect(await response.text()).not.toMatch(/Private database|fake-secret/)
+  })
+
+  it('原生刷新正文超出字节上限时取消读取，未调用认证回调', async () => {
+    const refresh = vi.fn()
+    const cancel = vi.fn()
+    const app = serv.createApp({
+      contract: {},
+      procedures: {},
+      refreshCookie: {
+        nativeTokenTransport: {
+          isRequest: () => true,
+        },
+        onRefresh: refresh,
+      },
+    })
+    const chunk = new TextEncoder().encode(' '.repeat(8193))
+    const body = new ReadableStream<Uint8Array>({
+      pull: controller => controller.enqueue(chunk),
+      cancel,
+    })
+    const request: RequestInit & { duplex: 'half' } = {
+      method: 'POST',
+      headers: { 'x-request-id': 'native-refresh-size', 'x-hai-locale': 'en-US' },
+      body,
+      duplex: 'half',
+    }
+    const response = await app.request(REFRESH_PATH, request)
+    expect(response.status).toBe(413)
+    expect(response.headers.get('x-trace-id')).toBe('native-refresh-size')
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: {
+        code: HaiCommonError.VALIDATION_ERROR.code,
+        httpStatus: 413,
+        traceId: 'native-refresh-size',
+        message: 'Refresh request body exceeds 16 KiB (traceId: native-refresh-size)',
+      },
+    })
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('原生刷新请求取消时停止等待正文，不调用认证回调', async () => {
+    const refresh = vi.fn()
+    const cancel = vi.fn()
+    const app = serv.createApp({
+      contract: {},
+      procedures: {},
+      refreshCookie: {
+        nativeTokenTransport: {
+          isRequest: () => true,
+        },
+        onRefresh: refresh,
+      },
+    })
+    const reading = Promise.withResolvers<void>()
+    const controller = new AbortController()
+    const request: RequestInit & { duplex: 'half' } = {
+      method: 'POST',
+      body: new ReadableStream<Uint8Array>({
+        pull: () => reading.resolve(),
+        cancel,
+      }),
+      signal: controller.signal,
+      duplex: 'half',
+    }
+    const pending = app.request(REFRESH_PATH, request)
+    await reading.promise
+    controller.abort()
+    const response = await pending
+    expect(response.status).toBe(408)
+    expect(await response.json()).toMatchObject({
+      success: false,
+      error: { code: HaiCommonError.TIMEOUT.code, httpStatus: 408 },
+    })
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(refresh).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -360,34 +437,43 @@ describe('mountRefreshCookieRoutes', () => {
       expect(body.error.message).toBe('未登录或登录已失效')
     })
 
-    it('onRefresh 回调失败时，返回错误并清除 cookie', async () => {
-      const failFn = vi.fn().mockResolvedValue({
-        success: false,
-        error: { code: 'SESSION_EXPIRED', message: 'Session expired', httpStatus: 401 },
+    it('迟到的认证拒绝保留先成功轮换的新 Cookie', async () => {
+      const waiting = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      const onRefresh = vi.fn()
+        .mockImplementationOnce(async () => {
+          waiting.resolve()
+          await release.promise
+          return core.err(HaiCommonError.UNAUTHORIZED, 'Refresh credential is invalid')
+        })
+        .mockResolvedValueOnce(core.ok(MOCK_TOKENS))
+      const app = serv.createApp({
+        contract: {},
+        procedures: {},
+        refreshCookie: { onRefresh },
       })
-      const iam = {
-        session: {
-          verifyToken: vi.fn(),
-          refresh: failFn,
-        },
-      }
-      const app = new Hono()
-      mountRefreshCookieRoutes(app, API_PREFIX, { secure: false }, iam)
-
-      const res = await app.request(`${API_PREFIX}/auth/refresh`, {
+      const refresh = () => app.request(REFRESH_PATH, {
         method: 'POST',
-        headers: { Cookie: `${COOKIE_NAME}=expired-token` },
+        headers: { Cookie: `${COOKIE_NAME}=previous-refresh` },
       })
-
-      expect(res.status).toBe(401)
-      const body = await res.json()
-      expect(body.success).toBe(false)
-
-      // 失败时清除失效 cookie
-      const cookies = res.headers.getSetCookie()
-      const clearCookie = cookies.find(c => c.startsWith(COOKIE_NAME))
-      expect(clearCookie).toBeDefined()
-      expect(clearCookie).toContain('Max-Age=0')
+      const pending = refresh()
+      try {
+        await waiting.promise
+        const rotated = await refresh()
+        expect(rotated.status).toBe(200)
+        expect(rotated.headers.get('set-cookie')).toContain(`${COOKIE_NAME}=${MOCK_TOKENS.refreshToken}`)
+      }
+      finally {
+        release.resolve()
+        await pending
+      }
+      const stale = await pending
+      expect(stale.status).toBe(401)
+      expect(await stale.json()).toMatchObject({
+        success: false,
+        error: { code: HaiCommonError.UNAUTHORIZED.code },
+      })
+      expect(stale.headers.getSetCookie()).toHaveLength(0)
     })
   })
 

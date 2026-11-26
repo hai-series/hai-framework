@@ -117,11 +117,11 @@ apps/desktop-app/
 
 ```yaml
 transport:
-  keyExchangePath: ${HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH:/_hai/key-exchange}
+  keyExchangePath: ${HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH:/api/v1/_hai/key-exchange}
 ```
 
 - `PUBLIC_API_BASE` 需包含服务端 `_serv.yml.http.apiPrefix`。
-- `keyExchangePath` 需与服务端 `_serv.yml.transport.keyExchangePath` 一致。
+- `keyExchangePath` 使用从站点根开始的绝对路径，需与服务端 `_serv.yml.transport.keyExchangePath` 一致。
 
 桌面端初始化入口在 `src/lib/api.ts`，调用顺序为：
 

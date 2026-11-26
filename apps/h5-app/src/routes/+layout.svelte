@@ -19,7 +19,10 @@
   }
 
   const { data, children }: Props = $props()
-  $effect(() => authActions.bindPageExit({ enabled: data.iamPublicConfig?.session.endOnPageHide }))
+  $effect(() => authActions.bindPageExit({
+    enabled: data.iamPublicConfig.session.endOnPageHide,
+    sessionFingerprint: data.sessionFingerprint,
+  }))
 
   let currentTheme = $state('light')
   let currentLanguage = $state('zh-CN')

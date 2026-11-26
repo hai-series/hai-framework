@@ -19,6 +19,7 @@
   "serv_validationUuid": "请输入有效的 UUID",
   "serv_validationEnum": "请选择有效选项",
   "serv_errorUnauthorized": "未登录或登录已失效",
+  "serv_refreshBodyTooLarge": "刷新请求体超过 16 KiB",
   "serv_errorForbidden": "无权执行该操作",
   "serv_errorInternal": "服务器内部错误",
   "serv_storageKeyRequired": "存储 key 不能为空",
@@ -35,5 +36,6 @@
   "serv_transportKeyExchangeFailed": "密钥协商失败",
   "serv_transportBusy": "加密传输繁忙，请稍后重试",
   "serv_feedbackUnavailable": "问题反馈暂不可用，业务功能可继续使用",
-  "serv_invalidApiPrefix": "API 前缀必须是合法的绝对路径，不能包含空路径段、查询、片段或路径穿越。"
+  "serv_invalidApiPrefix": "API 前缀必须是合法的绝对路径，不能包含空路径段、查询、片段或路径穿越。",
+  "serv_invalidKeyExchangePath": "密钥协商路径必须是固定的站点绝对路径，不能包含点路径段、通配符、编码、查询或片段。"
 }

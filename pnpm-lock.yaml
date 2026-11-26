@@ -863,6 +863,9 @@ importers:
       '@h-ai/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@h-ai/api-contract':
+        specifier: workspace:*
+        version: link:../../packages/api-contract
       '@h-ai/cache':
         specifier: workspace:*
         version: link:../../packages/cache
@@ -878,6 +881,9 @@ importers:
       '@h-ai/runner':
         specifier: workspace:*
         version: link:../../packages/runner
+      '@h-ai/serv':
+        specifier: workspace:*
+        version: link:../../packages/serv
       '@h-ai/tools':
         specifier: workspace:*
         version: link:../../packages/tools

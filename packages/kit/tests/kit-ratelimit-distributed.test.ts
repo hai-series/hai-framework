@@ -5,10 +5,11 @@ import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { afterEach, expect, it, vi } from 'vitest'
-import { cache } from '../../cache/src/cache-main.js'
 import { acquireRedisContainer } from '../../iam/tests/helpers/redis-container.js'
-import { createCacheRateLimitStore, createMemoryRateLimitStore, MemoryRateLimitStore, rateLimitMiddleware } from '../src/middleware/kit-ratelimit.js'
+import { kit } from '../src/kit-main.js'
 
 /** 仅创建该中间件实际访问的RequestEvent字段，不模拟SvelteKit路由实现。 */
 function context(address = '127.0.0.1'): MiddlewareContext {
@@ -31,13 +32,13 @@ afterEach(async () => {
 
 it('没有原子计数器时立即拒绝构造，不使用get/set回退', () => {
   // 运行时输入验证覆盖JS消费者缺失store的情况。
-  expect(() => rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: undefined! })).toThrow('atomic')
+  expect(() => kit.middleware.rateLimit({ windowMs: 1000, maxRequests: 1, store: undefined! })).toThrow('atomic')
 })
 
 it('固定窗口等于边界时重置，后续请求不延长期限', async () => {
   vi.useFakeTimers()
-  const store = new MemoryRateLimitStore()
-  const limited = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store })
+  const store = core.access.createMemoryRateLimitStore()
+  const limited = kit.middleware.rateLimit({ windowMs: 1000, maxRequests: 1, store })
   const next = vi.fn(async () => new Response('OK'))
   expect((await limited(context(), next)).status).toBe(200)
   await vi.advanceTimersByTimeAsync(999)
@@ -51,7 +52,7 @@ it.each(['NODE_ENV', 'HAI_CORE_ENV'])('%s 生产环境拒绝内存，存储故�
   vi.stubEnv('NODE_ENV', 'development')
   vi.stubEnv('HAI_CORE_ENV', 'development')
   const next = vi.fn(async () => new Response('OK'))
-  const failed = rateLimitMiddleware({
+  const failed = kit.middleware.rateLimit({
     windowMs: 1000,
     maxRequests: 1,
     store: {
@@ -64,19 +65,20 @@ it.each(['NODE_ENV', 'HAI_CORE_ENV'])('%s 生产环境拒绝内存，存储故�
   expect((await failed(context(), next)).status).toBe(503)
   expect(next).not.toHaveBeenCalled()
   await cache.init({ type: 'memory' })
+  const memory = core.access.createMemoryRateLimitStore()
   vi.stubEnv(productionFlag, 'production')
   vi.stubEnv('HAI_E2E', '0')
   vi.stubEnv('HAI_E2E_MOCK', '0')
-  expect(() => createMemoryRateLimitStore()).toThrow('Memory')
-  expect(() => rateLimitMiddleware({
+  expect(() => core.access.createMemoryRateLimitStore()).toThrow('Memory')
+  expect(() => kit.middleware.rateLimit({
     windowMs: 1000,
     maxRequests: 1,
-    store: new MemoryRateLimitStore(),
+    store: memory,
   })).toThrow('Memory')
-  const shared = rateLimitMiddleware({
+  const shared = kit.middleware.rateLimit({
     windowMs: 1000,
     maxRequests: 1,
-    store: createCacheRateLimitStore(cache, { namespace: 'production', allowMemory: true }),
+    store: core.access.createCacheRateLimitStore(cache, { namespace: 'production', allowMemory: true }),
   })
   expect((await shared(context(), next)).status).toBe(503)
   vi.stubEnv('HAI_E2E', '1')
@@ -84,10 +86,10 @@ it.each(['NODE_ENV', 'HAI_CORE_ENV'])('%s 生产环境拒绝内存，存储故�
 })
 
 it('等价IPv6/IPv4映射地址共享计数，不采信任意代理请求头', async () => {
-  const limited = rateLimitMiddleware({
+  const limited = kit.middleware.rateLimit({
     windowMs: 1000,
     maxRequests: 1,
-    store: new MemoryRateLimitStore(),
+    store: core.access.createMemoryRateLimitStore(),
   })
   const next = async () => new Response('OK')
   expect((await limited(context('2001:0db8:0000:0000:0000:0000:0000:0001'), next)).status).toBe(200)
@@ -96,14 +98,18 @@ it('等价IPv6/IPv4映射地址共享计数，不采信任意代理请求头', a
   expect((await limited(context('127.0.0.1'), next)).status).toBe(429)
 })
 
-it('两个独立HTTP进程共享Redis总放行5次，节点时钟差异不提前重置TTL', async () => {
+it.each(['kit', 'serv'])('kit 与 %s 进程共享 Redis 总放行 5 次，节点时钟差异不提前重置 TTL', async (secondHost) => {
   const redis = await acquireRedisContainer()
   const children: ReturnType<typeof spawn>[] = []
   try {
     const config = { type: 'redis' as const, host: redis.host, port: redis.port }
     await cache.init(config)
     const namespace = `process-${crypto.randomUUID()}`
-    const urls = await Promise.all([0, 7200000].map(async (clockSkew) => {
+    const workers = [
+      { clockSkew: 0, host: 'kit' },
+      { clockSkew: 7200000, host: secondHost },
+    ]
+    const urls = await Promise.all(workers.map(async ({ clockSkew, host }) => {
       const child = spawn(process.execPath, [
         fileURLToPath(new URL('./helpers-rate-limit-worker.mjs', import.meta.url)),
       ], {
@@ -111,14 +117,23 @@ it('两个独立HTTP进程共享Redis总放行5次，节点时钟差异不提前
         stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         env: {
           ...process.env,
-          KIT_RATE_LIMIT_WORKER: JSON.stringify({ cache: config, namespace, clockSkew }),
+          KIT_RATE_LIMIT_WORKER: JSON.stringify({
+            cache: config,
+            namespace,
+            clockSkew,
+            host,
+          }),
         },
       })
       children.push(child)
+      let startupError = ''
+      child.stderr?.setEncoding('utf8').on('data', (value: string) => {
+        startupError += value
+      })
       const ready = await Promise.race([
         once(child, 'message'),
         once(child, 'exit').then(() => {
-          throw new Error('Worker exited before listening')
+          throw new Error(`Rate-limit worker exited before listening: ${startupError.trim()}`)
         }),
       ])
       const message = ready[0] as { port: number }

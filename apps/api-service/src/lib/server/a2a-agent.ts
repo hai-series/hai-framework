@@ -3,9 +3,8 @@
  * API Service - A2A Echo Executor
  * =============================================================================
  *
- * 简单回声执行器示例，配合 `ai.a2a.registerExecutor()` 使用；Agent Card 通过
- * `config/_ai.yml` 配置。如需通过 HTTP 暴露 A2A 端点，可在 `@h-ai/serv`
- * 之外自行扩展应用路由。
+ * 简单回声执行器示例，由应用在启用 A2A HTTP 入口后注册。Agent Card 由
+ * `config/_ai.yml` 定义，发现和调用路径由 `config/_serv.yml` 定义。
  */
 
 import type { AgentExecutor } from '@h-ai/ai'

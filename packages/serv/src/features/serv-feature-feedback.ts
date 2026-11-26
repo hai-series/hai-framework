@@ -9,6 +9,24 @@ import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
 
 /** 已认证请求到反馈范围的可信映射，返回 null 时拒绝访问。 */
+/**
+ * 已初始化的反馈服务与订单门户的可信提交人识别规则。
+ * @example
+ * ```ts
+ * import type { FeedbackProcedureDeps } from '@h-ai/serv'
+ *
+ * function orderFeedbackDeps(feedback: FeedbackProcedureDeps['feedback']): FeedbackProcedureDeps {
+ *   return {
+ *     feedback,
+ *     resolveContext: ({ session }) => ({
+ *       scopeId: 'orders',
+ *       userId: session.userId,
+ *       permissions: session.permissions,
+ *     }),
+ *   }
+ * }
+ * ```
+ */
 export interface FeedbackProcedureDeps {
   readonly feedback: FeedbackHttpOperations
   readonly resolveContext: (context: AuthenticatedServContext) => FeedbackContext | null | Promise<FeedbackContext | null>

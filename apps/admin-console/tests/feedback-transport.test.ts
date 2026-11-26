@@ -40,3 +40,13 @@ it('宿主能为特定反馈路径设置显式容量', async () => {
     },
   })
 })
+
+it('子目录应用的反馈容量匹配实际请求路径', async () => {
+  const { getAdminKitConfig } = await import('../src/lib/server/kit-config.js')
+  const transport = getAdminKitConfig('/console').transport
+  expect(transport).not.toBe(false)
+  if (!transport)
+    throw new Error('Transport disabled')
+  expect(transport.routePlaintextBytes).toMatchObject(apiContract.feedbackTransportRoutes('/console/api'))
+  expect(transport.routePlaintextBytes).not.toHaveProperty('/api/feedback/reports')
+})

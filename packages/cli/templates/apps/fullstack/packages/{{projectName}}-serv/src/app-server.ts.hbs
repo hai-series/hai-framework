@@ -1,6 +1,9 @@
 import type { CoreConfig } from '@h-ai/core'
 import type { ServHttpApp } from '@h-ai/serv'
 import process from 'node:process'
+{{#if features.ai}}
+import { ai } from '@h-ai/ai'
+{{/if}}
 {{#if features.feedback}}
 import { apiContract } from '@h-ai/api-contract/feedback'
 {{/if}}
@@ -30,10 +33,15 @@ export function createServerApp(): ServHttpApp {
   const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
   if (!ring.success)
     throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
+  const rateLimit = servConfig.http.rateLimit && {
+    ...servConfig.http.rateLimit,
+    store: core.access.createCacheRateLimitStore(cache, { namespace: '{{projectName}}', allowMemory: true }),
+  }
+  const { cors } = servConfig
   const security = serv.createRuntimeSecurityPolicy({
     environment: coreConfig.env,
-    corsOrigin: servConfig.cors.origin,
-    nativeOrigins: servConfig.cors.nativeOrigins,
+    corsOrigin: cors && cors.origin,
+    nativeOrigins: cors ? cors.nativeOrigins : undefined,
   })
   const publicPaths = [
     `${servConfig.http.apiPrefix}/assets`,
@@ -48,7 +56,22 @@ export function createServerApp(): ServHttpApp {
       : []),
   ]
 
+{{#if features.ai}}
+  const audio = serv.createIamAudio({
+    ai,
+    iam,
+    config: servConfig.audio,
+    permission: 'ai:audio:use',
+  })
+{{else}}
+  if (servConfig.audio)
+    throw new Error('audio requires the AI feature')
+{{/if}}
+
   return serv.createApp({
+{{#if features.ai}}
+    audio: audio.config,
+{{/if}}
     contract: contracts.{{fullstack.contractExportName}},
 {{#if features.feedback}}
     createContext: async input => ({
@@ -57,6 +80,9 @@ export function createServerApp(): ServHttpApp {
     }),
 {{/if}}
     procedures: createServerProcedures({
+{{#if features.ai}}
+      audio,
+{{/if}}
       app: {
         name: coreConfig.name,
         version: coreConfig.version,
@@ -67,7 +93,7 @@ export function createServerApp(): ServHttpApp {
         frontends: [...contracts.ENABLED_FRONTENDS],
       },
     }),
-    iam,
+    auth: { iam },
     refreshCookie: {
       secure: security.secureRefreshCookie,
       nativeTokenTransport: {
@@ -97,31 +123,51 @@ export function createServerApp(): ServHttpApp {
     },
     http: {
       ...servConfig.http,
+      rateLimit,
       openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
       docs: security.exposeApiDocs ? servConfig.http.docs : false,
     },
-    middlewares: [
-      {
-        middleware: serv.cors({
-          origin: security.allowOrigin,
-          credentials: servConfig.cors.credentials,
-          allowedHeaders: [
-            ...new Set([
-              ...servConfig.cors.allowedHeaders,
-              'X-Client-Id',
-              'X-Encrypted',
-              'X-Hai-Transport',
-              'X-Request-Client',
-              'X-HAI-Token-Transport',
-              'X-Hai-Reauthentication',
-              'X-Hai-Terminal',
-            ]),
-          ],
-          exposedHeaders: [
-            ...new Set([...servConfig.cors.exposedHeaders, 'X-Encrypted', 'X-Hai-Transport']),
-          ],
-        }),
+{{#if features.ai}}
+    a2a: servConfig.a2a && ai.a2a.createHttpHandler({
+      ...servConfig.a2a,
+      authenticate: {
+        verifyApiKey: key => iam.apiKey.verifyApiKey(key),
       },
+    }),
+{{/if}}
+    cors: cors && {
+      ...cors,
+      origin: security.allowOrigin,
+      credentials: cors.credentials,
+      allowedHeaders: [
+        ...new Set([
+          ...cors.allowedHeaders,
+          'X-Client-Id',
+          'X-Encrypted',
+          'X-Hai-Transport',
+          'X-Request-Client',
+          'X-HAI-Token-Transport',
+          'X-Hai-Reauthentication',
+          'X-Hai-Terminal',
+        ]),
+      ],
+      exposedHeaders: [
+        ...new Set([
+          ...cors.exposedHeaders,
+          'X-Encrypted',
+          'X-Hai-Transport',
+          ...(rateLimit
+            ? [
+                'Retry-After',
+                'X-RateLimit-Limit',
+                'X-RateLimit-Remaining',
+                'X-RateLimit-Reset',
+              ]
+            : []),
+        ]),
+      ],
+    },
+    middlewares: [
       {
         path: `${servConfig.http.apiPrefix}/assets/*`,
         middleware: serv.storageAssets({

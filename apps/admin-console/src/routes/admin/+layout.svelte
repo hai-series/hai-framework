@@ -57,7 +57,10 @@
     sessionRecovery.configure(data.iamPublicConfig, data.user)
     return () => sessionRecovery.cancel()
   })
-  $effect(() => authActions.bindPageExit({ enabled: data.iamPublicConfig.session.endOnPageHide }))
+  $effect(() => authActions.bindPageExit({
+    enabled: data.iamPublicConfig.session.endOnPageHide,
+    sessionFingerprint: data.sessionFingerprint,
+  }))
   $effect(() => {
     sensitiveActions.configure(data.iamPublicConfig.reauthentication)
     return () => sensitiveActions.cancel()

@@ -1,3 +1,8 @@
+{{#unless features.feedback}}
+{{#if features.ai}}
+import type { serv } from '@h-ai/serv'
+{{/if}}
+{{/unless}}
 import type { CreateAppProceduresOptions } from './app-procedures.js'
 {{#if features.feedback}}
 import { feedback } from '@h-ai/feedback'
@@ -10,6 +15,9 @@ import { createAppProcedures } from './app-procedures.js'
 
 export interface CreateServerProceduresOptions {
   readonly app: CreateAppProceduresOptions
+{{#if features.ai}}
+  readonly audio: ReturnType<typeof serv.createIamAudio>
+{{/if}}
 }
 
 /** 工程级 procedures 聚合入口；后续增加领域时在这里追加即可。 */
@@ -22,6 +30,11 @@ export function createServerProcedures(options: CreateServerProceduresOptions) {
     },
     admin: createAdminProcedures(),
     profile: createProfileProcedures(),
+{{#if features.ai}}
+    ai: {
+      audio: { issueTicket: options.audio.issueTicket },
+    },
+{{/if}}
 {{#if features.feedback}}
     feedback: serv.createFeedbackProcedures({
       feedback,

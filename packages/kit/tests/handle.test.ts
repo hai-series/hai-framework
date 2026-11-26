@@ -1,3 +1,4 @@
+import type { HttpRateLimitContext } from '@h-ai/core'
 import type { RequestEvent } from '@sveltejs/kit'
 /**
  * =============================================================================
@@ -7,9 +8,10 @@ import type { RequestEvent } from '@sveltejs/kit'
 
 import type { Handle } from '@sveltejs/kit/hooks'
 import type { SessionData } from '../src/kit-types.js'
-import { HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createHandle, sequence } from '../src/hooks/index.js'
+import { kit } from '../src/kit-main.js'
 
 /**
  * 创建模拟 RequestEvent
@@ -52,7 +54,7 @@ describe('createHandle', () => {
     const handle = createHandle({
       logging: false,
       auth: {
-        verifyToken: async () => null,
+        verifyToken: async () => core.err(HaiCommonError.UNAUTHORIZED),
         protectedPaths: ['/yyy/api/**'],
         loginUrl: '/yyy/auth/login',
       },
@@ -77,6 +79,84 @@ describe('createHandle', () => {
     expect(resolve).toHaveBeenCalledWith(event)
   })
 
+  it.each([false, true])('保留原生重定向并附加响应头（限流：%s）', async (rateLimited) => {
+    const handle = kit.createHandle({
+      logging: false,
+      http: {
+        rateLimit: rateLimited && {
+          store: core.access.createMemoryRateLimitStore(),
+        },
+      },
+    })
+    const response = await handle({
+      event: createMockEvent(),
+      resolve: async () => Response.redirect('http://localhost/account', 303),
+    })
+
+    expect(response.status).toBe(303)
+    expect(response.headers.get('location')).toBe('http://localhost/account')
+    expect(response.headers.get('x-request-id')).toMatch(/^req_/)
+    expect(response.headers.get('x-ratelimit-remaining')).toBe(rateLimited ? '99' : null)
+    expect(response.body).toBeNull()
+  })
+
+  it('只对实际 CORS 预检免计数，普通 OPTIONS 仍占用限流窗口', async () => {
+    const handle = kit.createHandle({
+      logging: false,
+      cors: { origin: 'https://example.test' },
+      http: {
+        rateLimit: {
+          maxRequests: 1,
+          store: core.access.createMemoryRateLimitStore(),
+        },
+      },
+    })
+    const resolve = vi.fn(() => new Response(null, { status: 204 }))
+    const preflight = await handle({
+      event: createMockEvent({
+        method: 'OPTIONS',
+        headers: { 'Origin': 'https://example.test', 'Access-Control-Request-Method': 'GET' },
+      }),
+      resolve,
+    })
+    expect(preflight.status).toBe(204)
+    expect(preflight.headers.get('Access-Control-Allow-Origin')).toBe('https://example.test')
+    expect(preflight.headers.get('X-RateLimit-Remaining')).toBeNull()
+    const plainOptions = await handle({
+      event: createMockEvent({ method: 'OPTIONS' }),
+      resolve,
+    })
+    expect(plainOptions.status).toBe(204)
+    expect(plainOptions.headers.get('X-RateLimit-Remaining')).toBe('0')
+    expect((await handle({
+      event: createMockEvent(),
+      resolve,
+    })).status).toBe(429)
+    expect(resolve).toHaveBeenCalledOnce()
+  })
+
+  it('拒绝旧的顶层 rateLimit 和缺少原子存储的运行时配置', () => {
+    const legacy = { logging: false, rateLimit: false }
+    expect(() => kit.createHandle(legacy)).toThrow('http.rateLimit')
+    expect(() => kit.createHandle({
+      http: {
+        rateLimit: { maxRequests: 1, store: undefined! },
+      },
+    })).toThrow('atomic')
+  })
+
+  it('保留原生 Fetch 响应的流式正文与原有响应头', async () => {
+    const response = await kit.createHandle({ logging: false })({
+      event: createMockEvent(),
+      resolve: () => fetch('data:text/plain,upstream%20body'),
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('text/plain')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(await response.text()).toBe('upstream body')
+  })
+
   it('应该通过 Authorization header 验证会话', async () => {
     const mockSession: SessionData = {
       userId: 'user1',
@@ -85,7 +165,7 @@ describe('createHandle', () => {
       permissions: ['read'],
     }
 
-    const validateSession = vi.fn().mockResolvedValue(mockSession)
+    const validateSession = vi.fn().mockResolvedValue(core.ok(mockSession))
 
     const handle = createHandle({
       logging: false,
@@ -103,6 +183,29 @@ describe('createHandle', () => {
     expect((event.locals as Record<string, unknown>).session).toEqual(mockSession)
   })
 
+  it('iAM 依赖故障返回安全的 503，业务及页面重定向均不执行', async () => {
+    const verifyToken = vi.fn(async () => core.err(HaiCommonError.SERVICE_UNAVAILABLE, 'Identity storage details'))
+    const handle = createHandle({
+      auth: {
+        verifyToken,
+        protectedPaths: ['/admin/**'],
+        loginUrl: '/auth/login',
+      },
+    })
+    const resolve = vi.fn(() => new Response('Private content'))
+    const response = await handle({
+      event: createMockEvent({
+        path: '/admin/reports',
+        headers: { authorization: 'Bearer sample-token' },
+      }),
+      resolve,
+    })
+    expect(response.status).toBe(503)
+    expect(response.headers.get('Location')).toBeNull()
+    expect(await response.text()).not.toContain('Identity storage details')
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
   it('缺少 Authorization 时不应触发会话验证', async () => {
     const mockSession: SessionData = {
       userId: 'user1',
@@ -111,7 +214,7 @@ describe('createHandle', () => {
       permissions: ['read'],
     }
 
-    const validateSession = vi.fn().mockResolvedValue(mockSession)
+    const validateSession = vi.fn().mockResolvedValue(core.ok(mockSession))
 
     const handle = createHandle({
       logging: false,
@@ -168,6 +271,105 @@ describe('createHandle', () => {
 
     expect(guard).not.toHaveBeenCalled()
     expect(resolve).toHaveBeenCalled()
+  })
+
+  it('按应用的解码路径选择守卫，保留挂载前缀和公开目录例外', async () => {
+    const guard = vi.fn().mockReturnValue({ allowed: true })
+    const handle = kit.createHandle({
+      logging: false,
+      guards: [
+        {
+          guard,
+          paths: ['/yyy/目录/**'],
+          exclude: ['/yyy/目录/%E5%85%AC%E5%BC%80'],
+        },
+      ],
+    })
+    const resolve = () => new Response('OK')
+
+    expect((await handle({
+      event: createMockEvent({ path: '/yyy/目录/详情' }),
+      resolve,
+    })).status).toBe(200)
+    expect(guard).toHaveBeenCalledOnce()
+    expect((await handle({
+      event: createMockEvent({ path: '/yyy/目录/公开' }),
+      resolve,
+    })).status).toBe(200)
+    expect(guard).toHaveBeenCalledOnce()
+  })
+
+  it('按地址限流涵盖 A2A 入口，拒绝请求时不会执行会话验证', async () => {
+    const getAgentCard = vi.fn(async () => Response.json({ name: 'Example Agent' }))
+    const verifyToken = vi.fn(async () => core.err(HaiCommonError.UNAUTHORIZED))
+    const handle = kit.createHandle({
+      logging: false,
+      a2a: {
+        cardPath: '/.well-known/agent-card.json',
+        rpcPath: '/a2a',
+        handleRequest: getAgentCard,
+      },
+      auth: { verifyToken },
+      http: {
+        rateLimit: {
+          maxRequests: 1,
+          store: core.access.createMemoryRateLimitStore(),
+        },
+      },
+    })
+    const resolve = vi.fn(() => new Response('OK'))
+
+    const card = await handle({
+      event: createMockEvent({ path: '/.well-known/agent-card.json' }),
+      resolve,
+    })
+    expect(card.status).toBe(200)
+    expect(await card.json()).toEqual({ name: 'Example Agent' })
+    const event = createMockEvent({
+      path: '/api/member',
+      headers: { authorization: 'Bearer fixture' },
+    })
+    const refused = await handle({ event, resolve })
+    expect(refused.status).toBe(429)
+    expect(getAgentCard).toHaveBeenCalledOnce()
+    expect(verifyToken).not.toHaveBeenCalled()
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it('自定义限流键可以在验证会话后从 locals 获取用户', async () => {
+    const session: SessionData = {
+      userId: 'member',
+      roles: ['member'],
+      permissions: [],
+    }
+    const verifyToken = vi.fn().mockResolvedValue(core.ok(session))
+    const keyGenerator = vi.fn((context: HttpRateLimitContext) => {
+      expect(context).toMatchObject({ session })
+      return session.userId
+    })
+    const handle = kit.createHandle({
+      logging: false,
+      auth: {
+        verifyToken,
+        protectedPaths: ['/api/member'],
+      },
+      http: {
+        rateLimit: {
+          keyGenerator,
+          store: core.access.createMemoryRateLimitStore(),
+        },
+      },
+    })
+
+    const response = await handle({
+      event: createMockEvent({
+        path: '/api/member',
+        headers: { authorization: 'Bearer fixture' },
+      }),
+      resolve: () => new Response('OK'),
+    })
+    expect(response.status).toBe(200)
+    expect(verifyToken).toHaveBeenCalledBefore(keyGenerator)
   })
 
   it('应该执行中间件', async () => {

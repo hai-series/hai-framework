@@ -12,6 +12,7 @@
   "apiClient_alreadyInitialized": "APIクライアントは初期化済みです。init()の前にapiClient.close()を呼び出してください",
   "apiClient_configError": "APIクライアントの設定エラー: {error}",
   "apiClient_invalidBaseUrl": "HTTP(S) の API URL、またはブラウザと同一オリジンのルート相対パスを指定してください。認証情報、クエリ、フラグメントは指定できません。",
+  "apiClient_invalidKeyExchangePath": "鍵交換パスにはドットセグメント、ワイルドカード、エンコード、クエリ、フラグメントを含まない固定の絶対パスを指定してください。",
   "apiClient_responseValidationFailed": "レスポンスの検証に失敗しました",
   "apiClient_unknown": "不明なエラー"
 }

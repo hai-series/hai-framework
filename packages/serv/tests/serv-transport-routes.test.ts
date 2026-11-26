@@ -67,13 +67,15 @@ function createApp(mounts = transportRoutes, transport?: ServTransportConfig, ex
           },
         }
       : undefined,
-    verifyToken: async token => token === authorized
-      ? core.ok({
-          userId: 'user-1',
-          permissions: ['events:read'],
-          roles: [],
-        })
-      : core.err(HaiCommonError.UNAUTHORIZED, 'Unknown test session'),
+    auth: {
+      verifyToken: async token => token === authorized
+        ? core.ok({
+            userId: 'user-1',
+            permissions: ['events:read'],
+            roles: [],
+          })
+        : core.err(HaiCommonError.UNAUTHORIZED, 'Unknown test session'),
+    },
   })
   const headers = { authorization: `Bearer ${authorized}` }
   return { app, headers, onEnd, upload }
@@ -133,6 +135,55 @@ it('authenticates before parsing and enforces the actual upload wire limit', asy
   const res = await app.request(baseUrl, { method: 'POST', headers, body: input })
   expect(res.status).toBe(413)
   expect(upload).not.toHaveBeenCalled()
+})
+
+it('keeps the admission decision through input validation for each dispatch of the same Request', async () => {
+  const validating = Promise.withResolvers<void>()
+  const resume = Promise.withResolvers<void>()
+  const validate = vi.fn()
+    .mockImplementationOnce(async () => {
+      validating.resolve()
+      await resume.promise
+    })
+  const contract = {
+    download: apiContract.route({ method: 'GET', path: '/document' })
+      .input(z.object({
+        key: z.string(),
+      }).superRefine(async () => validate()))
+      .output(z.file()),
+  }
+  const download = vi.fn(() => new File(['document'], 'document.txt', { type: 'text/plain' }))
+  const procedures = serv.implement(contract).context<ServContext>().route('download').auth().handleTransport(download).build()
+  const handler = serv.createContractHandler({
+    contract,
+    procedures,
+    transportRoutes: [
+      { procedure: contract.download, maxRequestBytes: 0 },
+    ],
+  })
+  const request = new Request('https://api.test/api/v1/document?key=receipt')
+  const context = {
+    request,
+    requestId: 'test-report',
+    session: { userId: 'user-1', permissions: [], roles: [] },
+  }
+  const fetchDocument = () => handler.fetch(request, () => context, { enabled: false })
+  const first = fetchDocument()
+  let second: Response | undefined
+  try {
+    await validating.promise
+    second = await fetchDocument()
+  }
+  finally {
+    resume.resolve()
+  }
+  for (const response of [await first, second]) {
+    expect(response?.status).toBe(200)
+    expect(response?.headers.get('cache-control')).toBe('no-store')
+    expect(response?.headers.get('content-disposition')).toMatch(/^attachment;/)
+    expect(await response?.text()).toBe('document')
+  }
+  expect(download).toHaveBeenCalledTimes(2)
 })
 
 it('denies a transport procedure until the host opts in', async () => {

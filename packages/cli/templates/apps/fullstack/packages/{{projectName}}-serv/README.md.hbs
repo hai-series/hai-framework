@@ -26,7 +26,7 @@
 以下是可运行示例的初始实现，角色/权限、管理流程、头像限额、分页、审计策略及部署方案均可按用户需求调整。需求与代码或模板规则不一致时，以需求为业务基线同步实现、测试与过期说明；实际框架 API 契约和服务端安全校验仍需满足。
 
 - `config/_core.yml`：应用元信息（名称 / 版本 / 环境 / 语言），启动时由 `core.config` 加载。
-- `config/_serv.yml`：服务端运行时设置（CORS 来源等）。
+- `config/_serv.yml`：监听、可信代理、访问规则、固定窗口限流、CORS 和传输加密。限流默认关闭，生产开启后通过共享 Redis 计数。启用与验证见根目录的 [安全配置指南](../../docs/security-configuration.md#配置请求来源限流与密钥交换)。
 - `config/_db.yml` / `_cache.yml` / `_iam.yml` / `_storage.yml` / `_audit.yml` / `_reach.yml`：管理及开发通知配置，初始化前使用模块公开 Schema 验证。Reach 默认控制台 Provider，生产按注释替换为 SMTP/短信/API。
 - `config/_ai.yml` / `_vecdb.yml` / `_payment.yml` / `_kit.yml`：保留未启用模块的完整注释示例；配置文件存在不代表模块已接入。先在本 workspace 安装对应依赖，再在 `src/server/runtime.ts` 按公开 Schema 校验、初始化并反序关闭，接入实际业务后按需取消注释。整份注释先去掉一层外层注释，可选字段继续按需开启。scheduler 已用于审计任务，配置位于 `_scheduler.yml`。
 - `src/index.ts`：进程入口，通过 `src/server/runtime.ts` 先向 Core 注册各模块公开 Schema 并加载配置，再初始化 reldb → cache → crypto → storage → reach（有配置时）→ audit → iam → scheduler（有任务时）；YAML 未声明的合法可选字段同样支持细项环境变量，启动失败及退出反序释放。
@@ -48,7 +48,7 @@ CLI 已在根目录 `.env.dev.local/.env.test.local/.env.prod.local` 为每个�
 
 所有配置字段以模块 Schema 为准；未使用字段和替代 Provider 用注释保留。宿主显式提供模块 Schema 后，合法可选路径可直接用细项配置；同源 `HAI_DB` / `HAI_CACHE` JSON 为基础，细项继续覆盖；`connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。凭据示例在根 `.env.example`，初始管理员密码和传输密钥环按环境生成到 `.env.dev.local/.env.test.local/.env.prod.local`；其他私有值或覆盖值保存在忽略的 `.env.local` 或部署环境。`.gitignore` 的 `**/data/` 忽略所有运行数据及 `.gitkeep`；运行时会创建目录。`crypto.init()` 无配置参数，datapipe 为纯函数，不提供虚构配置。
 
-CLI 同时在根 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成独立的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`，运行时不隐式生成。同一环境所有节点从环境文件加载相同 ring，也可由 Secret Manager 统一覆盖，客户端 registry 复用共享 reldb。私钥不进入普通 YAML、PUBLIC_/VITE_、日志或公开响应。轮换先分发含新旧版本的 ring，再切 activeKeyId 并滚动重建；过渡期后删除旧 ID，旧客户端 destroy 后重协商。没有 sticky session 依赖。
+CLI 将本地开发和测试的示例密钥环写入根目录的 `.env.dev`、`.env.test`，并将生产密钥环写入忽略的 `.env.prod.local`。同一生产环境的所有节点从受保护配置或 Secret Manager 加载同一份 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，并共用 Redis 中的客户端公钥登记和防重放状态，网关无需绑定会话到单个实例。密钥环结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`，私钥只留在服务端。轮换时先分发包含新旧版本的密钥环，再切换 `activeKeyId`，过渡期后撤销旧版本。
 
 自动生成的 `.env` 包含已启用模块的环境参数；YAML 显式引用相同变量并保留本地回退。使用 `start:test` / `start:prod` 加载对应环境覆盖。
 
@@ -60,9 +60,15 @@ CLI 同时在根 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成�
 从工程根运行 `pnpm build --target image` 导出镜像。默认带部署工具，可运行 `pnpm run deploy --env test --build` 一次完成构建发布，或 `pnpm run deploy --env prod --bundle-only` 交付已有镜像及跨平台脚本。完整包包含自建中间件，人工部署与按服务更新见工程根 README。
 
 - 服务镜像直接由 `@h-ai/serv` 对外监听，配置挂载点为 `/app/config`，数据目录为 `/app/data`，不包含额外转发进程。
-- Web 镜像不烘焙 API 地址；启动时使用 `-e PUBLIC_API_BASE=https://api.example.com` 注入，同一镜像可部署到不同环境。未设置时 Web 默认请求自身 origin。
+- Web 镜像不烘焙 API 地址；启动时使用 `-e PUBLIC_API_BASE=https://api.example.com` 注入，同一镜像可部署到不同环境。未设置时 Web 默认请求自身 origin。修改 _serv.yml 的 transport.keyExchangePath 后，自管 Web 镜像还需注入 PUBLIC_API_KEY_EXCHANGE_PATH；受管 Fullstack 网关自动发布该路径，并在业务前缀之外也能单独转发。
 - YAML 配置使用 `${ENV_NAME:default}` 接收运行时环境变量；不要把密钥写入镜像。
 - 受控内网或 VPN 的生产 HTTP 入口可在 `.env.prod.local` 设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 和实际 `HAI_SERV_CORS_ORIGIN`，重新部署后端后重新登录。刷新凭据会经 HTTP 明文传输。
+{{#if features.ai}}
+
+### 实时语音
+
+在 `_ai.yml` 配置语音模型，给 IAM 员工角色授予 `ai:audio:use`，在 `_serv.yml` 设置 `audio: { path: /voice }`。员工使用当前会话调用 `ai.audio.issueTicket` 取得一次性票据，浏览器用该票据连接 `wss://<站点域名>/voice`。受管网关转发升级请求，并关闭该路径的日志以保护票据。外层代理按路径限制流量时，也要放行 `/voice`。
+{{/if}}
 
 ### IAM 认证配置
 

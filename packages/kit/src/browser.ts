@@ -26,11 +26,9 @@ import { setAllModulesLocale } from './kit-i18n.js'
  * ```
  */
 export const kit: BrowserKitFunctions = {
-  matchPermission,
-  resolveOptions,
-  resolveText,
   resolveConfig: resolveKitConfig,
   resolveTransportConfig: resolveKitTransportConfig,
+  guard: { matchPermission },
   client: {
     create: createKitClient,
     createAuthActions: createKitAuthActions,
@@ -39,6 +37,8 @@ export const kit: BrowserKitFunctions = {
   },
   crud: {
     define: defineCrud,
+    resolveOptions,
+    resolveText,
   },
   auth: {
     setBrowserToken,
@@ -59,7 +59,6 @@ export type {
 export type {
   ApiResponse,
   AuthOperations,
-  AuthOperationsProvider,
   BrowserKitFunctions,
   CorsConfig,
   FormError,
@@ -67,13 +66,13 @@ export type {
   GuardConfig,
   GuardResult,
   HaiRequestEvent,
-  HandleA2AConfig,
-  HandleA2AOperations,
   HandleAuthConfig,
   HandleConfig,
   HookCryptoConfig,
   KitConfig,
   KitConfigInput,
+  KitHttpConfig,
+  KitHttpConfigInput,
   KitPublicConfig,
   KitServerConfig,
   KitServerConfigInput,

@@ -18,7 +18,7 @@ it('本地存储经 typed client 中转文件并限制对象所有权、覆盖�
     const app = serv.createApp({
       contract,
       procedures: {
-        storageTransfer: serv.createStorageExtensionProcedures({
+        storageTransfer: serv.createStorageTransferProcedures({
           storage,
           authorize: ({ context, keys }) => keys[0].startsWith(`users/${context.session.userId}/`),
         }),

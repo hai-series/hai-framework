@@ -79,7 +79,13 @@ describe('generated scaffold', () => {
       const publicConfig = await iam.getPublicConfig()
       if (!publicConfig.success)
         throw new Error(publicConfig.error.message)
-      expect(await load()).toEqual({
+      const event: Pick<Parameters<typeof load>[0], 'depends' | 'locals' | 'setHeaders'> = {
+        depends: () => {},
+        locals: { requestId: 'scaffold-public-config', locale: 'en-US' },
+        setHeaders: () => {},
+      }
+      // 模拟布局读取的三个宿主字段，无需启动 SvelteKit 服务器。
+      expect(await load(event as Parameters<typeof load>[0])).toEqual({
         kitConfig: { transport: getKitConfig().transport },
         iamPublicConfig: publicConfig.data,
         appConfig: {

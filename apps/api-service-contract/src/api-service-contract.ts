@@ -12,7 +12,10 @@ import { appContract } from './app-contract.js'
 export const apiServiceContract = apiContract.create({
   iam: apiContract.iam,
   storage: apiContract.storage,
-  ai: apiContract.ai,
+  ai: {
+    ...apiContract.ai,
+    audio: { issueTicket: apiContract.extensions.ai.audio.issueTicket },
+  },
   app: appContract,
 })
 

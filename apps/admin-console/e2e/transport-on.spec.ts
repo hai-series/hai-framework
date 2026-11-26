@@ -110,7 +110,7 @@ test.describe('Transport enabled E2E', () => {
       await route.fulfill({ response })
     })
     const networkDataPromise = page.waitForResponse(response => response.url().includes('/admin/iam/roles/__data.json'))
-    const exchangePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/_hai/key-exchange').then(async (response) => {
+    const exchangePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/_hai/key-exchange').then(async (response) => {
       expect(response.ok()).toBe(true)
       return response.json() as Promise<{ clientId: string, clientKeyTtlSeconds: number }>
     })

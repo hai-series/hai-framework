@@ -6,10 +6,12 @@
  * @module serv-config
  */
 
-import type { RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
+import type { HttpCorsConfig, HttpCorsConfigInput, HttpHostA2AConfig, HttpHostA2AConfigInput, HttpRateLimitConfig, HttpRateLimitConfigInput, RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
+import type { PublicTransportConfig, PublicTransportConfigInput } from '@h-ai/crypto'
 import process from 'node:process'
-import { RequestAccessConfigSchema, TrustedProxiesSchema } from '@h-ai/core'
-import { crypto } from '@h-ai/crypto'
+import { apiContract } from '@h-ai/api-contract'
+import { HttpAccessConfigSchema, HttpCorsConfigSchema, HttpEndpointPathSchema, HttpHostA2AConfigSchema } from '@h-ai/core'
+import { TransportConfigSchema } from '@h-ai/crypto'
 import { z } from 'zod'
 import { servM } from './serv-i18n.js'
 
@@ -113,22 +115,11 @@ export interface ServHealthHttpConfig {
  *
  * import { type ServTransportRuntimeConfig, serv } from '@h-ai/serv'
  *
- * const transport: ServTransportRuntimeConfig = { keyExchangePath: '/_hai/key-exchange', excludePaths: ['/health'] }
+ * const transport: ServTransportRuntimeConfig = { keyExchangePath: '/api/v1/_hai/key-exchange', excludePaths: ['/health'] }
  * // 仅路径配置；真正启用还需私有 keyring 与共享 keyStore。
  *```
  */
-export interface ServTransportRuntimeConfig {
-  /** 双向明文 UTF-8 字节上限；省略使用 1 MiB，范围 1 KiB～64 MiB。 */
-  readonly maxPlaintextBytes?: number
-  /** 请求时间允许领先服务器的秒数，默认 30，整数范围 0～1800。 */
-  readonly maxFutureSkewSeconds?: number
-  /** 请求从签发起的有效秒数，默认 300，整数范围 1～3600。 */
-  readonly maxRequestAgeSeconds?: number
-  /** 按完整路径段匹配的明文容量；* 匹配单段。 */
-  readonly routePlaintextBytes?: Readonly<Record<string, number>>
-  readonly keyExchangePath: `/${string}`
-  readonly excludePaths: readonly `/${string}`[]
-}
+export type ServTransportRuntimeConfig = PublicTransportConfig
 
 /**
  * `config/_serv.yml` 中可序列化的跨端 CORS 配置。
@@ -138,16 +129,10 @@ export interface ServTransportRuntimeConfig {
  *
  * import { type ServCorsRuntimeConfig, serv } from '@h-ai/serv'
  *
- * const cors: ServCorsRuntimeConfig = { origin: 'https://app.example.com', allowedHeaders: ['Authorization', 'Content-Type'], exposedHeaders: [], credentials: true }
+ * const cors: ServCorsRuntimeConfig = { origin: 'https://app.example.com', methods: ['GET'], allowedHeaders: ['Authorization'], exposedHeaders: [], credentials: true, maxAge: 3600 }
  *```
  */
-export interface ServCorsRuntimeConfig {
-  readonly origin?: string
-  readonly nativeOrigins?: string
-  readonly allowedHeaders: readonly string[]
-  readonly exposedHeaders: readonly string[]
-  readonly credentials: boolean
-}
+export type ServCorsRuntimeConfig = Exclude<HttpCorsConfig, false>
 
 /**
  * ServHttpApp 的 HTTP 挂载配置。
@@ -157,7 +142,7 @@ export interface ServCorsRuntimeConfig {
  *
  * import { type ServHttpConfig, serv } from '@h-ai/serv'
  *
- * const http: ServHttpConfig = { trustedProxies: 'auto', access: false, apiPrefix: '/api/v1', openapi: false, docs: false, health: { path: '/health' } }
+ * const http: ServHttpConfig = { trustedProxies: 'auto', access: false, rateLimit: false, apiPrefix: '/api/v1', openapi: false, docs: false, health: { path: '/health' } }
  *```
  */
 export interface ServHttpConfig {
@@ -165,6 +150,8 @@ export interface ServHttpConfig {
   readonly trustedProxies: TrustedProxies
   /** 每次请求的 IP/时间策略；默认 false，内联与独立文件二选一。 */
   readonly access: RequestAccessConfigInput
+  /** 请求频率策略。默认关闭，启用时由宿主注入原子计数存储。 */
+  readonly rateLimit: HttpRateLimitConfig
   readonly apiPrefix: `/${string}`
   readonly openapi: false | ServOpenAPIHttpConfig
   readonly docs: false | ServDocsHttpConfig
@@ -188,8 +175,10 @@ export interface ServHttpConfig {
 export interface ServConfig {
   readonly server: ServServerConfig
   readonly http: ServHttpConfig
-  readonly cors: ServCorsRuntimeConfig
+  readonly cors: HttpCorsConfig
   readonly transport: false | ServTransportRuntimeConfig
+  readonly a2a: HttpHostA2AConfig
+  readonly audio: false | Readonly<{ path: `/${string}` }>
 }
 
 /**
@@ -203,7 +192,7 @@ export interface ServConfig {
  * const input: ServCorsRuntimeConfigInput = { origin: 'https://app.example.com', credentials: true }
  *```
  */
-export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
+export type ServCorsRuntimeConfigInput = Exclude<HttpCorsConfigInput, false>
 
 /**
  * `config/_serv.yml` 中的传输加密输入类型。
@@ -213,18 +202,11 @@ export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
  *
  * import { type ServTransportRuntimeConfigInput, serv } from '@h-ai/serv'
  *
- * const input: ServTransportRuntimeConfigInput = { keyExchangePath: '/_hai/key-exchange' }
+ * const input: ServTransportRuntimeConfigInput = { keyExchangePath: '/api/v1/_hai/key-exchange' }
  * // 此输入不包含私钥；私有 Secret 仅在服务端运行时装配。
  *```
  */
-export type ServTransportRuntimeConfigInput = Partial<{
-  readonly maxPlaintextBytes: number | 'auto'
-  readonly maxFutureSkewSeconds: number
-  readonly maxRequestAgeSeconds: number
-  readonly routePlaintextBytes: Readonly<Record<string, number>>
-  readonly keyExchangePath: `/${string}`
-  readonly excludePaths: readonly `/${string}`[]
-}>
+export type ServTransportRuntimeConfigInput = PublicTransportConfigInput
 
 /**
  * `serv.createApp` 接受的 HTTP 配置入参类型。
@@ -240,6 +222,7 @@ export type ServTransportRuntimeConfigInput = Partial<{
 export type ServHttpConfigInput = Partial<{
   readonly trustedProxies: TrustedProxies
   readonly access: RequestAccessConfigInput
+  readonly rateLimit: HttpRateLimitConfigInput
   readonly apiPrefix: `/${string}`
   readonly openapi: false | Partial<ServOpenAPIHttpConfig>
   readonly docs: false | Partial<ServDocsHttpConfig>
@@ -264,8 +247,10 @@ export type ServHttpConfigInput = Partial<{
 export interface ServConfigInput {
   readonly server?: ServServerConfigInput
   readonly http?: ServHttpConfigInput
-  readonly cors?: ServCorsRuntimeConfigInput
+  readonly cors?: HttpCorsConfigInput
   readonly transport?: false | ServTransportRuntimeConfigInput
+  readonly a2a?: HttpHostA2AConfigInput
+  readonly audio?: false | Readonly<{ path?: `/${string}` }>
 }
 
 const OpenAPIHttpConfigInputSchema = z.union([
@@ -291,45 +276,19 @@ const HealthHttpConfigInputSchema = z.union([
   }),
 ])
 
-const TransportRuntimeConfigInputSchema = z.union([
-  z.literal(false),
-  z.object({
-    maxPlaintextBytes: z.union([
-      z.number().int().min(crypto.transport.plaintextRange.min).max(crypto.transport.plaintextRange.max),
-      z.literal('auto'),
-    ]).transform(value => value === 'auto'
-      ? undefined
-      : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
-    maxFutureSkewSeconds: z.number().int().min(0).max(crypto.transport.timeLimits.maxFutureSkewSeconds).optional().describe('允许客户端请求时间领先服务器的秒数').meta({ default: crypto.transport.protocol.CLOCK_SKEW_MS / 1000 }),
-    maxRequestAgeSeconds: z.number().int().min(crypto.transport.timeLimits.minRequestAgeSeconds).max(crypto.transport.timeLimits.maxRequestAgeSeconds).optional().describe('请求从签发起的有效秒数').meta({ default: crypto.transport.protocol.REQUEST_WINDOW_MS / 1000 }),
-    routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(crypto.transport.plaintextRange.min).max(crypto.transport.plaintextRange.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
-    keyExchangePath: AbsolutePathSchema.default('/_hai/key-exchange'),
-    excludePaths: z.array(AbsolutePathSchema).default([]),
-  }),
-])
-
 const ServerConfigInputSchema = z.object({
   host: z.string().min(1).default('127.0.0.1'),
   port: z.number().int().min(1).max(65535).default(3000),
 })
 
-const CorsRuntimeConfigInputSchema = z.object({
-  origin: z.string().optional(),
-  nativeOrigins: z.string().optional(),
-  allowedHeaders: z.array(z.string()).default([
-    'Authorization',
-    'Content-Type',
-    'X-Requested-With',
-    'X-Hai-Reauthentication',
-    'X-Hai-Terminal',
-  ]),
-  exposedHeaders: z.array(z.string()).default([]),
-  credentials: z.boolean().default(false),
-})
+const audioConfigSchema = z.union([
+  z.literal(false),
+  z.strictObject({
+    path: HttpEndpointPathSchema.optional().describe('实时音频 WebSocket 的完整站点路径，默认由业务前缀与 /ai/audio 组成'),
+  }),
+]).default(false).describe('实时语音 WebSocket HTTP 路径；默认关闭')
 
-const ServHttpConfigInputSchema = z.object({
-  trustedProxies: TrustedProxiesSchema.default('auto'),
-  access: RequestAccessConfigSchema.default(false),
+const ServHttpConfigInputSchema = HttpAccessConfigSchema.extend({
   apiPrefix: ApiPrefixSchema.default('/api/v1'),
   openapi: OpenAPIHttpConfigInputSchema.default(false),
   docs: DocsHttpConfigInputSchema.default(false),
@@ -352,14 +311,25 @@ const ServHttpConfigInputSchema = z.object({
 export const ServConfigSchema = z.object({
   server: ServerConfigInputSchema.optional(),
   http: ServHttpConfigInputSchema.optional(),
-  cors: CorsRuntimeConfigInputSchema.optional(),
-  transport: TransportRuntimeConfigInputSchema.optional(),
-}).transform(({ server, http, cors, transport }) => ({
-  server: resolveServServerConfig(server ?? {}),
-  http: resolveServHttpConfig(http ?? {}),
-  cors: resolveServCorsRuntimeConfig(cors ?? {}),
-  transport: resolveServTransportRuntimeConfig(transport ?? false),
-}))
+  cors: HttpCorsConfigSchema,
+  transport: TransportConfigSchema,
+  a2a: HttpHostA2AConfigSchema,
+  audio: audioConfigSchema,
+}).transform(({ server, http, cors, transport, a2a, audio }): ServConfig => {
+  const httpConfig = http ?? resolveServHttpConfig()
+  return {
+    server: resolveServServerConfig(server ?? {}),
+    http: httpConfig,
+    cors,
+    transport,
+    a2a,
+    audio: audio === false
+      ? false
+      : {
+          path: apiContract.resolveAudioWebSocketPath(httpConfig.apiPrefix, audio.path),
+        },
+  }
+})
 
 /**
  * 读取 `HOST` / `PORT` 环境变量覆盖（环境变量高于配置文件）。
@@ -422,23 +392,6 @@ export function resolveServHttpConfig(input: ServHttpConfigInput = {}): ServHttp
  * 解析并校验配置输入，填充该层默认值。
  *
  * @param input - 对应层的可选配置
- * @returns 完整配置
- * @throws 配置违反 Schema 时抛出 ZodError；由启动边界处理。
- *
- * @example
- * ```ts
- * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * const cors = resolveServCorsRuntimeConfig({ origin: 'https://app.example.com', credentials: true })
- *```
- */
-export function resolveServCorsRuntimeConfig(input: ServCorsRuntimeConfigInput = {}): ServCorsRuntimeConfig {
-  return CorsRuntimeConfigInputSchema.parse(input)
-}
-
-/**
- * 解析并校验配置输入，填充该层默认值。
- *
- * @param input - 对应层的可选配置
  * @returns 完整配置；transport 关闭时为 false
  * @throws 配置违反 Schema 时抛出 ZodError；由启动边界处理。
  *
@@ -446,13 +399,13 @@ export function resolveServCorsRuntimeConfig(input: ServCorsRuntimeConfigInput =
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * const disabled = resolveServTransportRuntimeConfig(false)
- * const enabled = resolveServTransportRuntimeConfig({ keyExchangePath: '/_hai/key-exchange' })
+ * const enabled = resolveServTransportRuntimeConfig({ keyExchangePath: '/api/v1/_hai/key-exchange' })
  *```
  */
 export function resolveServTransportRuntimeConfig(
   input: false | ServTransportRuntimeConfigInput = false,
 ): false | ServTransportRuntimeConfig {
-  return TransportRuntimeConfigInputSchema.parse(input)
+  return TransportConfigSchema.parse(input)
 }
 
 /**

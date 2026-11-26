@@ -2,22 +2,64 @@
  * =============================================================================
  * @h-ai/kit - kit.auth 未配置场景测试
  * =============================================================================
- * 验证：当未通过 createHandle 注入 auth.operations 时，公共 API 必须返回
+ * 验证：当未通过 createHandle 注入 auth.iam 时，公共 API 必须返回
  * 失败 HaiResult（KIT_AUTH_NOT_CONFIGURED），禁止抛出未捕获异常。
  * =============================================================================
  */
 
 import type { AuthResult } from '@h-ai/iam'
-import type { AuthOperations } from '../src/kit-types.js'
-import { core } from '@h-ai/core'
+import type { AuthOperations } from '@h-ai/kit'
+import type { RequestEvent } from '@sveltejs/kit'
+import { core, HaiCommonError } from '@h-ai/core'
+import { kit } from '@h-ai/kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { configureAuth, login, loginWithApiKey, loginWithLdap, loginWithOtp, logout, registerAndLogin } from '../src/kit-auth.js'
+
+const { login, loginWithApiKey, loginWithLdap, loginWithOtp, logout, registerAndLogin } = kit.auth
 
 function createCookies() {
   return {
+    get: vi.fn<(name: string) => string | undefined>(),
     set: vi.fn(),
     delete: vi.fn(),
   }
+}
+
+function requestEvent(cookies: ReturnType<typeof createCookies>): RequestEvent {
+  const url = new URL('https://app.example.test/api/auth/login')
+  // 仅提供本测试中 Hook 消费的 SvelteKit 字段，其余由真实宿主提供。
+  return {
+    request: new Request(url),
+    url,
+    cookies,
+    locals: {},
+    route: { id: '/api/auth/login' },
+  } as RequestEvent
+}
+
+async function withAuthCookies(
+  cookies: ReturnType<typeof createCookies>,
+  operations: AuthOperations,
+  run: (cookies: RequestEvent['cookies']) => Promise<void>,
+) {
+  const handle = kit.createHandle({
+    logging: false,
+    auth: {
+      iam: {
+        auth: {
+          ...operations,
+          verifyToken: async () => core.err(HaiCommonError.UNAUTHORIZED),
+        },
+      },
+    },
+  })
+  const response = await handle({
+    event: requestEvent(cookies),
+    resolve: async ({ cookies }) => {
+      await run(cookies)
+      return new Response()
+    },
+  })
+  expect(response.ok).toBe(true)
 }
 
 afterEach(() => vi.unstubAllEnvs())
@@ -52,15 +94,7 @@ function createAuthOperations() {
 }
 
 describe('kit.auth 未配置时返回 HaiResult 错误', () => {
-  // 每个用例前重置 authState（通过 configureAuth 清空 operations）
-  function resetAuthState() {
-    // 通过传 undefined 无法清空（configureAuth 只在有值时写入），
-    // 因此用一个永远 throw 的 operations 占位，再通过另外的测试覆盖该路径
-    // 这里直接利用模块加载顺序：本文件单独运行不会先注入 operations
-  }
-
   it('login 未配置时返回 KIT_AUTH_NOT_CONFIGURED', async () => {
-    resetAuthState()
     const cookies = createCookies()
     const result = await login(cookies, { identifier: 'a', password: 'b' })
     expect(result.success).toBe(false)
@@ -127,30 +161,32 @@ describe('kit.auth 已配置时正常委托给 operations', () => {
     const operations = createAuthOperations()
     const failure = core.err({ code: 'STATE_UNAVAILABLE', message: 'Session state unavailable' })
     operations.logout.mockResolvedValueOnce(failure)
-    configureAuth({ operations })
     const cookies = createCookies()
-    expect(await logout(cookies, 'held-token')).toBe(failure)
+    await withAuthCookies(cookies, operations, async (boundCookies) => {
+      expect(await logout(boundCookies, 'held-token')).toBe(failure)
+    })
     expect(operations.logout).toHaveBeenCalledWith('held-token')
     expect(cookies.delete).toHaveBeenCalledWith('hai_access_token', { path: '/' })
   })
 
   it('logout 成功和底层异常都清Cookie，异常不被转换为成功', async () => {
     const operations = createAuthOperations()
-    configureAuth({ operations })
     const cookies = createCookies()
-    expect(await logout(cookies, 'held-token')).toEqual(core.ok(undefined))
-    operations.logout.mockRejectedValueOnce(new Error('Injected control-flow failure'))
-    await expect(logout(cookies, 'held-token')).rejects.toThrow('Injected control-flow failure')
+    await withAuthCookies(cookies, operations, async (boundCookies) => {
+      expect(await logout(boundCookies, 'held-token')).toEqual(core.ok(undefined))
+      operations.logout.mockRejectedValueOnce(new Error('Injected control-flow failure'))
+      await expect(logout(boundCookies, 'held-token')).rejects.toThrow('Injected control-flow failure')
+    })
     expect(cookies.delete).toHaveBeenCalledTimes(2)
   })
 
   it('login 已配置时调用 operations 并写入 Cookie', async () => {
     const mockOps = createAuthOperations()
-    configureAuth({ operations: mockOps })
-
     const cookies = createCookies()
-    const result = await login(cookies, { identifier: 'u', password: 'p' })
-    expect(result.success).toBe(true)
+    await withAuthCookies(cookies, mockOps, async (boundCookies) => {
+      const result = await login(boundCookies, { identifier: 'u', password: 'p' })
+      expect(result.success).toBe(true)
+    })
     expect(mockOps.login).toHaveBeenCalledOnce()
     expect(cookies.set).toHaveBeenCalledWith(
       'hai_access_token',
@@ -164,11 +200,61 @@ describe('kit.auth 已配置时正常委托给 operations', () => {
     vi.stubEnv('HAI_CORE_ENV', 'development')
     vi.stubEnv(productionFlag, 'production')
     vi.stubEnv('HAI_E2E', '1')
-    configureAuth({
-      operations: createAuthOperations(),
-    })
     const cookies = createCookies()
-    await login(cookies, { identifier: 'user', password: 'password' })
+    await withAuthCookies(cookies, createAuthOperations(), async (boundCookies) => {
+      const result = await login(boundCookies, { identifier: 'user', password: 'password' })
+      expect(result.success).toBe(true)
+    })
     expect(cookies.set).toHaveBeenCalledWith('hai_access_token', 'tk', expect.objectContaining({ secure: true }))
+  })
+
+  it('每个 Handle 使用自己的 Cookie、验证器和认证操作', async () => {
+    const fixtures = ['first', 'second'].map((id) => {
+      const operations = createAuthOperations()
+      const cookies = createCookies()
+      const verifyToken = vi.fn(async () => core.ok({ userId: id, roles: [], permissions: [] }))
+      cookies.get.mockImplementation(name => name === `${id}_cookie`
+        ? `${id}_access`
+        : undefined)
+      const handle = kit.createHandle({
+        logging: false,
+        auth: {
+          cookieName: `${id}_cookie`,
+          iam: {
+            auth: { ...operations, verifyToken },
+          },
+        },
+      })
+      return {
+        id,
+        operations,
+        cookies,
+        verifyToken,
+        handle,
+      }
+    })
+
+    await Promise.all(fixtures.map(async ({ cookies, operations, id, verifyToken, handle }) => {
+      const resolve = vi.fn(async (event: RequestEvent) => {
+        expect(event.locals).toMatchObject({
+          session: { userId: id },
+          accessToken: `${id}_access`,
+        })
+        const result = await login(event.cookies, { identifier: id, password: 'fixture-password' })
+        expect(result.success).toBe(true)
+        return new Response()
+      })
+      expect((await handle({
+        event: requestEvent(cookies),
+        resolve,
+      })).ok).toBe(true)
+      expect(verifyToken).toHaveBeenCalledExactlyOnceWith(`${id}_access`)
+      expect(operations.login).toHaveBeenCalledExactlyOnceWith({ identifier: id, password: 'fixture-password' }, undefined)
+      expect(cookies.set).toHaveBeenCalledExactlyOnceWith(`${id}_cookie`, 'tk', expect.objectContaining({ httpOnly: true }))
+    }))
+    expect((await login(createCookies(), { identifier: 'unconfigured', password: 'fixture-password' }))).toMatchObject({
+      success: false,
+      error: { code: 'KIT_AUTH_NOT_CONFIGURED' },
+    })
   })
 })

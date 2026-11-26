@@ -46,7 +46,9 @@ function setup(resolved: FeedbackContext = actor) {
       feedback,
       resolveContext: () => resolved,
     }),
-    verifyToken: async () => core.ok({ userId: actor.userId, roles: [], permissions: [] }),
+    auth: {
+      verifyToken: async () => core.ok({ userId: actor.userId, roles: [], permissions: [] }),
+    },
   })
   function send(body: object, authorized = true) {
     return app.request(`/api/v1/feedback/reports/${id}/messages`, {

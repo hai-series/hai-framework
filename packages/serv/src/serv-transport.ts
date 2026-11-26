@@ -60,9 +60,9 @@ export interface ServTransportConfig {
    */
   readonly crypto: CryptoFunctions
   /**
-   * 密钥协商端点路径（相对于 `apiPrefix`）。默认 `/_hai/key-exchange`。
+   * 密钥协商端点的站点绝对路径，独立于 `apiPrefix`。默认 `/api/v1/_hai/key-exchange`。
    */
-  readonly keyExchangePath?: string
+  readonly keyExchangePath?: `/${string}`
   /**
    * 不参与加解密的路径白名单（绝对路径完整匹配或前缀匹配）。
    * 健康检查、文档页等公共路由通常无需加密。
@@ -81,7 +81,7 @@ export interface ServTransportConfig {
  * - JSON 响应自动加密
  *
  * @param manager - 由 `crypto.transport.createServer()` 创建的管理器
- * @param keyExchangePath - 密钥协商绝对路径（已与 apiPrefix 拼接）
+ * @param keyExchangePath - 密钥协商端点的站点绝对路径。
  * @param excludePaths - 不参与加解密的路径
  * @param policy - 共享容量准入，由 createApp 创建。
  * @param encryption - 已编译的路径/方法选择器；显式规则优先于宿主排除列表。
@@ -100,20 +100,15 @@ export function createTransportMiddleware(
   keyExchangePath: string,
   excludePaths: readonly string[] = [],
   policy = crypto.transport.createBodyPolicy(manager.bodyLimits.plaintextBytes),
-  encryption?: RequestAccessCheck['encryption'],
+  encryption?: (path: string, method: string, request: Request) => ReturnType<RequestAccessCheck['encryption']>,
 ): MiddlewareHandler {
   return async (c, next) => {
     const pathname = new URL(c.req.url).pathname
-
-    // OPTIONS 无业务密文；交由请求策略和 CORS 处理，不要求先建立密钥。
-    if (c.req.method === 'OPTIONS')
-      return next()
-
     // Step 1：密钥协商端点直接短路处理，不进入下游业务逻辑。
     if (pathname === keyExchangePath && c.req.method === 'POST')
       return handleKeyExchange(c.req.raw, manager)
 
-    const mode = encryption?.(pathname, c.req.method)
+    const mode = encryption?.(pathname, c.req.method, c.req.raw)
     if (mode === 'disabled') {
       // 明文端点拒绝传输信封，防止把密文当业务数据处理或返回无法解密的成功响应。
       if (c.req.raw.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || c.req.raw.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)) {

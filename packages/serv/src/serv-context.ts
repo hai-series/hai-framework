@@ -8,13 +8,13 @@
  *   与 Bearer accessToken。**不会**填充 `session`。
  * - `buildAuthContextFactory(verifyToken)`：**带认证的上下文工厂**。在 `parseRequestContext` 基础上
  *   异步调用 `verifyToken(accessToken)` 校验访问令牌，若成功则把会话写入 `context.session`。
- *   失败或 token 不存在均使 `session = undefined`，下游 `.auth()` 返回失败 HaiResult（error.httpStatus=401），普通 procedure 默认 HTTP 200。
+ *   无 token 或校验明确拒绝时由下游守卫返回未认证。校验依赖故障由 HTTP 边界返回安全的 5xx。
  *
- * 应用层通常无需直接调用上述函数：`serv.createApp({ iam })` 内部自动选择最合适的工厂。
+ * 应用层通常无需直接调用上述函数：`serv.createApp({ auth: { iam } })` 内部自动选择最合适的工厂。
  * @module serv-context
  */
 
-import type { HaiResult, Logger } from '@h-ai/core'
+import type { HaiResult, HttpSession, HttpVerifyToken, Logger } from '@h-ai/core'
 import type { RefreshTokenPair } from './serv-cookie-auth.js'
 import { core } from '@h-ai/core'
 import { resolveRequestLocale } from './serv-validation.js'
@@ -33,18 +33,13 @@ import { resolveRequestLocale } from './serv-validation.js'
  * // 会话来自可信 verifyToken，不能将客户端 userId/roles 直接提升为会话。
  * ```
  */
-export interface ServSession {
-  readonly userId: string
-  readonly username?: string
-  readonly roles: string[]
-  readonly permissions: string[]
-}
+export type ServSession = HttpSession
 
 /**
  * serv 与 IAM 模块交互所需的**最小**接口。
  *
  * 结构上是 `@h-ai/iam` 的 `iam` 对象的子集 —— 直接传入 `iam` 即可（TypeScript 结构类型）。
- * 单一出处：在 `serv.createApp({ iam })` 提供后，serv 自动派生：
+ * 单一出处：在 `serv.createApp({ auth: { iam } })` 提供后，serv 自动派生：
  * - access token 校验（用于填充 `context.session`）
  * - refresh token 轮换（仅当启用 `refreshCookie` 时使用）
  *
@@ -64,7 +59,7 @@ export interface ServSession {
 export interface ServIam {
   readonly auth: {
     /** 验证会话并读取当前有效的用户与授权；不依赖最大努力会话同步。 */
-    verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>
+    verifyToken: HttpVerifyToken
   }
   readonly session: {
     /** 使用 refresh token 换发新令牌对；refreshCookie 启用时调用，不要求旧 access 有效。 */
@@ -153,6 +148,19 @@ const HEADER_AUTHORIZATION = 'authorization'
 const HEADER_USER_AGENT = 'user-agent'
 
 /**
+ * 携带访问令牌校验故障的状态与原始原因，交给 HTTP 错误边界处理。
+ * @example 模块内部上下文
+ * ```ts
+ * const failure = new ServAuthVerificationError(new Error('Validation provider unavailable'), 503)
+ * ```
+ */
+export class ServAuthVerificationError extends Error {
+  constructor(cause: unknown, readonly httpStatus = 500) {
+    super('Access token verification failed', { cause })
+  }
+}
+
+/**
  * 内部：客户端关联 ID 只作定位且必须有界，不提供任何授权。
  * @example 模块内部上下文
  * ```ts
@@ -201,7 +209,7 @@ export function extractBearerToken(value: string | null): string | undefined {
  * - **不会**读取 refresh token：refresh token 若启用 `refreshCookie`，只走专属刷新路由
  *
  * `session` 字段始终为 `undefined`：若需会话填充，请使用 {@link buildAuthContextFactory}
- * 或直接通过 `serv.createApp({ iam })` 让框架自动选择合适工厂。
+ * 或直接通过 `serv.createApp({ auth: { iam } })` 让框架自动选择合适工厂。
  *
  * @param input - 上下文输入
  * @returns 仅含元数据的 ServContext
@@ -246,7 +254,7 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  * 工作流程（每个请求执行一次）：
  * 1. 调用 `parseRequestContext` 提取元数据 + accessToken（仅来自 Authorization Bearer）
  * 2. 若 `accessToken` 存在 → 调用 `verifyToken(accessToken)`
- * 3. `verifyToken` 成功 → `session = result.data`；失败或 token 缺失 → `session = undefined`
+ * 3. 校验成功时设置会话；缺少 token 或校验返回有效 4xx 时保留匿名上下文。
  * 4. 下游 `.auth()` / `.permission()` / `.role()` guard 据此返回 HaiResult（error.httpStatus=401/403），普通 procedure 默认 HTTP 200
  *
  * refresh token **不参与**这里的认证流程：它只在 access token 过期后，被 `/auth/refresh`
@@ -254,11 +262,11 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  *
  * **安全保证**：
  * - 每个请求都会重新调用 `verifyToken`（不缓存），用户被撤权后立即生效
- * - `verifyToken` 失败时**不**抛错，统一收敛为 `session=undefined`，交由 guard 返回未认证的失败 HaiResult
- * - 异常通过 try/catch 兜底，避免向 HTTP 层泄漏堆栈
+ * - 校验器抛错或返回服务端故障时中止上下文构造，由 Serv HTTP 边界记录根因并返回安全错误。
  *
  * @param verifyToken - 访问令牌校验回调（通常是 `token => iam.auth.verifyToken(token)` 或自定义函数）
  * @returns 异步上下文工厂
+ * @throws 校验器抛错、返回 5xx 或返回无法分类的错误时，异步工厂拒绝。
  *
  * @example
  * ```ts
@@ -268,29 +276,23 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  * // IAM 已初始化；每个请求重新验证 token 与当前持久凭据/权限状态。
  * const factory = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
  * const context = await factory({ request: new Request('https://example.com/profile') })
- * // 未携带/验证失败时 session 为空，由 route guard 决定是否拒绝。
+ * // 未携带令牌或校验明确拒绝时 session 为空，由 route guard 决定是否拒绝。
  * ```
  */
 export function buildAuthContextFactory(
-  verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>,
+  verifyToken: HttpVerifyToken,
 ): CreateServContext {
   return async (input) => {
-    // Step 1：先同步解析请求头，拿到 requestId / locale / accessToken 等基础元数据。
     const base = parseRequestContext(input)
-    // Step 2：没有 access token 时返回基础上下文；后续由 `.auth()` guard 返回未认证的失败 HaiResult。
     if (!base.accessToken)
       return base
-    try {
-      // Step 3：有 token 时才触发异步校验；成功则把 session 注入上下文。
-      const result = await verifyToken(base.accessToken)
-      if (!result.success)
-        return base
-      // Step 4：返回带 session 的上下文，供 route guard 使用。
-      return { ...base, session: result.data }
-    }
-    catch {
-      // Step 5：verifyToken 抛错（不规范）也视为未认证；fail closed，不向上传播。
-      return base
-    }
+
+    const verified = await core.auth.verifySession(verifyToken, base.accessToken)
+    if (!verified.success)
+      throw new ServAuthVerificationError(verified.error.cause, verified.error.httpStatus)
+
+    return verified.data
+      ? { ...base, session: verified.data }
+      : base
   }
 }

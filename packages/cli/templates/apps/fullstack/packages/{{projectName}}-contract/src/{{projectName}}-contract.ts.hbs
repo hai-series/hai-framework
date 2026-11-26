@@ -15,6 +15,11 @@ export const {{fullstack.contractExportName}} = frameworkApiContract.create({
   iam: { auth: authContract },
   admin: adminContract,
   profile: profileContract,
+{{#if features.ai}}
+  ai: {
+    audio: { issueTicket: frameworkApiContract.extensions.ai.audio.issueTicket },
+  },
+{{/if}}
 {{#if features.feedback}}
   feedback: frameworkApiContract.feedback,
 {{/if}}

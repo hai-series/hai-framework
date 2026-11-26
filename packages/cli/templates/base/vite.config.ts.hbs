@@ -9,6 +9,11 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { core } from '@h-ai/core'
+{{#if isSvelteOnlyApp}}
+{{#if features.crypto}}
+import { crypto } from '@h-ai/crypto'
+{{/if}}
+{{/if}}
 {{#if hasUi}}
 {{#unless isSvelteOnlyApp}}
 import { ui } from '@h-ai/ui/auto-import'
@@ -81,6 +86,18 @@ export default defineConfig(({ mode, command }) => {
       : undefined,
   }
   const publicBase = resolvePublicBasePath()
+  const apiProxy = { target: process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000', changeOrigin: true, ws: true }
+{{#if features.crypto}}
+  const exchangePath = process.env.PUBLIC_API_KEY_EXCHANGE_PATH
+{{/if}}
+  const proxy = {
+    '/api': apiProxy,
+{{#if features.crypto}}
+    ...(crypto.transport.isKeyExchangePath(exchangePath)
+      ? { [exchangePath]: apiProxy }
+      : {}),
+{{/if}}
+  }
 {{/if}}
 
   return {
@@ -184,11 +201,17 @@ export default defineConfig(({ mode, command }) => {
     },
 {{/unless}}
     server: {
+{{#if isSvelteOnlyApp}}
+      proxy,
+{{/if}}
       fs: {
         allow: [
           path.resolve(process.cwd()),
         ],
       },
     },
+{{#if isSvelteOnlyApp}}
+    preview: { proxy },
+{{/if}}
   }
 })

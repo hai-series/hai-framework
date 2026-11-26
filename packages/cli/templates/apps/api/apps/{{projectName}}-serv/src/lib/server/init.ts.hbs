@@ -1,5 +1,11 @@
 /** 应用声明真实模块顺序；并发、失败回滚与关闭重试由 core 处理。 */
 {{#if features.ai}}
+{{#if features.iam}}
+import type { AgentExecutor } from '@h-ai/ai'
+{{/if}}
+{{/if}}
+import type { ServConfig } from '@h-ai/serv'
+{{#if features.ai}}
 import { ai, AIConfigSchema } from '@h-ai/ai'
 {{/if}}
 {{#if features.audit}}
@@ -8,7 +14,7 @@ import { audit, AuditInitConfigSchema } from '@h-ai/audit'
 {{#if features.cache}}
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 {{/if}}
-import { core } from '@h-ai/core'
+import { core, HaiConfigError } from '@h-ai/core'
 {{#if features.crypto}}
 import { crypto } from '@h-ai/crypto'
 {{/if}}
@@ -36,6 +42,13 @@ import { storage, StorageConfigSchema } from '@h-ai/storage'
 {{#if features.vecdb}}
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 {{/if}}
+
+{{#if features.ai}}{{#if features.iam}}
+/** 启用 serv.a2a 前，在此接入应用自己的执行器并检查调用方权限。 */
+function createA2AExecutor(): AgentExecutor | undefined {
+  return undefined
+}
+{{/if}}{{/if}}
 
 {{#if features.feedback}}
 async function startFeedback() {
@@ -215,6 +228,53 @@ const runtime = core.module.createRuntime([
     close: () => ai.close(),
   },
 {{/if}}
+  {
+    name: 'a2a-http',
+    enabled: () => Boolean(core.config.getOrThrow<ServConfig>('serv').a2a),
+    start: () => {
+{{#if features.ai}}
+{{#if features.iam}}
+      if (!iam.config?.login.apikey) {
+        return core.err({
+          ...HaiConfigError.CONFIG_VALIDATION_ERROR,
+          message: '',
+          ext: {
+            fields: ['iam.login.apikey'],
+          },
+        })
+      }
+      const executor = createA2AExecutor()
+      if (!executor) {
+        return core.err({
+          ...HaiConfigError.CONFIG_VALIDATION_ERROR,
+          message: '',
+          ext: {
+            fields: ['serv.a2a', 'createA2AExecutor'],
+          },
+        })
+      }
+      return ai.a2a.registerExecutor(executor)
+{{else}}
+      return core.err({
+        ...HaiConfigError.CONFIG_VALIDATION_ERROR,
+        message: '',
+        ext: {
+          fields: ['serv.a2a', 'iam.login.apikey'],
+        },
+      })
+{{/if}}
+{{else}}
+      return core.err({
+        ...HaiConfigError.CONFIG_VALIDATION_ERROR,
+        message: '',
+        ext: {
+          fields: ['serv.a2a', 'ai.a2a'],
+        },
+      })
+{{/if}}
+    },
+    close: () => { },
+  },
   {
     name: 'bootstrap',
     start: () => { core.logger.info('API service initialized') },

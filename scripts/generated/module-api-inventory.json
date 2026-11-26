@@ -27106,12 +27106,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "AuthOperationsProvider",
-              "kind": "type",
-              "declaration": "AuthOperationsProvider",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "BrowserKitFunctions",
               "kind": "type",
               "declaration": "BrowserKitFunctions",
@@ -27127,7 +27121,7 @@
               "name": "CorsConfig",
               "kind": "type",
               "declaration": "CorsConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "FormError",
@@ -27157,18 +27151,6 @@
               "name": "HaiRequestEvent",
               "kind": "type",
               "declaration": "HaiRequestEvent",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "HandleA2AConfig",
-              "kind": "type",
-              "declaration": "HandleA2AConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "HandleA2AOperations",
-              "kind": "type",
-              "declaration": "HandleA2AOperations",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -27226,6 +27208,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "KitHttpConfig",
+              "kind": "type",
+              "declaration": "KitHttpConfig",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KitHttpConfigInput",
+              "kind": "type",
+              "declaration": "KitHttpConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "KitPublicConfig",
               "kind": "type",
               "declaration": "KitPublicConfig",
@@ -27271,7 +27265,7 @@
               "name": "RateLimitConfig",
               "kind": "type",
               "declaration": "RateLimitConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "RouteGuard",
@@ -27283,7 +27277,7 @@
               "name": "SessionData",
               "kind": "type",
               "declaration": "SessionData",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "SessionLike",
@@ -27321,12 +27315,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "AuthOperationsProvider",
-              "kind": "type",
-              "declaration": "AuthOperationsProvider",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "BrowserKitFunctions",
               "kind": "type",
               "declaration": "BrowserKitFunctions",
@@ -27342,7 +27330,7 @@
               "name": "CorsConfig",
               "kind": "type",
               "declaration": "CorsConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "FormError",
@@ -27372,18 +27360,6 @@
               "name": "HaiRequestEvent",
               "kind": "type",
               "declaration": "HaiRequestEvent",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "HandleA2AConfig",
-              "kind": "type",
-              "declaration": "HandleA2AConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "HandleA2AOperations",
-              "kind": "type",
-              "declaration": "HandleA2AOperations",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -27441,6 +27417,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "KitHttpConfig",
+              "kind": "type",
+              "declaration": "KitHttpConfig",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KitHttpConfigInput",
+              "kind": "type",
+              "declaration": "KitHttpConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "KitPublicConfig",
               "kind": "type",
               "declaration": "KitPublicConfig",
@@ -27486,7 +27474,7 @@
               "name": "RateLimitConfig",
               "kind": "type",
               "declaration": "RateLimitConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "RouteGuard",
@@ -27498,7 +27486,7 @@
               "name": "SessionData",
               "kind": "type",
               "declaration": "SessionData",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "SessionLike",
@@ -27522,12 +27510,6 @@
           "target": "./dist/index.js",
           "exists": true,
           "symbols": [
-            {
-              "name": "A2AApiKeyAuthConfig",
-              "kind": "type",
-              "declaration": "A2AApiKeyAuthConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
             {
               "name": "ApiResponse",
               "kind": "type",
@@ -27553,12 +27535,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "AuthOperationsProvider",
-              "kind": "type",
-              "declaration": "AuthOperationsProvider",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "BrowserKitFunctions",
               "kind": "type",
               "declaration": "BrowserKitFunctions",
@@ -27580,7 +27556,7 @@
               "name": "CorsConfig",
               "kind": "type",
               "declaration": "CorsConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "CrudApiDef",
@@ -27703,18 +27679,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "HandleA2AConfig",
-              "kind": "type",
-              "declaration": "HandleA2AConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "HandleA2AOperations",
-              "kind": "type",
-              "declaration": "HandleA2AOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "HandleAuthConfig",
               "kind": "type",
               "declaration": "HandleAuthConfig",
@@ -27743,12 +27707,6 @@
               "kind": "value",
               "declaration": "kit",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "KitA2AHandlerConfig",
-              "kind": "type",
-              "declaration": "KitA2AHandlerConfig",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "KitClient",
@@ -27784,6 +27742,24 @@
               "name": "KitFunctions",
               "kind": "type",
               "declaration": "KitFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KitHttpConfig",
+              "kind": "type",
+              "declaration": "KitHttpConfig",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KitHttpConfigInput",
+              "kind": "type",
+              "declaration": "KitHttpConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "KitIam",
+              "kind": "type",
+              "declaration": "KitIam",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -27823,12 +27799,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "MemoryRateLimitStore",
-              "kind": "type",
-              "declaration": "MemoryRateLimitStore",
-              "declarationKind": "ClassDeclaration"
-            },
-            {
               "name": "Middleware",
               "kind": "type",
               "declaration": "Middleware",
@@ -27853,34 +27823,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "RateLimitCache",
-              "kind": "type",
-              "declaration": "RateLimitCache",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "RateLimitConfig",
               "kind": "type",
               "declaration": "RateLimitConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "RateLimitEntry",
-              "kind": "type",
-              "declaration": "RateLimitEntry",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "RateLimitStore",
-              "kind": "type",
-              "declaration": "RateLimitStore",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ResolvedA2AConfig",
-              "kind": "type",
-              "declaration": "ResolvedA2AConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "RoleGuardConfig",
@@ -27898,7 +27844,7 @@
               "name": "SessionData",
               "kind": "type",
               "declaration": "SessionData",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "SessionGuardConfig",
@@ -27947,12 +27893,6 @@
           "exists": true,
           "symbols": [
             {
-              "name": "A2AApiKeyAuthConfig",
-              "kind": "type",
-              "declaration": "A2AApiKeyAuthConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ApiResponse",
               "kind": "type",
               "declaration": "ApiResponse",
@@ -27977,12 +27917,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "AuthOperationsProvider",
-              "kind": "type",
-              "declaration": "AuthOperationsProvider",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "BrowserKitFunctions",
               "kind": "type",
               "declaration": "BrowserKitFunctions",
@@ -28004,7 +27938,7 @@
               "name": "CorsConfig",
               "kind": "type",
               "declaration": "CorsConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "CrudApiDef",
@@ -28127,18 +28061,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "HandleA2AConfig",
-              "kind": "type",
-              "declaration": "HandleA2AConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "HandleA2AOperations",
-              "kind": "type",
-              "declaration": "HandleA2AOperations",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "HandleAuthConfig",
               "kind": "type",
               "declaration": "HandleAuthConfig",
@@ -28167,12 +28089,6 @@
               "kind": "value",
               "declaration": "kit",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "KitA2AHandlerConfig",
-              "kind": "type",
-              "declaration": "KitA2AHandlerConfig",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "KitClient",
@@ -28208,6 +28124,24 @@
               "name": "KitFunctions",
               "kind": "type",
               "declaration": "KitFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KitHttpConfig",
+              "kind": "type",
+              "declaration": "KitHttpConfig",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "KitHttpConfigInput",
+              "kind": "type",
+              "declaration": "KitHttpConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "KitIam",
+              "kind": "type",
+              "declaration": "KitIam",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -28247,12 +28181,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "MemoryRateLimitStore",
-              "kind": "type",
-              "declaration": "MemoryRateLimitStore",
-              "declarationKind": "ClassDeclaration"
-            },
-            {
               "name": "Middleware",
               "kind": "type",
               "declaration": "Middleware",
@@ -28277,34 +28205,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "RateLimitCache",
-              "kind": "type",
-              "declaration": "RateLimitCache",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "RateLimitConfig",
               "kind": "type",
               "declaration": "RateLimitConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "RateLimitEntry",
-              "kind": "type",
-              "declaration": "RateLimitEntry",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "RateLimitStore",
-              "kind": "type",
-              "declaration": "RateLimitStore",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ResolvedA2AConfig",
-              "kind": "type",
-              "declaration": "ResolvedA2AConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "RoleGuardConfig",
@@ -28322,7 +28226,7 @@
               "name": "SessionData",
               "kind": "type",
               "declaration": "SessionData",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "SessionGuardConfig",
@@ -28358,74 +28262,6 @@
               "name": "TransportKeyPair",
               "kind": "type",
               "declaration": "TransportKeyPair",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./a2a",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/modules/a2a/index.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "A2AApiKeyAuthConfig",
-              "kind": "type",
-              "declaration": "A2AApiKeyAuthConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "kit",
-              "kind": "value",
-              "declaration": "kit",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "KitA2AHandlerConfig",
-              "kind": "type",
-              "declaration": "KitA2AHandlerConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ResolvedA2AConfig",
-              "kind": "type",
-              "declaration": "ResolvedA2AConfig",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./a2a",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/modules/a2a/index.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "A2AApiKeyAuthConfig",
-              "kind": "type",
-              "declaration": "A2AApiKeyAuthConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "kit",
-              "kind": "value",
-              "declaration": "kit",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "KitA2AHandlerConfig",
-              "kind": "type",
-              "declaration": "KitA2AHandlerConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ResolvedA2AConfig",
-              "kind": "type",
-              "declaration": "ResolvedA2AConfig",
               "declarationKind": "InterfaceDeclaration"
             }
           ]
@@ -28538,86 +28374,6 @@
               "name": "KitClientConfig",
               "kind": "type",
               "declaration": "KitClientConfig",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./crypto",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/modules/crypto/index.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "EncryptedPayload",
-              "kind": "type",
-              "declaration": "EncryptedPayload",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "kit",
-              "kind": "value",
-              "declaration": "kit",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TransportEncryptionConfig",
-              "kind": "type",
-              "declaration": "TransportEncryptionConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TransportEncryptionManager",
-              "kind": "type",
-              "declaration": "TransportEncryptionManager",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TransportKeyPair",
-              "kind": "type",
-              "declaration": "TransportKeyPair",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./crypto",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/modules/crypto/index.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "EncryptedPayload",
-              "kind": "type",
-              "declaration": "EncryptedPayload",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "kit",
-              "kind": "value",
-              "declaration": "kit",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TransportEncryptionConfig",
-              "kind": "type",
-              "declaration": "TransportEncryptionConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TransportEncryptionManager",
-              "kind": "type",
-              "declaration": "TransportEncryptionManager",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "TransportKeyPair",
-              "kind": "type",
-              "declaration": "TransportKeyPair",
               "declarationKind": "InterfaceDeclaration"
             }
           ]
@@ -32187,21 +31943,27 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "AiExtensionOperationRequest",
+              "name": "AiMediaOperationRequest",
               "kind": "type",
-              "declaration": "AiExtensionOperationRequest",
+              "declaration": "AiMediaOperationRequest",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "AiExtensionProcedureDeps",
+              "name": "AiMediaProcedureDeps",
               "kind": "type",
-              "declaration": "AiExtensionProcedureDeps",
+              "declaration": "AiMediaProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "AiMemoryWriteAuthorizationRequest",
               "kind": "type",
               "declaration": "AiMemoryWriteAuthorizationRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMemoryWriteProcedureDeps",
+              "kind": "type",
+              "declaration": "AiMemoryWriteProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -32214,6 +31976,12 @@
               "name": "AiProcedureDeps",
               "kind": "type",
               "declaration": "AiProcedureDeps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiStreamingProcedureDeps",
+              "kind": "type",
+              "declaration": "AiStreamingProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -32271,6 +32039,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CreateServContractHandlerOptions",
+              "kind": "type",
+              "declaration": "CreateServContractHandlerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "FeedbackProcedureDeps",
               "kind": "type",
               "declaration": "FeedbackProcedureDeps",
@@ -32283,15 +32057,15 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "IamExtensionAccessRequest",
+              "name": "IamManagementAccessRequest",
               "kind": "type",
-              "declaration": "IamExtensionAccessRequest",
+              "declaration": "IamManagementAccessRequest",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "IamExtensionProcedureDeps",
+              "name": "IamManagementProcedureDeps",
               "kind": "type",
-              "declaration": "IamExtensionProcedureDeps",
+              "declaration": "IamManagementProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -32307,9 +32081,9 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "PaymentExtensionProcedureDeps",
+              "name": "PaymentCloseOrderProcedureDeps",
               "kind": "type",
-              "declaration": "PaymentExtensionProcedureDeps",
+              "declaration": "PaymentCloseOrderProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -32364,13 +32138,13 @@
               "name": "ServCorsConfig",
               "kind": "type",
               "declaration": "ServCorsConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServCorsRuntimeConfig",
               "kind": "type",
               "declaration": "ServCorsRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServCorsRuntimeConfigInput",
@@ -32532,7 +32306,7 @@
               "name": "ServSession",
               "kind": "type",
               "declaration": "ServSession",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServStorageAssetsConfig",
@@ -32556,7 +32330,7 @@
               "name": "ServTransportRuntimeConfig",
               "kind": "type",
               "declaration": "ServTransportRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServTransportRuntimeConfigInput",
@@ -32577,21 +32351,21 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "StorageExtensionAccessRequest",
-              "kind": "type",
-              "declaration": "StorageExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "StorageExtensionProcedureDeps",
-              "kind": "type",
-              "declaration": "StorageExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "StorageProcedureDeps",
               "kind": "type",
               "declaration": "StorageProcedureDeps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "StorageTransferAccessRequest",
+              "kind": "type",
+              "declaration": "StorageTransferAccessRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StorageTransferProcedureDeps",
+              "kind": "type",
+              "declaration": "StorageTransferProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             }
           ]
@@ -32611,21 +32385,27 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "AiExtensionOperationRequest",
+              "name": "AiMediaOperationRequest",
               "kind": "type",
-              "declaration": "AiExtensionOperationRequest",
+              "declaration": "AiMediaOperationRequest",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "AiExtensionProcedureDeps",
+              "name": "AiMediaProcedureDeps",
               "kind": "type",
-              "declaration": "AiExtensionProcedureDeps",
+              "declaration": "AiMediaProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "AiMemoryWriteAuthorizationRequest",
               "kind": "type",
               "declaration": "AiMemoryWriteAuthorizationRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMemoryWriteProcedureDeps",
+              "kind": "type",
+              "declaration": "AiMemoryWriteProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -32638,6 +32418,12 @@
               "name": "AiProcedureDeps",
               "kind": "type",
               "declaration": "AiProcedureDeps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiStreamingProcedureDeps",
+              "kind": "type",
+              "declaration": "AiStreamingProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -32695,6 +32481,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CreateServContractHandlerOptions",
+              "kind": "type",
+              "declaration": "CreateServContractHandlerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "FeedbackProcedureDeps",
               "kind": "type",
               "declaration": "FeedbackProcedureDeps",
@@ -32707,15 +32499,15 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "IamExtensionAccessRequest",
+              "name": "IamManagementAccessRequest",
               "kind": "type",
-              "declaration": "IamExtensionAccessRequest",
+              "declaration": "IamManagementAccessRequest",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "IamExtensionProcedureDeps",
+              "name": "IamManagementProcedureDeps",
               "kind": "type",
-              "declaration": "IamExtensionProcedureDeps",
+              "declaration": "IamManagementProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -32731,9 +32523,9 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "PaymentExtensionProcedureDeps",
+              "name": "PaymentCloseOrderProcedureDeps",
               "kind": "type",
-              "declaration": "PaymentExtensionProcedureDeps",
+              "declaration": "PaymentCloseOrderProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -32788,13 +32580,13 @@
               "name": "ServCorsConfig",
               "kind": "type",
               "declaration": "ServCorsConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServCorsRuntimeConfig",
               "kind": "type",
               "declaration": "ServCorsRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServCorsRuntimeConfigInput",
@@ -32956,7 +32748,7 @@
               "name": "ServSession",
               "kind": "type",
               "declaration": "ServSession",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServStorageAssetsConfig",
@@ -32980,7 +32772,7 @@
               "name": "ServTransportRuntimeConfig",
               "kind": "type",
               "declaration": "ServTransportRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServTransportRuntimeConfigInput",
@@ -33001,21 +32793,21 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "StorageExtensionAccessRequest",
-              "kind": "type",
-              "declaration": "StorageExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "StorageExtensionProcedureDeps",
-              "kind": "type",
-              "declaration": "StorageExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "StorageProcedureDeps",
               "kind": "type",
               "declaration": "StorageProcedureDeps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "StorageTransferAccessRequest",
+              "kind": "type",
+              "declaration": "StorageTransferAccessRequest",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StorageTransferProcedureDeps",
+              "kind": "type",
+              "declaration": "StorageTransferProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             }
           ]
@@ -33035,21 +32827,27 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "AiExtensionOperationRequest",
+              "name": "AiMediaOperationRequest",
               "kind": "type",
-              "declaration": "AiExtensionOperationRequest",
+              "declaration": "AiMediaOperationRequest",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "AiExtensionProcedureDeps",
+              "name": "AiMediaProcedureDeps",
               "kind": "type",
-              "declaration": "AiExtensionProcedureDeps",
+              "declaration": "AiMediaProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "AiMemoryWriteAuthorizationRequest",
               "kind": "type",
               "declaration": "AiMemoryWriteAuthorizationRequest",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiMemoryWriteProcedureDeps",
+              "kind": "type",
+              "declaration": "AiMemoryWriteProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -33062,6 +32860,12 @@
               "name": "AiProcedureDeps",
               "kind": "type",
               "declaration": "AiProcedureDeps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AiStreamingProcedureDeps",
+              "kind": "type",
+              "declaration": "AiStreamingProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -33119,6 +32923,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CreateServContractHandlerOptions",
+              "kind": "type",
+              "declaration": "CreateServContractHandlerOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "FeedbackProcedureDeps",
               "kind": "type",
               "declaration": "FeedbackProcedureDeps",
@@ -33131,15 +32941,15 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "IamExtensionAccessRequest",
+              "name": "IamManagementAccessRequest",
               "kind": "type",
-              "declaration": "IamExtensionAccessRequest",
+              "declaration": "IamManagementAccessRequest",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "IamExtensionProcedureDeps",
+              "name": "IamManagementProcedureDeps",
               "kind": "type",
-              "declaration": "IamExtensionProcedureDeps",
+              "declaration": "IamManagementProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -33155,9 +32965,9 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "PaymentExtensionProcedureDeps",
+              "name": "PaymentCloseOrderProcedureDeps",
               "kind": "type",
-              "declaration": "PaymentExtensionProcedureDeps",
+              "declaration": "PaymentCloseOrderProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -33212,13 +33022,13 @@
               "name": "ServCorsConfig",
               "kind": "type",
               "declaration": "ServCorsConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServCorsRuntimeConfig",
               "kind": "type",
               "declaration": "ServCorsRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServCorsRuntimeConfigInput",
@@ -33380,7 +33190,7 @@
               "name": "ServSession",
               "kind": "type",
               "declaration": "ServSession",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServStorageAssetsConfig",
@@ -33404,7 +33214,7 @@
               "name": "ServTransportRuntimeConfig",
               "kind": "type",
               "declaration": "ServTransportRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ServTransportRuntimeConfigInput",
@@ -33425,1073 +33235,21 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "StorageExtensionAccessRequest",
-              "kind": "type",
-              "declaration": "StorageExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "StorageExtensionProcedureDeps",
-              "kind": "type",
-              "declaration": "StorageExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "StorageProcedureDeps",
               "kind": "type",
               "declaration": "StorageProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./features/ai",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/features/ai.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "_",
-              "kind": "type",
-              "declaration": "ServRuntimeSecurityPolicyInput",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "$",
+              "name": "StorageTransferAccessRequest",
               "kind": "type",
-              "declaration": "ServServerConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a",
-              "kind": "type",
-              "declaration": "IamExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "A",
-              "kind": "type",
-              "declaration": "AudioTicketGrant",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a0",
-              "kind": "type",
-              "declaration": "ServServerConfigInput",
+              "declaration": "StorageTransferAccessRequest",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "a1",
+              "name": "StorageTransferProcedureDeps",
               "kind": "type",
-              "declaration": "ServSession",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a2",
-              "kind": "type",
-              "declaration": "ServStorageAssetsConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a3",
-              "kind": "type",
-              "declaration": "ServTransportConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a4",
-              "kind": "type",
-              "declaration": "ServTransportRoute",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a5",
-              "kind": "type",
-              "declaration": "ServTransportRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a6",
-              "kind": "type",
-              "declaration": "ServTransportRuntimeConfigInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "a7",
-              "kind": "type",
-              "declaration": "ServValidationFailureBody",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiAuthorizedMediaRequest",
-              "kind": "type",
-              "declaration": "AiAuthorizedMediaRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiExtensionOperationRequest",
-              "kind": "type",
-              "declaration": "AiExtensionOperationRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "AiExtensionProcedureDeps",
-              "kind": "type",
-              "declaration": "AiExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiMemoryWriteAuthorizationRequest",
-              "kind": "type",
-              "declaration": "AiMemoryWriteAuthorizationRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiObjectAuthorizationRequest",
-              "kind": "type",
-              "declaration": "AiObjectAuthorizationRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiProcedureDeps",
-              "kind": "type",
-              "declaration": "AiProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "b",
-              "kind": "type",
-              "declaration": "IamProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "B",
-              "kind": "type",
-              "declaration": "ServHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "c",
-              "kind": "type",
-              "declaration": "StorageExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "C",
-              "kind": "type",
-              "declaration": "CreateServAppOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "d",
-              "kind": "type",
-              "declaration": "StorageExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "D",
-              "kind": "type",
-              "declaration": "ServHttpConfigInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "e",
-              "kind": "type",
-              "declaration": "StorageProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "E",
-              "kind": "type",
-              "declaration": "ServIam",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "f",
-              "kind": "type",
-              "declaration": "AudioTicketVerification",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "F",
-              "kind": "type",
-              "declaration": "FeedbackProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "g",
-              "kind": "type",
-              "declaration": "AuditProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "G",
-              "kind": "type",
-              "declaration": "GenerateOpenAPISpecOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "h",
-              "kind": "type",
-              "declaration": "AuditReadScope",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "H",
-              "kind": "type",
-              "declaration": "ServImplementer",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "i",
-              "kind": "type",
-              "declaration": "AuthenticatedServContext",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "I",
-              "kind": "type",
-              "declaration": "IamExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "j",
-              "kind": "type",
-              "declaration": "AuthorizedAudioRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "J",
-              "kind": "type",
-              "declaration": "ServListenOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "k",
-              "kind": "type",
-              "declaration": "CreateServContext",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "K",
-              "kind": "type",
-              "declaration": "ServMiddleware",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "l",
-              "kind": "type",
-              "declaration": "CreateServContextInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "L",
-              "kind": "type",
-              "declaration": "ServMiddlewareFactory",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "m",
-              "kind": "type",
-              "declaration": "RefreshTokenPair",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "M",
-              "kind": "type",
-              "declaration": "ServMiddlewareMount",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "n",
-              "kind": "type",
-              "declaration": "ServAudioConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "N",
-              "kind": "type",
-              "declaration": "NativeRefreshTokenTransportConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "o",
-              "kind": "type",
-              "declaration": "ServConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "O",
-              "kind": "type",
-              "declaration": "ServNodeServer",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "p",
-              "kind": "type",
-              "declaration": "ServConfigInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "P",
-              "kind": "type",
-              "declaration": "PaymentExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "q",
-              "kind": "type",
-              "declaration": "ServConfigSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "Q",
-              "kind": "type",
-              "declaration": "ServOpenAPIHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "r",
-              "kind": "type",
-              "declaration": "ServContext",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "R",
-              "kind": "type",
-              "declaration": "RefreshCookieConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "s",
-              "kind": "type",
-              "declaration": "ServCorsConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "S",
-              "kind": "type",
-              "declaration": "StorageAccessRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "serv",
-              "kind": "value",
-              "declaration": "serv",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "t",
-              "kind": "type",
-              "declaration": "ServCorsRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "T",
-              "kind": "type",
-              "declaration": "ServProcedureHandler",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "u",
-              "kind": "type",
-              "declaration": "ServCorsRuntimeConfigInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "U",
-              "kind": "type",
-              "declaration": "ServProcedureOptions",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "v",
-              "kind": "type",
-              "declaration": "ServDocsHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "V",
-              "kind": "type",
-              "declaration": "ServRequestMetadata",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "w",
-              "kind": "type",
-              "declaration": "ServFetchHandler",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "W",
-              "kind": "type",
-              "declaration": "ServRouteHandler",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "x",
-              "kind": "type",
-              "declaration": "ServFunctions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "X",
-              "kind": "type",
-              "declaration": "ServRoutePath",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "y",
-              "kind": "type",
-              "declaration": "ServHealthHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "Y",
-              "kind": "type",
-              "declaration": "ServRouterBuilder",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "z",
-              "kind": "type",
-              "declaration": "ServHttpApp",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "Z",
-              "kind": "type",
-              "declaration": "ServRuntimeSecurityPolicy",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./features/ai",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/features/ai.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "_",
-              "kind": "type",
-              "declaration": "ServRuntimeSecurityPolicyInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "$",
-              "kind": "type",
-              "declaration": "ServServerConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a",
-              "kind": "type",
-              "declaration": "IamExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "A",
-              "kind": "type",
-              "declaration": "AudioTicketGrant",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a0",
-              "kind": "type",
-              "declaration": "ServServerConfigInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "a1",
-              "kind": "type",
-              "declaration": "ServSession",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a2",
-              "kind": "type",
-              "declaration": "ServStorageAssetsConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a3",
-              "kind": "type",
-              "declaration": "ServTransportConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a4",
-              "kind": "type",
-              "declaration": "ServTransportRoute",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a5",
-              "kind": "type",
-              "declaration": "ServTransportRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "a6",
-              "kind": "type",
-              "declaration": "ServTransportRuntimeConfigInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "a7",
-              "kind": "type",
-              "declaration": "ServValidationFailureBody",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiAuthorizedMediaRequest",
-              "kind": "type",
-              "declaration": "AiAuthorizedMediaRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiExtensionOperationRequest",
-              "kind": "type",
-              "declaration": "AiExtensionOperationRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "AiExtensionProcedureDeps",
-              "kind": "type",
-              "declaration": "AiExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiMemoryWriteAuthorizationRequest",
-              "kind": "type",
-              "declaration": "AiMemoryWriteAuthorizationRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiObjectAuthorizationRequest",
-              "kind": "type",
-              "declaration": "AiObjectAuthorizationRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "AiProcedureDeps",
-              "kind": "type",
-              "declaration": "AiProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "b",
-              "kind": "type",
-              "declaration": "IamProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "B",
-              "kind": "type",
-              "declaration": "ServHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "c",
-              "kind": "type",
-              "declaration": "StorageExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "C",
-              "kind": "type",
-              "declaration": "CreateServAppOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "d",
-              "kind": "type",
-              "declaration": "StorageExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "D",
-              "kind": "type",
-              "declaration": "ServHttpConfigInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "e",
-              "kind": "type",
-              "declaration": "StorageProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "E",
-              "kind": "type",
-              "declaration": "ServIam",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "f",
-              "kind": "type",
-              "declaration": "AudioTicketVerification",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "F",
-              "kind": "type",
-              "declaration": "FeedbackProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "g",
-              "kind": "type",
-              "declaration": "AuditProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "G",
-              "kind": "type",
-              "declaration": "GenerateOpenAPISpecOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "h",
-              "kind": "type",
-              "declaration": "AuditReadScope",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "H",
-              "kind": "type",
-              "declaration": "ServImplementer",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "i",
-              "kind": "type",
-              "declaration": "AuthenticatedServContext",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "I",
-              "kind": "type",
-              "declaration": "IamExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "j",
-              "kind": "type",
-              "declaration": "AuthorizedAudioRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "J",
-              "kind": "type",
-              "declaration": "ServListenOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "k",
-              "kind": "type",
-              "declaration": "CreateServContext",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "K",
-              "kind": "type",
-              "declaration": "ServMiddleware",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "l",
-              "kind": "type",
-              "declaration": "CreateServContextInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "L",
-              "kind": "type",
-              "declaration": "ServMiddlewareFactory",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "m",
-              "kind": "type",
-              "declaration": "RefreshTokenPair",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "M",
-              "kind": "type",
-              "declaration": "ServMiddlewareMount",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "n",
-              "kind": "type",
-              "declaration": "ServAudioConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "N",
-              "kind": "type",
-              "declaration": "NativeRefreshTokenTransportConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "o",
-              "kind": "type",
-              "declaration": "ServConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "O",
-              "kind": "type",
-              "declaration": "ServNodeServer",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "p",
-              "kind": "type",
-              "declaration": "ServConfigInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "P",
-              "kind": "type",
-              "declaration": "PaymentExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "q",
-              "kind": "type",
-              "declaration": "ServConfigSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "Q",
-              "kind": "type",
-              "declaration": "ServOpenAPIHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "r",
-              "kind": "type",
-              "declaration": "ServContext",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "R",
-              "kind": "type",
-              "declaration": "RefreshCookieConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "s",
-              "kind": "type",
-              "declaration": "ServCorsConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "S",
-              "kind": "type",
-              "declaration": "StorageAccessRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "serv",
-              "kind": "value",
-              "declaration": "serv",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "t",
-              "kind": "type",
-              "declaration": "ServCorsRuntimeConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "T",
-              "kind": "type",
-              "declaration": "ServProcedureHandler",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "u",
-              "kind": "type",
-              "declaration": "ServCorsRuntimeConfigInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "U",
-              "kind": "type",
-              "declaration": "ServProcedureOptions",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "v",
-              "kind": "type",
-              "declaration": "ServDocsHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "V",
-              "kind": "type",
-              "declaration": "ServRequestMetadata",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "w",
-              "kind": "type",
-              "declaration": "ServFetchHandler",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "W",
-              "kind": "type",
-              "declaration": "ServRouteHandler",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "x",
-              "kind": "type",
-              "declaration": "ServFunctions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "X",
-              "kind": "type",
-              "declaration": "ServRoutePath",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "y",
-              "kind": "type",
-              "declaration": "ServHealthHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "Y",
-              "kind": "type",
-              "declaration": "ServRouterBuilder",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "z",
-              "kind": "type",
-              "declaration": "ServHttpApp",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "Z",
-              "kind": "type",
-              "declaration": "ServRuntimeSecurityPolicy",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./features/feedback",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/features/feedback.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "FeedbackProcedureDeps",
-              "kind": "type",
-              "declaration": "FeedbackProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "serv",
-              "kind": "value",
-              "declaration": "serv",
-              "declarationKind": "VariableDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./features/feedback",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/features/feedback.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "FeedbackProcedureDeps",
-              "kind": "type",
-              "declaration": "FeedbackProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "serv",
-              "kind": "value",
-              "declaration": "serv",
-              "declarationKind": "VariableDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./features/iam",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/features/iam.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "IamExtensionAccessRequest",
-              "kind": "type",
-              "declaration": "IamExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "IamExtensionProcedureDeps",
-              "kind": "type",
-              "declaration": "IamExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "IamProcedureDeps",
-              "kind": "type",
-              "declaration": "IamProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "serv",
-              "kind": "value",
-              "declaration": "serv",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TokenPair",
-              "kind": "type",
-              "declaration": "TokenPair",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./features/iam",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/features/iam.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "IamExtensionAccessRequest",
-              "kind": "type",
-              "declaration": "IamExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "IamExtensionProcedureDeps",
-              "kind": "type",
-              "declaration": "IamExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "IamProcedureDeps",
-              "kind": "type",
-              "declaration": "IamProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "serv",
-              "kind": "value",
-              "declaration": "serv",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "TokenPair",
-              "kind": "type",
-              "declaration": "TokenPair",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./features/storage",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/features/storage.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "serv",
-              "kind": "value",
-              "declaration": "serv",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "StorageAccessRequest",
-              "kind": "type",
-              "declaration": "StorageAccessRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "StorageExtensionAccessRequest",
-              "kind": "type",
-              "declaration": "StorageExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "StorageExtensionProcedureDeps",
-              "kind": "type",
-              "declaration": "StorageExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "StorageProcedureDeps",
-              "kind": "type",
-              "declaration": "StorageProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./features/storage",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/features/storage.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "serv",
-              "kind": "value",
-              "declaration": "serv",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "StorageAccessRequest",
-              "kind": "type",
-              "declaration": "StorageAccessRequest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "StorageExtensionAccessRequest",
-              "kind": "type",
-              "declaration": "StorageExtensionAccessRequest",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "StorageExtensionProcedureDeps",
-              "kind": "type",
-              "declaration": "StorageExtensionProcedureDeps",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "StorageProcedureDeps",
-              "kind": "type",
-              "declaration": "StorageProcedureDeps",
+              "declaration": "StorageTransferProcedureDeps",
               "declarationKind": "InterfaceDeclaration"
             }
           ]

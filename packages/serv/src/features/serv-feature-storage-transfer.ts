@@ -11,13 +11,13 @@ import { implement } from '../serv-router.js'
  * 文件中转的资源授权请求。上传策略也可检查文件的 MIME、扩展名或实际内容。
  * @example
  * ```ts
- * import type { StorageExtensionAccessRequest } from '@h-ai/serv'
- * function canAccess(request: StorageExtensionAccessRequest) {
+ * import type { StorageTransferAccessRequest } from '@h-ai/serv'
+ * function canAccess(request: StorageTransferAccessRequest) {
  *   return request.keys[0].startsWith(`users/${request.context.session.userId}/`)
  * }
  * ```
  */
-export type StorageExtensionAccessRequest = {
+export type StorageTransferAccessRequest = {
   readonly context: AuthenticatedServContext
   readonly keys: readonly [string]
 } & ({ readonly operation: 'upload', readonly file: File } | { readonly operation: 'download' })
@@ -26,16 +26,16 @@ export type StorageExtensionAccessRequest = {
  * 构造 Storage 中转 procedures 所需的存储操作与资源授权策略。
  * @example
  * ```ts
- * import type { StorageExtensionProcedureDeps } from '@h-ai/serv'
+ * import type { StorageTransferProcedureDeps } from '@h-ai/serv'
  * import { storage } from '@h-ai/storage'
- * const deps: StorageExtensionProcedureDeps = { storage, authorize: ({ context, keys }) => keys[0].startsWith(`users/${context.session.userId}/`) }
+ * const deps: StorageTransferProcedureDeps = { storage, authorize: ({ context, keys }) => keys[0].startsWith(`users/${context.session.userId}/`) }
  * void deps
  * ```
  */
-export interface StorageExtensionProcedureDeps {
+export interface StorageTransferProcedureDeps {
   readonly storage: { readonly file: Pick<StorageFunctions['file'], 'put' | 'getStreamWithMetadata'> }
   /** 宿主应按可信用户或租户校验完整 key，仅返回 true 时允许访问。 */
-  readonly authorize: (request: StorageExtensionAccessRequest) => boolean | Promise<boolean>
+  readonly authorize: (request: StorageTransferAccessRequest) => boolean | Promise<boolean>
 }
 
 function fileTooLarge({ locale }: ServContext): HaiResult<never> {
@@ -58,12 +58,12 @@ function fileTooLarge({ locale }: ServContext): HaiResult<never> {
  * ```ts
  * import { storage } from '@h-ai/storage'
  * import { serv } from '@h-ai/serv'
- * const procedures = serv.createStorageExtensionProcedures({ storage, authorize: ({ context, keys }) => keys[0].startsWith(`users/${context.session.userId}/`) })
+ * const procedures = serv.createStorageTransferProcedures({ storage, authorize: ({ context, keys }) => keys[0].startsWith(`users/${context.session.userId}/`) })
  * void procedures
  * ```
  */
-export function createStorageExtensionProcedures({ storage, authorize }: StorageExtensionProcedureDeps) {
-  async function checkAccess(request: StorageExtensionAccessRequest): Promise<HaiResult<void>> {
+export function createStorageTransferProcedures({ storage, authorize }: StorageTransferProcedureDeps) {
+  async function checkAccess(request: StorageTransferAccessRequest): Promise<HaiResult<void>> {
     if (typeof authorize !== 'function' || await authorize(request) !== true)
       return core.err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: request.context.locale }))
     return core.ok(undefined)

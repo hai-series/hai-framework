@@ -14,13 +14,13 @@ import {
   authGuard,
   conditionalGuard,
   hasPermission,
-  matchPermission,
   notGuard,
   permissionGuard,
   requirePermission,
   roleGuard,
   sessionGuard,
 } from '../src/guards/index.js'
+import { kit } from '../src/index.js'
 
 /**
  * 创建模拟 RequestEvent
@@ -357,29 +357,29 @@ describe('conditionalGuard', () => {
 
 describe('matchPermission', () => {
   it('完全匹配时返回 true', () => {
-    expect(matchPermission('user:read', ['user:read', 'user:create'])).toBe(true)
+    expect(kit.guard.matchPermission('user:read', ['user:read', 'user:create'])).toBe(true)
   })
 
   it('无匹配时返回 false', () => {
-    expect(matchPermission('user:delete', ['user:read', 'user:create'])).toBe(false)
+    expect(kit.guard.matchPermission('user:delete', ['user:read', 'user:create'])).toBe(false)
   })
 
   it('通配符 * 匹配所有权限', () => {
-    expect(matchPermission('user:read', ['*'])).toBe(true)
-    expect(matchPermission('role:delete', ['*'])).toBe(true)
+    expect(kit.guard.matchPermission('user:read', ['*'])).toBe(true)
+    expect(kit.guard.matchPermission('role:delete', ['*'])).toBe(true)
   })
 
   it('前缀通配符 admin:* 匹配同前缀权限', () => {
-    expect(matchPermission('admin:read', ['admin:*'])).toBe(true)
-    expect(matchPermission('admin:write', ['admin:*'])).toBe(true)
+    expect(kit.guard.matchPermission('admin:read', ['admin:*'])).toBe(true)
+    expect(kit.guard.matchPermission('admin:write', ['admin:*'])).toBe(true)
   })
 
   it('前缀通配符不匹配不同前缀', () => {
-    expect(matchPermission('user:read', ['admin:*'])).toBe(false)
+    expect(kit.guard.matchPermission('user:read', ['admin:*'])).toBe(false)
   })
 
   it('空权限列表返回 false', () => {
-    expect(matchPermission('user:read', [])).toBe(false)
+    expect(kit.guard.matchPermission('user:read', [])).toBe(false)
   })
 })
 

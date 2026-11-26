@@ -25,8 +25,12 @@ export interface ManagementApiOptions {
 
 /** 所有业务请求由 api-client 统一完成 Token 注入、刷新和双向加密。 */
 export async function initializeManagementApi(options: ManagementApiOptions = {}) {
-  if (options.requireApiBase && !options.baseUrl && !resolveRuntimeApiOrigin() && !import.meta.env.PUBLIC_API_BASE)
+  const runtime = resolveRuntimeApiConfig()
+  if (options.requireApiBase && !options.baseUrl && !runtime?.apiBase && !import.meta.env.PUBLIC_API_BASE)
     return core.err(HaiApiClientError.CONFIG_ERROR, 'Native applications require a configured API origin')
+  const keyExchangePath = runtime?.apiKeyExchangePath || import.meta.env.PUBLIC_API_KEY_EXCHANGE_PATH || crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
+  if (!crypto.transport.isKeyExchangePath(keyExchangePath))
+    return core.err(HaiApiClientError.CONFIG_ERROR, core.i18n.coreM('core_configValidationFailed'))
   if (managementApi.isInitialized)
     await managementApi.close()
   if (!crypto.isInitialized) {
@@ -46,7 +50,7 @@ export async function initializeManagementApi(options: ManagementApiOptions = {}
       storage: options.tokenStorage,
       onRefreshFailed: options.onSessionExpired,
     },
-    transport: { crypto },
+    transport: { crypto, keyExchangePath },
   })
 }
 
@@ -68,7 +72,7 @@ export function resolveAvatarUrl(value: string | undefined): string | undefined 
 }
 
 function resolveDefaultApiOrigin(): string {
-  return resolveRuntimeApiOrigin()
+  return resolveRuntimeApiConfig()?.apiBase
     || import.meta.env.PUBLIC_API_BASE
     || (typeof globalThis.location === 'undefined'
       ? DEFAULT_API_ORIGIN
@@ -83,11 +87,10 @@ function createCredentialedFetch(fetchFn: typeof fetch = globalThis.fetch.bind(g
   }
 }
 
-function resolveRuntimeApiOrigin(): string | undefined {
-  const runtimeConfig = (globalThis as typeof globalThis & {
-    __HAI_PUBLIC_CONFIG__?: { apiBase?: string }
+function resolveRuntimeApiConfig() {
+  return (globalThis as typeof globalThis & {
+    __HAI_PUBLIC_CONFIG__?: { apiBase?: string, apiKeyExchangePath?: string }
   }).__HAI_PUBLIC_CONFIG__
-  return runtimeConfig?.apiBase
 }
 
 function normalizeApiBaseUrl(value: string): string {

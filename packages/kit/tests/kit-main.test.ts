@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { kit } from '../src/kit-main.js'
+import { kit as browserKit } from '../src/browser.js'
+import { kit } from '../src/index.js'
 
 describe('kit 统一出口', () => {
   it('kit 对象已导出', () => {
@@ -31,6 +32,37 @@ describe('kit 统一出口', () => {
       expect(typeof kit.guard.require).toBe('function')
       expect(typeof kit.guard.check).toBe('function')
     })
+  })
+
+  describe.each([
+    { target: 'Node', facade: kit },
+    { target: '浏览器', facade: browserKit },
+  ])('$target 公开工具入口', ({ facade }) => {
+    it('按资源定义解析库存列和发布状态筛选器', () => {
+      const label = () => '库存'
+      const options = [
+        { label: '已发布', value: true },
+      ]
+
+      expect(facade.crud.resolveText(label)).toBe('库存')
+      expect(facade.crud.resolveText('商品名称')).toBe('商品名称')
+      expect(facade.crud.resolveOptions(() => options)).toEqual(options)
+      expect(facade.crud.resolveOptions(undefined)).toEqual([])
+      expect(facade).not.toHaveProperty('resolveText')
+      expect(facade).not.toHaveProperty('resolveOptions')
+    })
+
+    it('按文章范围的授权决定是否显示阅读入口', () => {
+      expect(facade.guard.matchPermission('article:read', ['article:*'])).toBe(true)
+      expect(facade.guard.matchPermission('user:read', ['article:*'])).toBe(false)
+      expect(facade).not.toHaveProperty('matchPermission')
+    })
+  })
+
+  it('浏览器仅提供可用于界面显示的权限匹配', () => {
+    expect(Object.keys(browserKit.guard)).toEqual(['matchPermission'])
+    expect(browserKit).not.toHaveProperty('a2a')
+    expect(browserKit).not.toHaveProperty('crypto')
   })
 
   // ─── response 子命名空间 ───

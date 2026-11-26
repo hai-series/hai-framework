@@ -8,5 +8,5 @@ export { resolveDesktopCryptoConfig, resolveDesktopCryptoTransportConfig } from 
 /** Vite 已插值并校验的公开配置，不包含私有环境变量。 */
 declare const __DESKTOP_CRYPTO_CONFIG__: DesktopCryptoConfigInput
 
-/** 当前桌面端构建使用的配置，例如 { transport: { keyExchangePath: '/_hai/key-exchange' } }。 */
+/** 当前桌面端构建使用的配置，例如 { transport: { keyExchangePath: '/api/v1/_hai/key-exchange' } }。 */
 export const desktopCryptoConfig = resolveDesktopCryptoConfig(__DESKTOP_CRYPTO_CONFIG__)

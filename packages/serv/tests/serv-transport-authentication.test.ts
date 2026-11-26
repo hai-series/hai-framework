@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net'
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
@@ -30,6 +31,51 @@ describe('serv authenticated transport boundary', () => {
     }
   })
   afterAll(async () => crypto.close())
+
+  it('加密审计员的 GET 并为同一地址的 A2A POST 使用独立认证流程', async () => {
+    const contract = apiContract.create({})
+    const rpcPath = '/api/v1/orders/pending'
+    const rpc = vi.fn(async () => Response.json({ backlog: 3 }))
+    const keyGenerator = vi.fn(() => 'orders-auditor')
+    const app = serv.createApp({
+      contract,
+      procedures: serv.implement(contract).context<ServContext>().build(),
+      a2a: { cardPath: '/.well-known/agent-card.json', rpcPath, handleRequest: rpc },
+      http: {
+        rateLimit: {
+          maxRequests: 5,
+          keyGenerator,
+          store: core.access.createMemoryRateLimitStore(),
+        },
+      },
+      transport: {
+        serverKeyRing,
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        crypto,
+      },
+    })
+    app.get(rpcPath, c => c.json({ report: 'pending orders' }))
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: 'http://test.local/api/v1/_hai/key-exchange',
+      fetch: async (input, init) => {
+        const request = new Request(input, init)
+        const response = await app.fetch(request)
+        if (request.method === 'GET')
+          expect(response.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe('true')
+        return response
+      },
+    })
+    try {
+      expect(await (await client.encryptedFetch(`http://test.local${rpcPath}`)).json()).toEqual({ report: 'pending orders' })
+      const response = await app.request(rpcPath, { method: 'POST' })
+      expect(await response.json()).toEqual({ backlog: 3 })
+      expect(rpc).toHaveBeenCalledOnce()
+      expect(keyGenerator).toHaveBeenCalledOnce()
+    }
+    finally {
+      client.destroy()
+    }
+  })
 
   it.each(['handshake', 'request'])('共享 %s 配额满返回 503 并阻止业务调用', async (stage) => {
     const keyStore = crypto.transport.createKeyStore({ cache, maxRegistrationsPerMinute: 1, maxRequestsPerMinute: 1 })

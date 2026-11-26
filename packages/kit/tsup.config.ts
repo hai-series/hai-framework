@@ -7,8 +7,6 @@ export default defineConfig({
     'src/index.ts',
     'src/browser.ts',
     'src/client/index.ts',
-    'src/modules/crypto/index.ts',
-    'src/modules/a2a/index.ts',
     'src/adapter/index.ts',
   ],
   external: [

@@ -9,6 +9,7 @@ import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { iam, IamConfigSchema } from '@h-ai/iam'
+import { KitConfigSchema } from '@h-ai/kit'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { runner, RunnerConfigSchema } from '@h-ai/runner'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
@@ -34,6 +35,7 @@ export const runtime = core.module.createRuntime([
           cache: CacheConfigSchema,
           db: ReldbConfigSchema,
           iam: IamConfigSchema,
+          kit: KitConfigSchema,
           runner: RunnerConfigSchema,
           storage: StorageConfigSchema,
           vecdb: VecdbConfigSchema,

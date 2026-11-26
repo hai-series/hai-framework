@@ -19,6 +19,7 @@
   "serv_validationUuid": "Enter a valid UUID",
   "serv_validationEnum": "Select a valid option",
   "serv_errorUnauthorized": "Unauthorized",
+  "serv_refreshBodyTooLarge": "Refresh request body exceeds 16 KiB",
   "serv_errorForbidden": "Forbidden",
   "serv_errorInternal": "Internal server error",
   "serv_storageKeyRequired": "Storage key must not be empty",
@@ -35,5 +36,6 @@
   "serv_transportKeyExchangeFailed": "Key exchange failed",
   "serv_transportBusy": "Encrypted transport is busy. Please retry shortly.",
   "serv_feedbackUnavailable": "Feedback is temporarily unavailable. Business features remain available.",
-  "serv_invalidApiPrefix": "API prefix must be a valid absolute path without empty segments, queries, fragments or traversal."
+  "serv_invalidApiPrefix": "API prefix must be a valid absolute path without empty segments, queries, fragments or traversal.",
+  "serv_invalidKeyExchangePath": "The key exchange path must be a fixed origin-absolute path without dot segments, wildcards, encoding, queries, or fragments."
 }

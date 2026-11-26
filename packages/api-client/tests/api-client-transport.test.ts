@@ -29,7 +29,10 @@ const protectedContract = {
  * 模拟一个对端 serv：处理 key-exchange + 解密 echo 请求 + 加密响应。
  * 直接用 crypto.transport.createServer 复用真实加解密路径。
  */
-function makeServerFetch(clockOffset = 0): typeof fetch {
+function makeServerFetch(
+  clockOffset = 0,
+  keyExchangePath: `/${string}` = crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH,
+): typeof fetch {
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
@@ -52,7 +55,7 @@ function makeServerFetch(clockOffset = 0): typeof fetch {
           : input.toString(), init)
     const url = new URL(req.url)
 
-    if (url.pathname === '/api/v1/_hai/key-exchange') {
+    if (url.pathname === keyExchangePath) {
       const body = await req.json() as { clientPublicKey: string }
       const clientId = await mgr.registerClientKey(body.clientPublicKey)
       return new Response(JSON.stringify({
@@ -282,6 +285,50 @@ describe('api-client transport', () => {
       await client.close()
       vi.unstubAllGlobals()
     }
+  })
+
+  it.each([undefined, '/gateway/key-exchange'] as const)('uses the exact exchange path independently of the business prefix: %s', async (keyExchangePath) => {
+    const client = apiClient.create(testContract)
+    const expectedExchangePath = keyExchangePath ?? crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
+    const fetch = vi.fn(makeServerFetch(0, expectedExchangePath))
+    try {
+      const initialized = await client.init({
+        baseUrl: 'https://api.test/business/v2/',
+        fetch,
+        transport: { crypto, keyExchangePath },
+      })
+      expect(initialized.success).toBe(true)
+      expect(await client.echo({ msg: 'hello' })).toEqual({
+        success: true,
+        data: {
+          echoed: { msg: 'hello' },
+        },
+      })
+      const paths = fetch.mock.calls.map(([input]) => new URL(input instanceof Request
+        ? input.url
+        : String(input)).pathname)
+      expect(paths).toEqual([expectedExchangePath, '/business/v2/echo'])
+    }
+    finally { await client.close() }
+  })
+
+  it('rejects a noncanonical key exchange path before sending a request', async () => {
+    const client = apiClient.create(testContract)
+    const fetch = vi.fn(async () => new Response())
+    try {
+      const result = await client.init({
+        baseUrl: 'https://api.test/business/v2',
+        fetch,
+        transport: { crypto, keyExchangePath: '/gateway/key-exchange?version=2' },
+      })
+      expect(result).toMatchObject({
+        success: false,
+        error: { code: HaiApiClientError.CONFIG_ERROR.code },
+      })
+      expect(client.isInitialized).toBe(false)
+      expect(fetch).not.toHaveBeenCalled()
+    }
+    finally { await client.close() }
   })
 
   it.each([false, true])('renews transport before refreshing a session after idle, domain unauthorized=%s', async (domainUnauthorized) => {

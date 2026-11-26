@@ -1,8 +1,7 @@
 /**
  * @h-ai/kit — 日志中间件
  *
- * HTTP 请求日志中间件，记录请求/响应摘要（方法、路径、状态码、耗时），
- * 并自动脱敏敏感字段（password / token / secret 等）。
+ * HTTP 请求日志中间件，记录请求/响应摘要（方法、路径、状态码、耗时）。
  * @module kit-logging
  */
 
@@ -20,11 +19,11 @@ import { core } from '@h-ai/core'
  * ```
  */
 export interface LoggingMiddlewareConfig {
-  /** 为 `true` 时记录非 GET 请求体（自动脱敏） */
+  /** 为 `true` 时仅记录请求是否带有正文。 */
   logBody?: boolean
   /** 为 `true` 时记录响应头 */
   logResponse?: boolean
-  /** JSON 正文的脱敏字段；默认包含 password/token/secret、授权/API Key 和银行卡字段。 */
+  /** @deprecated 请求正文内容已停止采集。 */
   redactFields?: string[]
 }
 
@@ -35,7 +34,7 @@ export interface LoggingMiddlewareConfig {
  * - 请求：method / path / queryParameterCount / userAgent / ip
  * - 响应：status / duration
  *
- * 敏感字段会被自动替换为 `[REDACTED]`。
+ * 请求正文和查询值不进入请求摘要。
  *
  * @param config - 日志配置
  * @returns Middleware 实例
@@ -46,16 +45,7 @@ export interface LoggingMiddlewareConfig {
  * ```
  */
 export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middleware {
-  const { logBody = false, logResponse = false, redactFields = [
-    'password',
-    'token',
-    'secret',
-    'authorization',
-    'apikey',
-    'api_key',
-    'creditcard',
-    'credit_card',
-  ] } = config
+  const { logBody = false, logResponse = false } = config
 
   return async (context, next) => {
     const { event, requestId } = context
@@ -80,16 +70,8 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
       ip: clientIp,
     }
 
-    if (logBody && event.request.method !== 'GET') {
-      try {
-        const clonedRequest = event.request.clone()
-        const body = await clonedRequest.json()
-        logData.body = redactObject(body, redactFields)
-      }
-      catch {
-        // 忽略非 JSON 请求体
-      }
-    }
+    if (logBody)
+      logData.hasBody = event.request.body !== null
 
     core.logger.trace('Incoming request', { ...logData })
 
@@ -111,17 +93,4 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
 
     return response
   }
-}
-
-/**
- * 递归屏蔽对象中的敏感字段
- *
- * 匹配规则：字段名转小写后与 `fields` 列表比较。
- *
- * @param obj - 待处理对象
- * @param fields - 需要屏蔽的字段名列表（全小写）
- * @returns 屏蔽后的副本
- */
-function redactObject(obj: unknown, fields: string[]): unknown {
-  return core.sanitize.sanitizeSensitiveFields(obj, { matcher: fields })
 }

@@ -7,6 +7,7 @@ import { createServer } from 'node:http'
 import { runInNewContext } from 'node:vm'
 import { apiClient } from '@h-ai/api-client'
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import Handlebars from 'handlebars'
 import ts from 'typescript'
@@ -55,6 +56,8 @@ function generatedClient(baseUrl: string, encrypted: boolean): MobileClient {
         return { apiClient }
       if (name === '@h-ai/crypto')
         return { crypto }
+      if (name === '@h-ai/core')
+        return { core }
       if (name === '@h-ai/capacitor') {
         return {
           capacitor: {
@@ -123,7 +126,7 @@ it.each(['encrypted', 'rejected-handshake', 'explicit-plaintext'] as const)('真
           headers.set(key, value)
       }
       outgoing.setHeader('content-type', 'application/json')
-      if (incoming.url === '/api/v1/custom/key-exchange') {
+      if (incoming.url === '/custom/key-exchange') {
         observed.handshakes++
         if (mode === 'rejected-handshake') {
           outgoing.writeHead(503).end(JSON.stringify({ message: 'Fixture registry unavailable' }))

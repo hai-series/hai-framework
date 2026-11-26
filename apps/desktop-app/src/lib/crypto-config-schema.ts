@@ -1,17 +1,18 @@
 /** 桌面端公开传输配置：供 Node 构建与浏览器共用，不读取运行环境。 */
+import { crypto } from '@h-ai/crypto'
 import { z } from 'zod'
 
 const AbsolutePathSchema = z.custom<`/${string}`>(
-  value => typeof value === 'string' && value.startsWith('/'),
-  'path must start with /',
+  crypto.transport.isKeyExchangePath,
+  'keyExchangePath must be a fixed origin-absolute path',
 )
 
 /**
  * 桌面端 transport 配置。
- * @example { keyExchangePath: '/_hai/key-exchange' }
+ * @example { keyExchangePath: '/api/v1/_hai/key-exchange' }
  */
 export interface DesktopCryptoTransportConfig {
-  /** 以 / 开头的密钥交换路径，必须与服务端约定一致。 */
+  /** 站点绝对路径，必须与服务端约定一致。 */
   readonly keyExchangePath: `/${string}`
 }
 
@@ -36,7 +37,7 @@ export type DesktopCryptoConfigInput = Partial<{
 const DesktopCryptoTransportConfigInputSchema = z.union([
   z.literal(false),
   z.object({
-    keyExchangePath: AbsolutePathSchema.default('/_hai/key-exchange'),
+    keyExchangePath: AbsolutePathSchema.default(crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH),
   }),
 ])
 
@@ -53,7 +54,7 @@ export const DesktopCryptoConfigSchema = z.object({
  * @param input - 关闭标记或路径配置
  * @returns 完整传输配置；false 表示关闭
  * @throws 配置不符合 Schema 时抛出 ZodError
- * @example resolveDesktopCryptoTransportConfig({}) // { keyExchangePath: '/_hai/key-exchange' }
+ * @example resolveDesktopCryptoTransportConfig({}) // { keyExchangePath: '/api/v1/_hai/key-exchange' }
  */
 export function resolveDesktopCryptoTransportConfig(input: false | Partial<DesktopCryptoTransportConfig> = false): false | DesktopCryptoTransportConfig {
   return DesktopCryptoTransportConfigInputSchema.parse(input)

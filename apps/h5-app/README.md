@@ -79,6 +79,7 @@ pnpm --filter h5-app preview
 - `config/_storage.yml`：存储类型及参数（local / S3）
 - `config/_vecdb.yml`：向量存储（开发 LanceDB，生产共享 Qdrant；URL/API Key 仅服务端）
 - `config/_ai.yml`：AI 模型配置（多模态识别）
+- `config/_kit.yml`：可信代理、访问规则、固定窗口限流。默认每个可信客户端 IP 每 60 秒最多请求 200 次，生产计数使用共享 Redis。 [入口配置](../../docs/usage/configuration/kit.md)
 
 每个 YAML 叶子项都可由 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，
 且环境变量优先于 YAML 值；camelCase key 不拆词。
@@ -106,6 +107,8 @@ pnpm --filter h5-app preview
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
 认证方式、注册、重置、协议和品牌由服务端 config/_iam.yml 控制。SvelteKit 页面消费 iam.publicConfig；移动/桌面页面从 API 服务读取公开配置。选用 Reach 时，初始化成功后传入 iam.init({ ...settings, reach })，使用标准通知模板。多节点共享 DB 与 Redis。UI 复用 AuthPanel/LoginForm 和框架认证动作，应用只负责业务导航与用户状态。
+
+`session.endOnPageHide` 默认关闭。启用时，登录后页面取得当前会话的指纹，离开页面时浏览器尝试只关闭该会话。页面关闭通知可能无法送达，部署时还需设置服务端闲置和绝对会话期限。 [Kit 会话操作](../../docs/usage/function/kit.md#auth)
 
 [完整配置与安全约束](../../packages/iam/README.md)
 

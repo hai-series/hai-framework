@@ -1,9 +1,12 @@
 /** 请求入口绑定真实审计持久化，验证拒绝、异常及业务事件的关联上下文。 */
 import type { RequestEvent } from '@sveltejs/kit'
 import { audit } from '@h-ai/audit'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
+import { redirect } from '@sveltejs/kit'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { createHandle } from '../src/hooks/index.js'
+import { kit } from '../src/kit-main.js'
 
 beforeEach(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
@@ -52,7 +55,7 @@ it('业务显式事件和入口事件共享身份快照及可信地址，读取�
   const handle = createHandle({
     logging: false,
     auth: {
-      verifyToken: async () => actor,
+      verifyToken: async () => core.ok(actor),
     },
   })
   const response = await handle({
@@ -119,7 +122,7 @@ it('守卫跳转也记录拒绝，异常只记录状态不复制错误内容', a
   const handle = createHandle({
     logging: false,
     auth: {
-      verifyToken: async () => actor,
+      verifyToken: async () => core.ok(actor),
     },
   })
   expect((await handle({
@@ -140,4 +143,22 @@ it('守卫跳转也记录拒绝，异常只记录状态不复制错误内容', a
   })
   if (failures.success)
     expect(failures.data.items[0]!.details).not.toContain('Private database')
+})
+
+it('明文表单的 SvelteKit 重定向透传给宿主，并只写入一次入口审计', async () => {
+  const handle = kit.createHandle({ logging: false })
+  await expect(handle({
+    event: event('/orders/submit'),
+    resolve: () => redirect(303, '/orders'),
+  })).rejects.toMatchObject({ status: 303, location: '/orders' })
+
+  expect(await audit.list({ requestId: 'kit-audit-request' })).toMatchObject({
+    success: true,
+    data: {
+      total: 1,
+      items: [
+        { action: 'request.execute', outcome: 'success' },
+      ],
+    },
+  })
 })

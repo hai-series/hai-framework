@@ -2,7 +2,7 @@ import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, Transp
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto, TransportTimeError } from '@h-ai/crypto'
 import { Hono } from 'hono'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -142,7 +142,7 @@ describe('serv.createApp({ transport })', () => {
     await crypto.close()
   })
 
-  it.each(['/api/v1', '/somepath/api/v1', '/some.path/api/v1'] as const)('handles key-exchange and rejects unauthenticated requests under %s', async (apiPrefix) => {
+  it.each(['/api/v1', '/somepath/api/v1', '/some.path/api/v1'] as const)('reuses the fixed exchange path with business API prefix %s', async (apiPrefix) => {
     const app = serv.createApp({
       contract,
       procedures,
@@ -170,15 +170,34 @@ describe('serv.createApp({ transport })', () => {
     if (!kpResult.success)
       return
 
-    const exchangeResp = await app.request(`${apiPrefix}/_hai/key-exchange`, {
+    const exchangePath = crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
+    const exchangeRequest = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clientPublicKey: kpResult.data.publicKey }),
-    })
+    }
+    const exchangeResp = await app.request(exchangePath, exchangeRequest)
     expect(exchangeResp.status).toBe(200)
     const exchanged = await exchangeResp.json() as { serverPublicKey: string, clientId: string }
     expect(typeof exchanged.serverPublicKey).toBe('string')
     expect(typeof exchanged.clientId).toBe('string')
+    if (apiPrefix !== '/api/v1') {
+      const underBusinessPrefix = await app.request(`${apiPrefix}/_hai/key-exchange`, exchangeRequest)
+      expect(underBusinessPrefix.ok).toBe(false)
+    }
+  })
+
+  it('直接装配拒绝无效的密钥协商路径', () => {
+    expect(() => serv.createApp({
+      contract,
+      procedures,
+      transport: {
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
+        crypto,
+        keyExchangePath: '/gateway/*',
+      },
+    })).toThrow(TypeError)
   })
 
   it('透传 transport.keyStore 到 crypto.transport.createServer', () => {
@@ -197,37 +216,31 @@ describe('serv.createApp({ transport })', () => {
     expect(createServer).toHaveBeenCalledWith(expect.objectContaining({ keyStore }))
   })
 
-  it('allows custom preflight responses without requiring a transport handshake', async () => {
+  it('serv.cors 在传输加密前应答自定义密钥协商端点，并保留实际路径', async () => {
     const origin = 'http://localhost:5176'
+    const keyExchangePath = '/gateway/key-exchange'
     const app = serv.createApp({
       contract,
       procedures,
       http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       middlewares: [
         {
-          middleware: (c, next) => {
-            if (c.req.method !== 'OPTIONS')
-              return next()
-
-            return new Response(null, {
-              status: 204,
-              headers: {
-                'Access-Control-Allow-Origin': origin,
-                'Access-Control-Allow-Methods': 'POST',
-                'Access-Control-Allow-Headers': 'content-type, x-client-id, x-encrypted',
-              },
-            })
-          },
+          middleware: serv.cors({
+            origin,
+            methods: ['POST'],
+            allowedHeaders: ['Content-Type', 'X-Client-Id', 'X-Encrypted'],
+          }),
         },
       ],
       transport: {
         keyStore: crypto.transport.createKeyStore({ cache }),
         serverKeyRing,
         crypto,
+        keyExchangePath,
       },
     })
 
-    const response = await app.request('/api/v1/_hai/key-exchange', {
+    const response = await app.request(keyExchangePath, {
       method: 'OPTIONS',
       headers: {
         origin,
@@ -238,7 +251,103 @@ describe('serv.createApp({ transport })', () => {
 
     expect(response.status).toBe(204)
     expect(response.headers.get('access-control-allow-origin')).toBe(origin)
+    const keyPair = crypto.asymmetric.generateKeyPair()
+    if (!keyPair.success)
+      throw new Error(keyPair.error.message)
+    const exchange = await app.request(keyExchangePath, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ clientPublicKey: keyPair.data.publicKey }),
+    })
+    expect(exchange.status).toBe(200)
+    expect(await exchange.json()).toMatchObject({
+      clientId: expect.any(String),
+    })
     expect(response.headers.get('access-control-allow-headers')).toContain('x-client-id')
+  })
+
+  it('握手参与计数；密文业务请求的 429 和 503 仍能通过客户端认证', async () => {
+    const origin = 'https://app.test'
+    const target = 'http://service.test/api/v1/limited'
+    const store = core.access.createMemoryRateLimitStore()
+    const handler = vi.fn()
+    let unavailable = false
+    let wireResponse: Response | undefined
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: {
+        rateLimit: {
+          windowMs: 60_000,
+          maxRequests: 2,
+          store: {
+            scope: 'memory',
+            increment: (key, windowMs) => {
+              if (unavailable)
+                throw new Error('offline')
+              return store.increment(key, windowMs)
+            },
+          },
+        },
+      },
+      transport: {
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
+        crypto,
+      },
+      middlewares: [
+        {
+          middleware: serv.cors({
+            origin,
+            exposedHeaders: ['Retry-After'],
+          }),
+        },
+        {
+          path: '/api/v1/limited',
+          middleware: (c) => {
+            handler()
+            return c.json({ ok: true })
+          },
+        },
+      ],
+    })
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: `http://service.test${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`,
+      fetch: async (input, init) => {
+        wireResponse = await app.fetch(new Request(input, init))
+        return wireResponse
+      },
+    })
+    const send = () => client.encryptedFetch(target, {
+      method: 'POST',
+      headers: { origin },
+      body: '{}',
+    })
+    try {
+      const allowed = await send()
+      expect(allowed.status).toBe(200)
+      expect(allowed.headers.get('x-ratelimit-remaining')).toBe('0')
+      expect(await allowed.json()).toEqual({ ok: true })
+
+      const excess = await send()
+      expect(excess.status).toBe(429)
+      expect(excess.headers.get('access-control-allow-origin')).toBe(origin)
+      expect(excess.headers.get('retry-after')).not.toBeNull()
+      expect(wireResponse?.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe('true')
+      expect(await excess.json()).toMatchObject({
+        error: { code: HaiCommonError.RATE_LIMIT_EXCEEDED.code },
+      })
+
+      unavailable = true
+      const failed = await send()
+      expect(failed.status).toBe(503)
+      expect(wireResponse?.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe('true')
+      expect(await failed.json()).toMatchObject({
+        error: { code: HaiCommonError.SERVICE_UNAVAILABLE.code },
+      })
+      expect(handler).toHaveBeenCalledOnce()
+    }
+    finally { client.destroy() }
   })
 
   it('end-to-end roundtrip via crypto.transport.createClient', async () => {
@@ -282,6 +391,39 @@ describe('serv.createApp({ transport })', () => {
     expect(resp.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBeNull()
     const data = await resp.json() as { echoed: { msg: string } }
     expect(data.echoed.msg).toBe('hello')
+  })
+
+  it('普通 OPTIONS 的业务请求和响应使用加密传输', async () => {
+    const app = serv.createApp({
+      contract,
+      procedures,
+      middlewares: [
+        {
+          middleware: serv.cors(),
+        },
+        {
+          path: '/widget',
+          middleware: c => c.json({ method: c.req.method }),
+        },
+      ],
+      transport: {
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
+        crypto,
+      },
+    })
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: 'https://example.test/api/v1/_hai/key-exchange',
+      fetch: (input, init) => app.fetch(new Request(input, init)),
+    })
+    try {
+      const response = await client.encryptedFetch('https://example.test/widget', { method: 'OPTIONS' })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({ method: 'OPTIONS' })
+    }
+    finally {
+      client.destroy()
+    }
   })
 
   it('renews an expired registry entry before sending concurrent POSTs', async () => {

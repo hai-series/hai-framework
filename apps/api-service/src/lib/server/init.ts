@@ -205,10 +205,13 @@ async function doInit(): Promise<void> {
     throw new Error(`AI initialization failed: ${aiResult.error.message}`)
   }
 
-  // 10. 注册 A2A 执行器（依赖 ai 模块）
-  const a2aResult = ai.a2a.registerExecutor(echoExecutor)
-  if (!a2aResult.success) {
-    core.logger.warn('A2A executor registration failed (a2a config may be missing)', { error: a2aResult.error })
+  // 10. 仅在配置启用 HTTP 入口时注册示例执行器。
+  if (servConfig.a2a) {
+    if (!iamConfig.login?.apikey)
+      throw new Error('The A2A HTTP endpoint requires IAM API key authentication.')
+    const registered = ai.a2a.registerExecutor(echoExecutor)
+    if (!registered.success)
+      throw new Error(registered.error.message)
   }
 
   core.logger.info('API Service initialized.')

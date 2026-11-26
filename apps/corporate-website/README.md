@@ -84,6 +84,7 @@ pnpm --filter corporate-website preview
 - `config/_vecdb.yml`：向量存储（开发 LanceDB，生产共享 Qdrant；URL/API Key 仅服务端）
 - `config/_ai.yml`：AI 模型配置
 - `config/_reach.yml`：消息通知配置
+- `config/_kit.yml`：可信代理、访问规则、固定窗口限流。默认每个可信客户端 IP 每 60 秒最多请求 120 次，生产计数使用共享 Redis。 [入口配置](../../docs/usage/configuration/kit.md)
 - `config/partner.yml`：合作管理后台管理员账号配置
 
 每个 YAML 叶子项都可由 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，

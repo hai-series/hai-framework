@@ -6,6 +6,7 @@
  * @module kit-transport-paths
  */
 
+import { HttpEndpointPathSchema } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 
 /**
@@ -16,7 +17,7 @@ import { crypto } from '@h-ai/crypto'
  * void endpoint.pathname
  *```
  */
-export const DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH = `/api${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
+export const DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH = crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
 
 const API_PREFIX = '/api/'
 const ROOT_DATA_PATH = '/__data.json'
@@ -75,10 +76,29 @@ export function isSvelteKitDataPath(pathname: string): boolean {
 }
 
 /**
+ * 校验自定义契约前缀，使用包含挂载目录的完整站点路径。
+ * @param value - 挂载后的契约 API 前缀。
+ * @returns 已校验的前缀，省略输入时返回 undefined。
+ * @throws TypeError 路径含编码、查询、点段或非规范分隔符。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const reportPrefix = resolveTransportContractApiPrefix('/console/reports')
+ * void reportPrefix
+ * ```
+ */
+export function resolveTransportContractApiPrefix(value?: `/${string}`): `/${string}` | undefined {
+  if (value !== undefined && !HttpEndpointPathSchema.safeParse(value).success)
+    throw new TypeError('contractApiPrefix must be a canonical absolute request path')
+  return value
+}
+
+/**
  * 判断路径是否属于 transport 保护范围。
  * @param pathname - 待判断的 URL pathname。
  * @param keyExchangePath - 公开密钥交换路径。
  * @param basePath - 已校验的宿主挂载目录；默认空字符串。
+ * @param contractApiPrefix - 已校验的契约 API 完整站点前缀。
  * @returns 是否属于 API、密钥交换或 SvelteKit 数据端点。
  * @example 模块内部上下文
  * ```ts
@@ -90,8 +110,11 @@ export function shouldHandleTransportPath(
   pathname: string,
   keyExchangePath: string = DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH,
   basePath = '',
+  contractApiPrefix?: string,
 ): boolean {
   if (pathname === keyExchangePath)
+    return true
+  if (contractApiPrefix && (pathname === contractApiPrefix || pathname.startsWith(`${contractApiPrefix}/`)))
     return true
   if (basePath && pathname !== basePath && !pathname.startsWith(`${basePath}/`))
     return false
@@ -125,25 +148,27 @@ export function shouldExcludeTransportPath(
 }
 
 /**
- * 从相对/绝对 URL 中提取 pathname。
- * @param urlOrPath - 绝对 URL 或相对路径。
- * @param origin - 解析相对路径的基准 origin。
- * @returns 解析后的 pathname；无效 URL 抛出 TypeError。
+ * 校验直接装配的交换路径；不把 URL、应用前缀或查询串隐式转换为协议路径。
+ * @param value - 实际绝对请求路径，省略时使用协议默认值。
+ * @returns 校验通过的 pathname。
+ * @throws TypeError 路径不规范。
  * @example 模块内部上下文
  * ```ts
- * const path = resolveTransportPath('https://app.example.com/api/articles?page=1')
+ * const path = resolveKeyExchangePath('/portal/api/exchange')
  * void path
- *```
+ * ```
  */
-export function resolveTransportPath(urlOrPath: string, origin = 'http://localhost'): string {
-  return new URL(urlOrPath, origin).pathname
+export function resolveKeyExchangePath(value: unknown = DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH): `/${string}` {
+  if (!crypto.transport.isKeyExchangePath(value))
+    throw new TypeError('keyExchangePath must be a canonical absolute request path')
+  return value
 }
 
 /**
  * 判断浏览器侧请求是否应走 transport。
  *
  * - 仅处理同源请求
- * - 仅保护宿主 basePath 下的 `/api/*` 与 SvelteKit `__data.json`
+ * - 保护已挂载的契约 API，以及宿主 basePath 下的 `/api/*` 与 SvelteKit `__data.json`
  * - 命中 `excludePaths` 时透传明文
  * @param url - 待判断的绝对或相对 URL。
  * @param options - 同源基准、密钥交换路径及排除列表。
@@ -151,6 +176,7 @@ export function resolveTransportPath(urlOrPath: string, origin = 'http://localho
  * @param options.keyExchangePath - 公开密钥交换路径。
  * @param options.excludePaths - 明文排除路径列表。
  * @param options.basePath - 已校验的宿主挂载目录；默认空字符串。
+ * @param options.contractApiPrefix - 已校验的契约 API 完整站点前缀。
  * @returns 是否同源、属于保护范围且未被排除。
  * @example 模块内部上下文
  * ```ts
@@ -165,6 +191,7 @@ export function shouldUseTransportForUrl(
     keyExchangePath?: string
     excludePaths?: readonly string[]
     basePath?: string
+    contractApiPrefix?: string
   } = {},
 ): boolean {
   const baseOrigin = options.origin ?? 'http://localhost'
@@ -176,7 +203,7 @@ export function shouldUseTransportForUrl(
     return false
 
   const keyExchangePath = options.keyExchangePath ?? DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH
-  if (!shouldHandleTransportPath(requestUrl.pathname, keyExchangePath, options.basePath))
+  if (!shouldHandleTransportPath(requestUrl.pathname, keyExchangePath, options.basePath, options.contractApiPrefix))
     return false
 
   return !shouldExcludeTransportPath(requestUrl.pathname, options.excludePaths ?? [], keyExchangePath)

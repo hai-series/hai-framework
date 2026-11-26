@@ -84,7 +84,7 @@
 
 #### 安装与启动
 
-默认 transport 必须从服务端私有环境或 `apps/admin-console/.env.local` 注入 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`；运行时不隐式生成。客户端公钥 registry 复用 reldb，多节点使用相同受管 ring 和共享数据库，不需要粘性路由。私钥不放公开 `_kit.yml`、PUBLIC_/VITE_、日志或浏览器配置。密钥由 Secret Manager/受管配置提供，轮换与撤销步骤见 [Crypto 传输说明](../../packages/crypto/README.md)。
+传输加密默认启用，开发和测试从 `.env.dev`、`.env.test` 读取示例密钥环。生产通过服务端私有环境或 Secret Manager 注入独立的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`。各生产实例使用同一个密钥环和共享 Redis 登记客户端公钥，客户端可在实例间继续使用已建立的加密会话。 [Crypto 传输说明](../../packages/crypto/README.md)
 
 ```bash
 # 在 hai-framework monorepo 根目录
@@ -145,15 +145,16 @@ HAI_ADMIN_DEFAULT_PASSWORD=<change-me-to-a-strong-local-password>
 - `config/_db.yml`：数据库连接（SQLite / PostgreSQL / MySQL）
 - `config/_cache.yml`：缓存类型与连接参数（memory / redis）
 - `config/_iam.yml`：认证策略、密码策略、JWT、RBAC、种子数据
-- `config/_kit.yml`：同源 transport 加密（密钥协商路径、是否强制加密、明文例外路径）
+- `config/_kit.yml`：可信代理、访问规则、固定窗口限流和同源传输加密
 - `config/_storage.yml`：存储类型及参数（local / S3）
 
 每个 YAML 叶子项都可由
 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，且环境变量优先于 YAML 值。
 例如 `_db.yml` 的 `database` 对应 `HAI_DB_DATABASE`，`_ai.yml` 的
 `llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`。camelCase key 不拆词。
-`config/_kit.yml` 在服务启动时加载环境引用并校验，hooks 与 SSR 使用同一份 transport 配置。
-SSR 只向浏览器传递公开的路径与开关，不包含 server 字段；修改环境后重启服务即可，无需重建。
+`config/_kit.yml` 在服务启动时加载环境引用并校验。默认密钥交换端点为 `POST /api/v1/_hai/key-exchange`。若通过 `HAI_KIT_TRANSPORT_KEYEXCHANGEPATH` 修改位置，填入从站点根开始的完整路径并同步网关路由。SSR 将公开的传输配置交给浏览器，修改运行时路径后重启服务即可。 [Kit 传输配置](../../docs/usage/configuration/kit.md#transport)
+
+`http.trustedProxies` 指定可信代理，`http.access` 设置访问规则。`http.rateLimit` 默认允许每个可信客户端 IP 在 60 秒内发起 100 次请求，可用 `HAI_KIT_HTTP_RATELIMIT_MAXREQUESTS` 修改次数，或设置 `HAI_KIT_HTTP_RATELIMIT=false` 关闭。超限时查看 HTTP 429 和 `Retry-After`。 [Kit 限流配置](../../docs/usage/configuration/kit.md#rate-limit-config-example)
 
 #### 认证页面
 

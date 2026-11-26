@@ -13,6 +13,7 @@ import { kit, KitConfigSchema } from '@h-ai/kit'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
 import { browserScopeCookie, issueBrowserScope, scopeProfile, validBrowserScope } from '#lib/server/browser-scope.js'
 import { ensureAIInitialized } from '#lib/server/init.js'
+import { labContractHandler } from '#lib/server/lab-status-contract.js'
 
 // 初始化 AI（E2E mock 模式跳过）、设置 locale 与 API 安全响应头
 let rateLimitInit: Promise<void> | undefined
@@ -41,11 +42,10 @@ async function ensureRateLimit(): Promise<void> {
   await rateLimitInit
 }
 
-// 初始化 AI（E2E mock 模式跳过）与限流，设置 locale 和安全响应头。
+// 初始化 AI（E2E mock 模式跳过），设置 locale 和安全响应头。
 const securityHandle: Handle = async ({ event, resolve }) => {
   if (process.env.HAI_E2E_MOCK !== '1')
     await ensureAIInitialized()
-  await ensureRateLimit()
 
   let browserScope = event.cookies.get(browserScopeCookie)
   if (!validBrowserScope(browserScope)) {
@@ -83,13 +83,20 @@ const haiHandle: Handle = async (input) => {
       throw new Error(loaded.error.message)
     if (loaded.data.transport !== false)
       throw new Error('This example does not install transport encryption; use admin-console or a crypto-enabled CLI template for the complete server and browser assembly')
-    configuredHandle = kit.createHandle({
-      trustedProxies: loaded.data.trustedProxies,
-      access: loaded.data.access,
-      rateLimit: {
-        windowMs: 60000,
-        maxRequests: 120,
-        store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'ai-playground', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }),
+    const { http } = loaded.data
+    if (http.rateLimit !== false)
+      await ensureRateLimit()
+    configuredHandle ??= kit.createHandle({
+      contract: labContractHandler,
+      http: {
+        ...http,
+        rateLimit: http.rateLimit && {
+          ...http.rateLimit,
+          store: core.access.createCacheRateLimitStore(cache, {
+            namespace: 'ai-playground',
+            allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1',
+          }),
+        },
       },
     })
   }

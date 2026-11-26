@@ -19,6 +19,9 @@ import { resolve as resolvePath } from '$app/paths'
 {{/if}}
 {{/if}}
 {{/if}}
+{{#if features.ai}}{{#if features.iam}}
+import { ai } from '@h-ai/ai'
+{{/if}}{{/if}}
 {{#if features.cache}}
 import { cache } from '@h-ai/cache'
 {{/if}}
@@ -76,10 +79,13 @@ const initHandle: Handle = async ({ event, resolve }) => {
 /**
  * i18n Handle - 使用 Paraglide middleware 处理语言
  *
- * API 请求跳过 paraglideMiddleware（不需要页面级 locale + 避免消耗 body）
+ * API 和 A2A 请求跳过页面路由本地化，保留协议路径与正文。
  */
 const i18nHandle: Handle = async ({ event, resolve }) => {
-  if (event.url.pathname.startsWith(`${resolvePath('/').replace(/\/$/, '')}/api/`)) {
+  const a2a = getKitConfig().a2a
+  const path = event.url.pathname
+  if (path.startsWith(`${resolvePath('/').replace(/\/$/, '')}/api/`)
+    || (a2a && (path === a2a.cardPath || path === a2a.rpcPath))) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? '{{defaultLocale}}'
     event.locals.locale = locale
     return kit.i18n.runWithLocale(locale, () => resolve(event))
@@ -109,6 +115,7 @@ const haiHandle: Handle = async (input) => {
         throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
       transport = {
         ...settings.transport,
+        crypto,
         basePath: resolvePath('/').replace(/\/$/, ''),
         serverKeyRing: ring.data,
         keyStore: crypto.transport.createKeyStore({ cache }),
@@ -118,28 +125,41 @@ const haiHandle: Handle = async (input) => {
     if (settings.transport !== false)
       throw new Error('Transport encryption requires the crypto feature; add it before enabling kit.transport')
 {{/if}}
+    const { http } = settings
+{{#unless features.cache}}
+    if (http.rateLimit !== false)
+      throw new Error('Kit http.rateLimit requires the cache feature; add it before enabling rate limiting')
+{{/unless}}
     configuredHandle = kit.createHandle({
-      trustedProxies: settings.trustedProxies,
-      access: settings.access,
+      cors: settings.cors,
+{{#if features.ai}}{{#if features.iam}}
+      a2a: settings.a2a && ai.a2a.createHttpHandler({
+        ...settings.a2a,
+        authenticate: {
+          verifyApiKey: key => iam.apiKey.verifyApiKey(key),
+        },
+      }),
+{{/if}}{{/if}}
+      http: {
+        ...http,
+{{#if features.cache}}
+        rateLimit: http.rateLimit && {
+          ...http.rateLimit,
+          store: core.access.createCacheRateLimitStore(cache, {
+            namespace: '{{projectName}}',
+            allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1',
+          }),
+        },
+{{else}}
+        rateLimit: false,
+{{/if}}
+      },
 {{#if features.crypto}}
-      crypto: { crypto, transport },
+      transport,
 {{/if}}
 {{#if features.iam}}
       auth: {
-        verifyToken: async (token) => {
-          const result = await iam.auth.verifyToken(token)
-          if (!result.success)
-            return null
-          const session = result.data
-          // 映射为 kit 的 SessionData 形态（携带守卫所需的核心字段）
-          return {
-            userId: session.userId,
-            username: session.username,
-            roles: session.roles,
-            permissions: session.permissions,
-            data: session.data,
-          }
-        },
+        iam,
         loginUrl: `${resolvePath('/').replace(/\/$/, '')}/auth/login`,
         protectedPaths: ['/admin/*', '/api/*'].map(path => `${resolvePath('/').replace(/\/$/, '')}${path}`),
         publicPaths: [
@@ -148,18 +168,7 @@ const haiHandle: Handle = async (input) => {
           '/api/public/*',
           '/api/health',
         ].map(path => `${resolvePath('/').replace(/\/$/, '')}${path}`),
-        operations: () => iam.auth,
       },
-{{/if}}
-{{#if features.cache}}
-      rateLimit: {
-        windowMs: 60000,
-        maxRequests: 200,
-        store: kit.middleware.createCacheRateLimitStore(cache, { namespace: '{{projectName}}', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' }),
-      },
-{{else}}
-      // 未选择cache能力时不启用限流；启用前须接入共享原子store。
-      rateLimit: false,
 {{/if}}
       logging: { logBody: false },
       onError: (error: unknown, _event) => {

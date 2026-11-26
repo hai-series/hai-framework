@@ -1,6 +1,6 @@
 /** 请求日志须支持 prerender，保留路由路径和查询参数数量，并且不消费请求正文。 */
 import type { RequestEvent } from '@sveltejs/kit'
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { kit } from '../src/index.js'
 
@@ -78,25 +78,35 @@ it('查询只记录参数数量，保留重写后的路由路径', async () => {
   expect(input.request.url).toContain('token=private-token')
 })
 
-it('开启正文日志仍先脱敏副本，不消费应用读取的 JSON 请求体', async () => {
-  const input = event(new Request('https://example.test/orders?secret=query-secret', {
+it('正文诊断只保留存在标记，认证处理器仍能读取原始请求', async () => {
+  const data = { code: 'one-time-value', identifier: 'person@example.invalid' }
+  const input = event(new Request('https://example.test/api/auth/login/otp?secret=query-secret', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ password: 'body-secret', orderId: 'order-1' }),
+    headers: { 'content-type': 'application/json', 'x-request-id': 'otp-diagnostics' },
+    body: JSON.stringify(data),
   }))
   const response = await kit.createHandle({
     logging: { logBody: true },
   })({
     event: input,
     resolve: async (received) => {
-      expect(await received.request.json()).toEqual({ password: 'body-secret', orderId: 'order-1' })
-      return new Response('Created', { status: 201 })
+      expect(await received.request.json()).toEqual(data)
+      return kit.response.badRequest('Verification failed', received.request.headers.get('x-request-id') ?? undefined)
     },
   })
-  expect(response.status).toBe(201)
+  expect(response.status).toBe(400)
+  expect((await response.json()).error.code).toBe(HaiCommonError.INVALID_REQUEST.code)
+  expect(response.headers.get('x-trace-id')).toBe('otp-diagnostics')
   expect(core.logger.trace).toHaveBeenCalledWith('Incoming request', expect.objectContaining({
+    requestId: 'otp-diagnostics',
     queryParameterCount: 1,
-    body: { password: '[REDACTED]', orderId: 'order-1' },
+    hasBody: true,
   }))
-  expect(core.logger.trace).toHaveBeenCalledWith('Request completed', expect.objectContaining({ status: 201 }))
+  expect(core.logger.trace).toHaveBeenCalledWith('Request completed', expect.objectContaining({
+    requestId: 'otp-diagnostics',
+    status: 400,
+  }))
+  const calls = JSON.stringify(vi.mocked(core.logger.trace).mock.calls)
+  expect(calls).not.toContain(data.code)
+  expect(calls).not.toContain(data.identifier)
 })

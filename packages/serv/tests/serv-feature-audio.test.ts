@@ -10,17 +10,21 @@
 import type { AudioOperations } from '@h-ai/ai'
 
 import type { HaiResult } from '@h-ai/core'
+import type { IssueTicketOptions, User } from '@h-ai/iam'
 import type { Hono } from 'hono'
 import type { UpgradeWebSocket, WSContext } from 'hono/ws'
 import type { AudioWsDeps } from '../src/features/serv-feature-audio.js'
 import type { ServContext } from '../src/serv-context.js'
 import { once } from 'node:events'
 import { apiContract } from '@h-ai/api-contract'
+import { cache } from '@h-ai/cache'
 import { core, HaiCommonError } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 import { describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { registerAudioWsRoute } from '../src/features/serv-feature-audio.js'
 import { audioWsServers } from '../src/serv-app.js'
+import { ServConfigSchema } from '../src/serv-config.js'
 import { serv } from '../src/serv-main.js'
 
 /** 构造可控的 ai.audio mock */
@@ -159,11 +163,103 @@ describe('serv feature audio', () => {
       expect(handle.close()).toBe(first)
       await first
       expect((await disconnected)[0]).toBe(1001)
-      expect(audioWsServers.get(app)?.clients.size).toBe(0)
+      expect(audioWsServers.get(app)?.server.clients.size).toBe(0)
     }
     finally {
       socket?.terminate()
       await handle.close()
+    }
+  })
+
+  it.each([
+    [undefined, 1024 * 1024],
+    [32 * 1024, 32 * 1024],
+  ])('底层 WebSocket 接收器使用有效的 %s 字节配置', (maxMessageBytes, expected) => {
+    const app = serv.createApp({
+      contract: {},
+      procedures: {},
+      audio: {
+        ai: {
+          audio: createAudioMock(),
+        },
+        verifyTicket: async () => core.ok({ session: TEST_SESSION }),
+        maxMessageBytes,
+      },
+    })
+    expect(audioWsServers.get(app)?.server.options.maxPayload).toBe(expected)
+  })
+
+  it.each([0, 1.5, 2 ** 31])('拒绝不受 WebSocket 接收器支持的字节配置 %s', (maxMessageBytes) => {
+    expect(() => serv.createApp({
+      contract: {},
+      procedures: {},
+      audio: {
+        ai: {
+          audio: createAudioMock(),
+        },
+        verifyTicket: async () => core.ok({ session: TEST_SESSION }),
+        maxMessageBytes,
+      },
+    })).toThrow(RangeError)
+  })
+
+  it('停机等待断连后才完成的语音授权及异步占用释放', async () => {
+    const authorizationStarted = Promise.withResolvers<void>()
+    const finishAuthorization = Promise.withResolvers<void>()
+    const finishRelease = Promise.withResolvers<void>()
+    const onSessionEnd = vi.fn(() => finishRelease.promise)
+    const transcribeStream = vi.fn(createAudioMock().transcribeStream)
+    const app = serv.createApp({
+      contract: {},
+      procedures: {},
+      audio: {
+        ai: {
+          audio: {
+            ...createAudioMock(),
+            transcribeStream,
+          },
+        },
+        verifyTicket: async () => core.ok({ session: TEST_SESSION }),
+        authorize: async () => {
+          authorizationStarted.resolve()
+          await finishAuthorization.promise
+          return core.ok({ operation: 'transcribe' })
+        },
+        onSessionEnd,
+      },
+    })
+    const handle = serv.listen(app, { port: 0 })
+    let socket: WebSocket | undefined
+    try {
+      if (!handle.server.listening)
+        await once(handle.server, 'listening')
+      socket = new WebSocket(`ws://${handle.address.host}:${handle.address.port}/api/v1/ai/audio?ticket=test-ticket`)
+      await once(socket, 'open')
+      socket.send(JSON.stringify({ type: 'start', operation: 'transcribe', stream: true }))
+      await authorizationStarted.promise
+
+      const disconnected = once(socket, 'close')
+      const closed = vi.fn()
+      const closing = handle.close().then(closed)
+      void closing.catch(() => {})
+      await disconnected
+      await vi.waitFor(() => expect(audioWsServers.get(app)?.server.clients.size).toBe(0))
+      finishAuthorization.resolve()
+      await vi.waitFor(() => expect(onSessionEnd).toHaveBeenCalledOnce())
+      expect(closed).not.toHaveBeenCalled()
+      expect(onSessionEnd).toHaveBeenCalledWith(TEST_SESSION, { operation: 'transcribe' })
+      expect(transcribeStream).not.toHaveBeenCalled()
+
+      finishRelease.resolve()
+      await closing
+      expect(closed).toHaveBeenCalledOnce()
+      expect(onSessionEnd).toHaveBeenCalledOnce()
+    }
+    finally {
+      finishAuthorization.resolve()
+      finishRelease.resolve()
+      socket?.terminate()
+      await handle.close().catch(() => {})
     }
   })
 
@@ -224,27 +320,48 @@ describe('serv feature audio', () => {
     }
   })
 
-  it('node adapter 完成真实 WebSocket 握手并传输音频消息', async () => {
+  it.each(['/front/api/v2/ai/audio', '/voice/orders'] as const)('node adapter 在 HTTP 加密启用时通过 %s 升级并转写', async (path) => {
     const contract = apiContract.create({})
     const procedures = serv.implement(contract).context<ServContext>().build()
+    const config = ServConfigSchema.parse({
+      http: { apiPrefix: '/front/api/v2' },
+      audio: path === '/voice/orders'
+        ? { path }
+        : {},
+    })
+    expect(config.audio).toEqual({ path })
+    expect((await crypto.init()).success).toBe(true)
+    const key = crypto.asymmetric.generateKeyPair()
+    if (!key.success)
+      throw new Error(key.error.message)
     const app = serv.createApp({
       contract,
       procedures,
       audio: {
+        path: config.audio ? config.audio.path : undefined,
         ai: {
           audio: createAudioMock(),
         },
         verifyTicket: async () => core.ok({ session: TEST_SESSION }),
       },
-      http: { openapi: false, docs: false },
+      http: config.http,
+      transport: {
+        crypto,
+        serverKeyRing: {
+          activeKeyId: 'audio-test',
+          keys: { 'audio-test': key.data },
+        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+      },
     })
+    expect((await app.request(path)).status).toBe(400)
     const handle = serv.listen(app, { port: 0 })
     if (!handle.server.listening)
       await once(handle.server, 'listening')
     const address = handle.server.address()
     if (!address || typeof address === 'string')
       throw new Error('The test HTTP server did not expose a TCP address')
-    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/v1/ai/audio?ticket=test-ticket`)
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}${path}?ticket=test-ticket`)
     try {
       await once(socket, 'open')
       const messages: Array<Record<string, unknown>> = []
@@ -276,7 +393,107 @@ describe('serv feature audio', () => {
     finally {
       socket.terminate()
       await handle.close()
+      await crypto.close()
     }
+  })
+
+  it('签发前检查语音权限，消费票据时按当前账号和权限重新授权', async () => {
+    const account: User = {
+      id: TEST_SESSION.userId,
+      username: 'auditor',
+      accountStatus: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    let granted = true
+    let pending: IssueTicketOptions | undefined
+    const audio = serv.createIamAudio({
+      ai: {
+        audio: createAudioMock(),
+      },
+      config: { path: '/voice/orders' },
+      permission: 'ai:audio',
+      iam: {
+        user: {
+          getUser: async () => core.ok(account),
+        },
+        authz: {
+          getUserAuthorization: async () => core.ok({
+            roles: TEST_SESSION.roles,
+            permissions: granted
+              ? TEST_SESSION.permissions
+              : [],
+          }),
+        },
+        ticket: {
+          async issue(options) {
+            pending = options
+            return core.ok({ ticket: 'report-audio-test-ticket', expiresAt: Date.now() + 30_000 })
+          },
+          async consume(ticket, options) {
+            if (!pending || ticket !== 'report-audio-test-ticket' || options?.purpose !== pending.purpose)
+              return core.err(HaiCommonError.UNAUTHORIZED)
+            const { subjectId, purpose, grant } = pending
+            pending = undefined
+            return core.ok({ subjectId, purpose, grant: grant ?? {} })
+          },
+        },
+      },
+    })
+    if (!audio.config)
+      throw new Error('Expected audio to be configured')
+    const { verifyTicket } = audio.config
+    const issueTicket = apiContract.extensions.ai.audio.issueTicket
+    const app = serv.createApp({
+      contract: {
+        ai: {
+          audio: { issueTicket },
+        },
+      },
+      procedures: {
+        ai: {
+          audio: { issueTicket: audio.issueTicket },
+        },
+      },
+      audio: audio.config,
+      createContext: () => ({
+        session: {
+          ...TEST_SESSION,
+          permissions: granted
+            ? TEST_SESSION.permissions
+            : [],
+        },
+      }),
+    })
+    const issue = () => app.request('/api/v1/ai/audio/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation: 'synthesize' }),
+    })
+    const first = await issue()
+    expect(first.status).toBe(200)
+    expect(first.headers.get('cache-control')).toBe('no-store')
+    expect(await first.json()).toMatchObject({
+      success: true,
+      data: { ticket: 'report-audio-test-ticket' },
+    })
+    expect(await verifyTicket('report-audio-test-ticket')).toMatchObject({
+      success: true,
+      data: {
+        grant: { operation: 'synthesize' },
+      },
+    })
+    expect(await verifyTicket('report-audio-test-ticket')).toMatchObject({ success: false })
+
+    await issue()
+    granted = false
+    expect(await verifyTicket('report-audio-test-ticket')).toMatchObject({ success: false })
+    expect(await (await issue()).json()).toMatchObject({ success: false })
+
+    granted = true
+    await issue()
+    account.accountStatus = 'dormant'
+    expect(await verifyTicket('report-audio-test-ticket')).toMatchObject({ success: false })
   })
 
   it('流式识别返回临时与最终文本，并以 end 结束', async () => {

@@ -30,7 +30,7 @@ RUN pnpm --filter {{fullstack.sharedPackageName}} paraglide:compile && HAI_BUILD
 FROM ${HAI_NGINX_IMAGE} AS web
 
 ENV PUBLIC_API_BASE=
-ENV NGINX_ENVSUBST_FILTER=PUBLIC_API_BASE_BASE64
+ENV NGINX_ENVSUBST_FILTER="^(PUBLIC_API_BASE_BASE64|PUBLIC_API_KEY_EXCHANGE_PATH_BASE64)$"
 ENV NGINX_ENVSUBST_OUTPUT_DIR=/tmp/hai-runtime-config
 
 RUN mkdir -p /tmp/hai-runtime-config

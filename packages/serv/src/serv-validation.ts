@@ -13,9 +13,7 @@ import type { HaiResult, ValidationFormError } from '@h-ai/core'
 import type { ZodType } from 'zod'
 import type { ServMessageKey } from './serv-i18n.js'
 import { core, HaiCommonError } from '@h-ai/core'
-import { normalizeServLocale, servM } from './serv-i18n.js'
-
-const DEFAULT_LOCALE = 'zh-CN'
+import { DEFAULT_SERV_LOCALE, normalizeServLocale, servM } from './serv-i18n.js'
 
 /**
  * 校验失败响应体（含 i18n 错误列表）。
@@ -49,7 +47,7 @@ export interface ServValidationFailureBody {
 /**
  * 从请求头解析客户端期望 locale。
  *
- * 优先级：`x-hai-locale` > `Accept-Language` 第一个匹配项 > 默认值（`zh-CN`）。
+ * 优先级：`x-hai-locale` > `Accept-Language` 第一个可接受的匹配项 > 默认值（`zh-CN`）。请求头名称不区分大小写。
  * 返回值会被规范化为 serv 当前支持的 locale（如 `en` → `en-US`）。
  *
  * @param headers - 请求头（`Headers` 或与之等价的对象）
@@ -64,17 +62,10 @@ export interface ServValidationFailureBody {
  * ```
  */
 export function resolveRequestLocale(headers: Headers | Record<string, string | undefined>): string {
-  const get = (name: string): string | undefined => {
-    if (headers instanceof Headers)
-      return headers.get(name) ?? undefined
-    return headers[name] ?? headers[name.toLowerCase()]
-  }
-
-  const explicit = get('x-hai-locale')
-  if (explicit)
-    return normalizeServLocale(explicit)
-
-  return normalizeServLocale(get('accept-language') ?? get('Accept-Language') ?? DEFAULT_LOCALE)
+  const get = (name: string): string | undefined => headers instanceof Headers
+    ? headers.get(name) ?? undefined
+    : headers[name] ?? Object.entries(headers).find(([key]) => key.toLowerCase() === name)?.[1]
+  return normalizeServLocale(get('x-hai-locale') || get('accept-language'))
 }
 
 /**
@@ -132,7 +123,7 @@ export function localizeZodError(zodError: unknown, locale: string): ValidationF
 export function validateInputOrFail<TOutput>(
   schema: ZodType<TOutput>,
   input: unknown,
-  locale: string = DEFAULT_LOCALE,
+  locale: string = DEFAULT_SERV_LOCALE,
 ): HaiResult<TOutput> {
   const resolvedLocale = normalizeServLocale(locale)
   const result = schema.safeParse(input)

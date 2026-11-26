@@ -56,6 +56,8 @@ GitHub Pages 发布到 `https://framework.hai-infra.com/` 的根路径。`vite.c
 
 此站不提供登录、数据库、Feedback 管理或其他服务端 API。构建期仅初始化公开文档所需的 core、Kit 和 i18n；浏览器产物不读取或注入私有环境变量。新增动态业务能力应另建服务，并重新核对静态托管的适用条件。
 
+`config/_kit.yml` 保持 `http.rateLimit: false` 和 `transport: false`。由 CDN 或反向代理为已发布的静态文件执行访问控制和限流，线上请求不会经过 Kit Hook。
+
 ## 许可证
 
 [Apache-2.0](../../LICENSE)

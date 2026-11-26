@@ -8,6 +8,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { IamFunctions } from '@h-ai/iam'
 import type { ErrorMap, Meta, ProcedureHandler } from '@orpc/server'
 import type { ServContext } from '../serv-context.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
@@ -124,9 +125,7 @@ export function checkServGuards<TContext extends ServContext>(
   const { session } = context
   const requiredPermissions = requirements.permissions ?? []
   const requiredRoles = requirements.roles ?? []
-  const hasPermissions = session.permissions.includes(WILDCARD_PERMISSION)
-    || requiredPermissions.every(permission => session.permissions.some(granted => granted === permission
-      || (granted.endsWith(':*') && permission.startsWith(granted.slice(0, -1)))))
+  const hasPermissions = requiredPermissions.every(permission => core.auth.matchPermission(permission, session.permissions))
   const hasRoles = session.roles.includes(WILDCARD_ROLE)
     || requiredRoles.every(role => session.roles.includes(role))
   if (!hasPermissions || !hasRoles)
@@ -139,4 +138,28 @@ function hasAuthenticatedSession<TContext extends ServContext>(
   context: TContext,
 ): context is AuthenticatedServContext<TContext> {
   return context.session !== undefined && context.session !== null
+}
+
+/**
+ * 在资源权限检查后验证敏感操作的一次性再鉴别凭据。
+ * @example
+ * ```ts
+ * import { iam } from '@h-ai/iam'
+ * import { type ServContext, serv } from '@h-ai/serv'
+ *
+ * async function verifyOrderCancellation(context: ServContext) {
+ *   const result = await serv.guard.requireSensitive(iam, context, 'orders.cancel')
+ *   if (!result.success) return result
+ *   return result
+ * }
+ * ```
+ */
+export async function requireSensitiveOperation(
+  iam: Pick<IamFunctions, 'auth' | 'publicConfig'>,
+  context: Pick<ServContext, 'request' | 'accessToken'>,
+  operation: string,
+): Promise<HaiResult<void>> {
+  if (!iam.publicConfig?.reauthentication.enabled)
+    return core.ok(undefined)
+  return iam.auth.checkSensitiveOperation(context.accessToken ?? '', operation, context.request.headers.get('x-hai-reauthentication') ?? undefined)
 }

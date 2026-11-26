@@ -2,4 +2,5 @@
 
 # 使用 Base64 跨越 shell、envsubst 与 JavaScript 字符串边界，避免 URL 字符改变脚本语义。
 PUBLIC_API_BASE_BASE64="$(printf '%s' "${PUBLIC_API_BASE:-}" | base64 | tr -d '\n')"
-export PUBLIC_API_BASE_BASE64
+PUBLIC_API_KEY_EXCHANGE_PATH_BASE64="$(printf '%s' "${PUBLIC_API_KEY_EXCHANGE_PATH:-}" | base64 | tr -d '\n')"
+export PUBLIC_API_BASE_BASE64 PUBLIC_API_KEY_EXCHANGE_PATH_BASE64

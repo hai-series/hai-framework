@@ -74,7 +74,19 @@ describe('standard Cookie login actions', () => {
   })
 })
 
-it.each([false, true])('cookie 页面离开开关=%s；保留既有fetch管线并清理监听', async (enabled) => {
+it.each([
+  {
+    enabled: false,
+    sessionFingerprint: 'a'.repeat(64),
+    expectedRequests: 0,
+  },
+  { enabled: true, sessionFingerprint: undefined, expectedRequests: 0 },
+  {
+    enabled: true,
+    sessionFingerprint: 'a'.repeat(64),
+    expectedRequests: 1,
+  },
+])('cookie 页面离开开关=$enabled，发出 $expectedRequests 个绑定请求', async ({ enabled, sessionFingerprint, expectedRequests }) => {
   const target = new EventTarget()
   vi.stubGlobal('window', target)
   const requests: { url: string, init?: RequestInit }[] = []
@@ -87,7 +99,7 @@ it.each([false, true])('cookie 页面离开开关=%s；保留既有fetch管线�
       return Response.json({ success: true })
     },
   })
-  const stop = actions.bindPageExit({ enabled })
+  const stop = actions.bindPageExit({ enabled, sessionFingerprint })
   try {
     const restored = new Event('pagehide')
     Object.defineProperty(restored, 'persisted', { value: true })
@@ -95,16 +107,20 @@ it.each([false, true])('cookie 页面离开开关=%s；保留既有fetch管线�
     expect(requests).toHaveLength(0)
     target.dispatchEvent(new Event('pagehide'))
     target.dispatchEvent(new Event('pagehide'))
-    expect(requests).toHaveLength(enabled ? 1 : 0)
-    if (enabled) {
+    expect(requests).toHaveLength(expectedRequests)
+    if (expectedRequests) {
       expect(requests[0]).toMatchObject({
         url: '/api/auth/session/close',
-        init: { keepalive: true, method: 'POST', body: '{}' },
+        init: {
+          keepalive: true,
+          method: 'POST',
+          body: JSON.stringify({ sessionFingerprint }),
+        },
       })
     }
     stop()
     target.dispatchEvent(new Event('pagehide'))
-    expect(requests).toHaveLength(enabled ? 1 : 0)
+    expect(requests).toHaveLength(expectedRequests)
   }
   finally { stop() }
 })

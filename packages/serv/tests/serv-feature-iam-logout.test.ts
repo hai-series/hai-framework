@@ -85,7 +85,7 @@ beforeAll(async () => {
     procedures: {
       iam: serv.createIamProcedures({ iam }),
     },
-    iam,
+    auth: { iam },
     refreshCookie: { secure: false },
   })
   node = serv.listen(app, { host: '127.0.0.1', port: 0 })

@@ -40,7 +40,7 @@ a2a:
     description: ${HAI_AI_A2A_AGENTCARD_DESCRIPTION:A simple echo agent that repeats your message (A2A demo)}
     # 说明：Agent 对外 URL
     # 取值：字符串
-    url: ${HAI_AI_A2A_AGENTCARD_URL:http://localhost:5173}
+    url: ${HAI_AI_A2A_AGENTCARD_URL:http://localhost:3000/a2a}
     # 说明：Agent 版本
     # 取值：字符串
     version: ${HAI_AI_A2A_AGENTCARD_VERSION:0.1.0}

@@ -70,26 +70,6 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
 }
 
 /**
- * 会话验证：保留 IAM 返回的真实角色与权限
- */
-async function validateSession(token: string) {
-  const result = await iam.auth.verifyToken(token)
-  if (!result.success)
-    return null
-
-  const s = result.data
-
-  return {
-    userId: s.userId,
-    username: s.username,
-    displayName: s.displayName,
-    avatarUrl: s.avatarUrl,
-    roles: s.roles,
-    permissions: s.permissions,
-  }
-}
-
-/**
  * 延迟创建 hai handle。
  *
  * transport 中间件会在 `kit.createHandle()` 阶段同步创建服务端管理器，
@@ -123,20 +103,31 @@ async function createHaiHandle(): Promise<Handle> {
       throw new Error(ring.error.message)
     managedTransport = {
       ...handleTransportConfig,
+      crypto,
       basePath: base,
       serverKeyRing: ring.data,
       keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
     }
   }
 
+  const { http } = kitConfig
   return kit.createHandle({
-    trustedProxies: kitConfig.trustedProxies,
-    access: kitConfig.access,
+    cors: kitConfig.cors,
+    http: {
+      ...http,
+      rateLimit: http.rateLimit && {
+        ...http.rateLimit,
+        store: core.access.createCacheRateLimitStore(cache, {
+          namespace: 'admin-console',
+          allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1',
+        }),
+      },
+    },
     middleware: [
       (_context, next) => core.context.run({ scopeId: feedbackScope }, next),
     ],
     auth: {
-      verifyToken: validateSession,
+      iam,
       loginUrl: '/auth/login',
       protectedPaths: ['/admin/*', '/api/*'],
       publicPaths: [
@@ -149,21 +140,8 @@ async function createHaiHandle(): Promise<Handle> {
         '/api/public/*',
         ...transportPublicPaths,
       ],
-      operations: () => iam.auth,
     },
-    rateLimit: {
-      store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'admin-console', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }),
-      windowMs: 60000,
-      maxRequests: process.env.HAI_E2E === '1'
-        ? 5000
-        : 100,
-    },
-    crypto: managedTransport === undefined
-      ? undefined
-      : {
-          crypto,
-          transport: managedTransport,
-        },
+    transport: managedTransport,
   })
 }
 

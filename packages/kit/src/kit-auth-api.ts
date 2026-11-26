@@ -1,7 +1,9 @@
 import type { HaiResult } from '@h-ai/core'
 /** SvelteKit 标准认证端点，统一验证、Cookie 和 HaiResult 处理。 */
-import type { AuthRequestContext, IamFunctions } from '@h-ai/iam'
+import type { AuthRequestContext, AuthResult, IamFunctions } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
+import type { AuthCookieWriter } from './kit-types.js'
+import { createHash } from 'node:crypto'
 import {
   IamConfirmPasswordResetInputSchema,
   IamCreateCaptchaInputSchema,
@@ -15,7 +17,8 @@ import {
   IamRequestPasswordResetInputSchema,
   IamSendOtpInputSchema,
 } from '@h-ai/api-contract'
-import { getAccessToken, login, loginWithLdap, loginWithOtp, registerAndLogin } from './kit-auth.js'
+import { z } from 'zod'
+import { getAccessToken, getCookieAccessToken, setAuthTokenCookie } from './kit-auth.js'
 import { handler } from './kit-handler.js'
 import { fromError, ok } from './kit-response.js'
 import { validateFormOrFail } from './kit-validation.js'
@@ -45,6 +48,28 @@ export const authApiPublicPaths = [
   '/api/auth/password/renew',
 ]
 
+const CloseSessionInputSchema = IamLogoutInputSchema.extend({
+  sessionFingerprint: z.string().regex(/^[\da-f]{64}$/).optional(),
+})
+
+/**
+ * 为已鉴别页面派生退出会话指纹，可由当前页面发送，不能用于鉴别或代替令牌。
+ * @param accessToken - 当前请求已验证的 IAM 访问令牌。
+ * @returns 该令牌的退出会话指纹；未提供令牌时返回 undefined。
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * const fingerprint = kit.auth.sessionFingerprint('example-access-token')
+ * void fingerprint
+ * ```
+ */
+export function createSessionFingerprint(accessToken?: string | null): string | undefined {
+  return accessToken
+    ? createHash('sha256').update('hai:kit:session-close:v1:').update(accessToken).digest('hex')
+    : undefined
+}
+
 function requestContext(event: Pick<RequestEvent, 'request' | 'getClientAddress'>): AuthRequestContext {
   let ip: string | undefined
   try {
@@ -62,7 +87,7 @@ function requestContext(event: Pick<RequestEvent, 'request' | 'getClientAddress'
 }
 
 /**
- * 应用路由直接导出对应 handler；认证 ops 仍由 createHandle 注入。
+ * 应用路由直接导出对应 handler；Cookie 名称由当前请求的 Handle 配置确定。
  * @param iam - 已由应用初始化的 IAM 服务对象。
  * @returns 标准认证端点的 RequestHandler 集合。
  * @example 模块内部上下文
@@ -78,11 +103,28 @@ export function createAuthApi(iam: IamFunctions) {
       ? ok(result.data)
       : fromError(result.error)
   }
+  function loginResponse(cookies: AuthCookieWriter, result: HaiResult<AuthResult>): Response {
+    if (!result.success)
+      return fromError(result.error)
+    const { tokens, user } = result.data
+    setAuthTokenCookie(cookies, tokens.accessToken, tokens.expiresIn)
+    return ok({ user })
+  }
+
   return {
     closeSession: handler(async ({ request, cookies }) => {
-      const input = await validateFormOrFail(request, IamLogoutInputSchema)
-      // 此入口不能清除 Cookie：页面离开响应可能晚于下一文档的新登录。
-      return response(await iam.auth.logout(input.accessToken ?? getAccessToken(request, cookies) ?? ''))
+      const input = await validateFormOrFail(request, CloseSessionInputSchema)
+      const explicitToken = input.accessToken ?? (input.sessionFingerprint
+        ? undefined
+        : getAccessToken(request))
+      if (explicitToken)
+        return response(await iam.auth.logout(explicitToken))
+
+      const cookieToken = getCookieAccessToken(cookies)
+      // 页面离开只能撤销原页面所属令牌。其他标签页的新 Cookie 不参与撤销。
+      if (!cookieToken || !input.sessionFingerprint || createSessionFingerprint(cookieToken) !== input.sessionFingerprint)
+        return ok(undefined)
+      return response(await iam.auth.logout(cookieToken))
     }),
     createCaptcha: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamCreateCaptchaInputSchema)
@@ -100,34 +142,22 @@ export function createAuthApi(iam: IamFunctions) {
     login: handler(async (event) => {
       const { request, cookies } = event
       const input = await validateFormOrFail(request, IamLoginInputSchema)
-      const result = await login(cookies, input, requestContext(event))
-      return result.success
-        ? ok({ user: result.data.user })
-        : fromError(result.error)
+      return loginResponse(cookies, await iam.auth.login(input, requestContext(event)))
     }),
     loginWithLdap: handler(async (event) => {
       const { request, cookies } = event
       const input = await validateFormOrFail(request, IamLdapLoginInputSchema)
-      const result = await loginWithLdap(cookies, input, requestContext(event))
-      return result.success
-        ? ok({ user: result.data.user })
-        : fromError(result.error)
+      return loginResponse(cookies, await iam.auth.loginWithLdap(input, requestContext(event)))
     }),
     loginWithOtp: handler(async (event) => {
       const { request, cookies } = event
       const input = await validateFormOrFail(request, IamOtpLoginInputSchema)
-      const result = await loginWithOtp(cookies, input, requestContext(event))
-      return result.success
-        ? ok({ user: result.data.user })
-        : fromError(result.error)
+      return loginResponse(cookies, await iam.auth.loginWithOtp(input, requestContext(event)))
     }),
     register: handler(async (event) => {
       const { request, cookies } = event
       const input = await validateFormOrFail(request, IamRegisterInputSchema)
-      const result = await registerAndLogin(cookies, input, requestContext(event))
-      return result.success
-        ? ok({ user: result.data.user })
-        : fromError(result.error)
+      return loginResponse(cookies, await iam.auth.registerAndLogin(input, requestContext(event)))
     }),
     sendOtp: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamSendOtpInputSchema)

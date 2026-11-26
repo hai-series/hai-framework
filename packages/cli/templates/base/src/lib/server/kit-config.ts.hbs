@@ -7,7 +7,7 @@ import { KitConfigSchema } from '@h-ai/kit'
 
 let configured: KitConfig | undefined
 
-/** 输入已由 Schema 校验为绝对路径；宿主补构建目录并保留绝对路径类型。 */
+/** 输入已由 Schema 校验为绝对路径；为构建子目录补齐宿主匹配的路径。 */
 function mounted(path: string): `/${string}` {
   if (!resolve('/').replace(/\/$/, '') || path === resolve('/').replace(/\/$/, '') || path.startsWith(`${resolve('/').replace(/\/$/, '')}/`))
     return `/${path.slice(1)}`
@@ -24,11 +24,14 @@ export function getKitConfig(): KitConfig {
   const transport = loaded.data.transport
   configured = {
     ...loaded.data,
+    a2a: loaded.data.a2a && {
+      cardPath: mounted(loaded.data.a2a.cardPath),
+      rpcPath: mounted(loaded.data.a2a.rpcPath),
+    },
     transport: transport === false
       ? false
       : {
           ...transport,
-          keyExchangePath: mounted(transport.keyExchangePath),
           excludePaths: transport.excludePaths.map(mounted),
           routePlaintextBytes: transport.routePlaintextBytes
             ? Object.fromEntries(Object.entries(transport.routePlaintextBytes).map(([path, bytes]) => [

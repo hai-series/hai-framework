@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { localizeZodError, resolveRequestLocale, validateInputOrFail } from '../src/serv-validation.js'
+import { serv } from '../src/serv-main.js'
+import { localizeZodError, validateInputOrFail } from '../src/serv-validation.js'
 
 describe('serv-validation', () => {
   it.each([
@@ -18,7 +19,7 @@ describe('serv-validation', () => {
     ])
   })
   it('resolveRequestLocale 应该优先使用 x-hai-locale', () => {
-    const locale = resolveRequestLocale({
+    const locale = serv.resolveRequestLocale({
       'x-hai-locale': 'en-US',
       'accept-language': 'zh-CN,zh;q=0.9',
     })
@@ -27,11 +28,22 @@ describe('serv-validation', () => {
   })
 
   it('resolveRequestLocale 应该把简写 en 规范化为 en-US', () => {
-    const locale = resolveRequestLocale({
+    const locale = serv.resolveRequestLocale({
       'accept-language': 'en,en;q=0.9',
     })
 
     expect(locale).toBe('en-US')
+  })
+
+  it.each([
+    { 'aCCePt-LanGuAge': 'fr-FR, zh;q=0, ja;q=0.8' },
+    new Headers({ 'Accept-Language': 'fr-FR, zh;q=0, ja;q=0.8' }),
+  ])('跳过不支持或被排除的首选语言', (headers) => {
+    expect(serv.resolveRequestLocale(headers)).toBe('ja-JP')
+  })
+
+  it('普通对象中的显式请求语言也按请求头大小写无关规则匹配', () => {
+    expect(serv.resolveRequestLocale({ 'X-Hai-Locale': 'en-US', 'Accept-Language': 'ja' })).toBe('en-US')
   })
 
   it('localizeZodError 应该本地化 Zod 默认英文错误', () => {

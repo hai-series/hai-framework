@@ -6,6 +6,7 @@
 import { apiClient } from '@h-ai/api-client'
 import { capacitor } from '@h-ai/capacitor'
 {{#if features.crypto}}
+import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 {{/if}}
 
@@ -20,7 +21,7 @@ let ownsCrypto = false
 
 /**
  * 解析客户端传输选项；仅显式 off 连接匹配的明文 API，握手失败不降级。
- * @returns 绑定实际 crypto 与公开协商子路径的选项，或显式明文模式的 undefined。
+ * @returns 绑定实际 crypto 与公开绝对协商路径的选项，或显式明文模式的 undefined。
  * @example 模块内部上下文
  * ```ts
  * const transport = resolveTransport()
@@ -37,22 +38,30 @@ function resolveTransport() {
   const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiTransport?: string, apiKeyExchangePath?: string } }).__HAI_PUBLIC_CONFIG__
   if ((runtime?.apiTransport || import.meta.env.PUBLIC_API_TRANSPORT) === 'off')
     return undefined
-  return { crypto, keyExchangePath: runtime?.apiKeyExchangePath || import.meta.env.PUBLIC_API_KEY_EXCHANGE_PATH || '/_hai/key-exchange' }
+  const keyExchangePath: unknown = runtime?.apiKeyExchangePath ?? import.meta.env.PUBLIC_API_KEY_EXCHANGE_PATH ?? crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
+  if (!crypto.transport.isKeyExchangePath(keyExchangePath))
+    throw new TypeError(`${core.i18n.coreM('core_configValidationFailed')} (PUBLIC_API_KEY_EXCHANGE_PATH)`)
+  return { crypto, keyExchangePath }
 }
 {{/if}}
 
 /**
- * 按公开运行配置、构建配置、本地示例地址的顺序解析含 API 前缀的 baseUrl。
+ * 解析含 API 前缀的基址。浏览器默认使用同源代理，原生应用默认连接本机服务。
+ * @param native 是否由 Capacitor 原生宿主调用。
  * @returns API baseUrl；服务端私钥和连接配置不属于该公开地址。
  * @example 模块内部上下文
  * ```ts
- * const base = new URL(resolveApiBase())
+ * const base = new URL(resolveApiBase(false))
  * const apiOrigin = base.origin
  * ```
  */
-export function resolveApiBase(): string {
+export function resolveApiBase(native: boolean): string {
   const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiBase?: string } }).__HAI_PUBLIC_CONFIG__
-  return runtime?.apiBase || import.meta.env.PUBLIC_API_BASE || DEFAULT_API_BASE
+  const origin = globalThis.location?.origin
+  const fallback = native || !origin
+    ? DEFAULT_API_BASE
+    : `${origin}/api/v1`
+  return runtime?.apiBase || import.meta.env.PUBLIC_API_BASE || fallback
 }
 
 /**
@@ -149,7 +158,7 @@ async function initialize(): Promise<void> {
       ownsCrypto = true
     }
     const result = await apiClient.init({
-      baseUrl: resolveApiBase(),
+      baseUrl: resolveApiBase(native),
       clientName: 'hai-mobile-app',
       headers: native
         ? { 'x-hai-token-transport': 'body' }
@@ -177,7 +186,7 @@ async function initialize(): Promise<void> {
   }
 {{else}}
   const result = await apiClient.init({
-    baseUrl: resolveApiBase(),
+    baseUrl: resolveApiBase(native),
     clientName: 'hai-mobile-app',
     headers: native
       ? { 'x-hai-token-transport': 'body' }

@@ -6,6 +6,7 @@ const web = new URL(process.env.PREFIX_WEB_URL)
 const service = new URL(process.env.PREFIX_SERVICE_URL)
 const address = new URL(process.env.PREFIX_PROXY_URL)
 const prefix = '/yyy'
+const keyExchangePath = `${prefix}/auth/key-exchange`
 const server = createServer((request, response) => {
   const url = new URL(request.url ?? '/', address)
   if (url.pathname === `${prefix}/health`)
@@ -13,10 +14,10 @@ const server = createServer((request, response) => {
   if (url.pathname === prefix)
     return response.writeHead(308, { Location: `${prefix}/${url.search}` }).end()
   if (url.pathname === `${prefix}/runtime-config.js`) {
-    response.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-store' }).end(`globalThis.__HAI_PUBLIC_CONFIG__=${JSON.stringify({ apiBase: `${address.origin}${prefix}/api/v1` })};`)
+    response.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-store' }).end(`globalThis.__HAI_PUBLIC_CONFIG__=${JSON.stringify({ apiBase: `${address.origin}${prefix}/api/v1`, apiKeyExchangePath: keyExchangePath })};`)
     return
   }
-  const isApi = url.pathname.startsWith(`${prefix}/api/`)
+  const isApi = url.pathname === keyExchangePath || url.pathname.startsWith(`${prefix}/api/`)
   if (!url.pathname.startsWith(`${prefix}/`))
     return response.writeHead(404).end()
   const upstream = new URL(isApi ? service : web)

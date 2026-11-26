@@ -7,42 +7,35 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { ApiKeyCredentials, AuthRequestContext, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
-import type { AuthCookieWriter, AuthOperations, AuthOperationsProvider } from './kit-types.js'
+import type { Cookies } from '@sveltejs/kit'
+import type { AuthCookieWriter, AuthOperations, HandleAuthConfig } from './kit-types.js'
 import { core } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
 
 /** 默认 Token Cookie 名 */
 const DEFAULT_TOKEN_COOKIE_NAME = 'hai_access_token'
 
-/**
- * 应用级认证配置（由 createHandle 一次性初始化，生命周期同进程）
- *
- * 此状态非请求级：仅在 createHandle() 时写入一次，后续所有请求只读访问。
- */
-const authState = {
-  cookieName: DEFAULT_TOKEN_COOKIE_NAME,
-  operations: null as AuthOperationsProvider | null,
-}
+// 按当前 Handle 的 Cookie 视图绑定配置，随请求释放。
+const requestAuth = new WeakMap<object, Pick<HandleAuthConfig, 'cookieName' | 'iam'>>()
 
 /**
- * 配置认证参数
- *
- * 通常由 `createHandle` 在初始化时自动调用，无需手动调用。
- * @param config - 启动阶段注入的 Cookie 名和认证操作提供器。
+ * 绑定当前 Handle 的认证配置，给组合 Hook 与同进程多个应用独立的 Cookie 视图。
+ * @param cookies - 当前请求的 SvelteKit Cookies 对象，可已由加密代理包装。
+ * @param config - Handle 启动阶段确定的 Cookie 名和认证操作提供器。
  * @param config.cookieName - 认证 Cookie 名。
- * @param config.operations - 已初始化服务的认证操作或惰性提供器。
+ * @param config.iam - IAM 已初始化服务。
+ * @returns 供当前请求向下游传递的 Cookie 视图。
  * @example 模块内部上下文
  * ```ts
- * function configure(operations: AuthOperationsProvider) {
- *   configureAuth({ cookieName: 'hai_access_token', operations })
+ * function configure(cookies: Cookies, config: HandleAuthConfig) {
+ *   return withRequestAuth(cookies, config)
  * }
  * ```
  */
-export function configureAuth(config: { cookieName?: string, operations?: AuthOperationsProvider }): void {
-  if (config.cookieName)
-    authState.cookieName = config.cookieName
-  if (config.operations)
-    authState.operations = config.operations
+export function withRequestAuth(cookies: Cookies, config: Pick<HandleAuthConfig, 'cookieName' | 'iam'>): Cookies {
+  const view = new Proxy(cookies, {})
+  requestAuth.set(view, config)
+  return view
 }
 
 /**
@@ -145,19 +138,42 @@ function getBearerTokenFromRequest(request: Request): string | null {
  * ```
  */
 export function getAccessToken(request: Request, cookies?: CookieReader): string | null {
-  return getBearerTokenFromRequest(request) ?? cookies?.get(authState.cookieName) ?? null
+  return getBearerTokenFromRequest(request) ?? getCookieAccessToken(cookies)
 }
 
 // ─── 服务端认证 Cookie 管理 ───
 
 /**
- * 写入 Access Token Cookie（内部使用，由 login 自动调用）。
+ * 读取当前请求的 Access Token Cookie，用于只允许 Cookie 匹配的退出请求。
+ * @param cookies - 当前请求的 Cookie 读取器。
+ * @returns Cookie 持有的访问令牌；缺失时返回 null。
+ * @example 模块内部上下文
+ * ```ts
+ * const held = getCookieAccessToken({ get: () => 'example-access-token' })
+ * void held
+ * ```
  */
-function setToken(cookies: CookieWriter, token: string, maxAge?: number): void {
+export function getCookieAccessToken(cookies?: CookieReader): string | null {
+  return cookies?.get(getCookieName(cookies)) ?? null
+}
+
+/**
+ * 写入当前请求的 Access Token Cookie；登录成功后由认证操作调用。
+ * @param cookies - 当前请求的 Cookie 写入器。
+ * @param token - IAM 签发的访问令牌。
+ * @param maxAge - Cookie 有效期，单位为秒。
+ * @example 模块内部上下文
+ * ```ts
+ * function persist(cookies: CookieWriter, result: AuthResult) {
+ *   setAuthTokenCookie(cookies, result.tokens.accessToken, result.tokens.expiresIn)
+ * }
+ * ```
+ */
+export function setAuthTokenCookie(cookies: CookieWriter, token: string, maxAge?: number): void {
   // 共享文件也供浏览器内存 Token 使用，不引入 Node 内建模块；未知宿主保持安全默认值。
   // eslint-disable-next-line node/prefer-global/process
   const secure = typeof process === 'undefined' || process.env.NODE_ENV === 'production' || process.env.HAI_CORE_ENV === 'production'
-  cookies.set(authState.cookieName, token, {
+  cookies.set(getCookieName(cookies), token, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
@@ -171,28 +187,26 @@ function setToken(cookies: CookieWriter, token: string, maxAge?: number): void {
  * 清除 Access Token Cookie（内部使用，由 logout 自动调用）。
  */
 function clearToken(cookies: CookieWriter): void {
-  cookies.delete(authState.cookieName, { path: '/' })
+  cookies.delete(getCookieName(cookies), { path: '/' })
 }
 
 // ─── 服务端高级认证 API（通过 kit.auth 暴露） ───
 
+function getCookieName(cookies: CookieReader | CookieWriter): string {
+  return requestAuth.get(cookies)?.cookieName || DEFAULT_TOKEN_COOKIE_NAME
+}
+
 /**
- * 获取已注入的认证操作；未配置时返回 null。
- *
- * 公共 API 不应 throw，因此此处用 null 信号配合上层短路返回 HaiResult。
+ * 获取当前请求绑定的认证操作；未配置时返回 undefined，由公开 API 转成 HaiResult。
  */
-function getAuthOperations(): AuthOperations | null {
-  if (!authState.operations)
-    return null
-  return typeof authState.operations === 'function'
-    ? authState.operations()
-    : authState.operations
+function getAuthOperations(cookies: CookieWriter): AuthOperations | undefined {
+  return requestAuth.get(cookies)?.iam?.auth
 }
 
 /**
  * 构造 "auth 未配置" 的标准 HaiResult 错误。
  *
- * 用于公共认证 API 在 `authState.operations` 未注入时返回，
+ * 用于公共认证 API 在当前请求未绑定认证操作时返回，
  * 避免向调用方抛出未捕获异常。
  */
 function authNotConfiguredError(): HaiResult<never> {
@@ -214,13 +228,13 @@ async function runAuthLogin<TCredentials>(
   credentials: TCredentials,
   run: (ops: AuthOperations, credentials: TCredentials) => Promise<HaiResult<AuthResult>>,
 ): Promise<HaiResult<AuthResult>> {
-  const ops = getAuthOperations()
+  const ops = getAuthOperations(cookies)
   if (!ops)
     return authNotConfiguredError()
 
   const result = await run(ops, credentials)
   if (result.success) {
-    setToken(cookies, result.data.tokens.accessToken, result.data.tokens.expiresIn)
+    setAuthTokenCookie(cookies, result.data.tokens.accessToken, result.data.tokens.expiresIn)
   }
   return result
 }
@@ -368,7 +382,7 @@ export async function logout(
   try {
     if (!accessToken)
       return core.ok(undefined)
-    const ops = getAuthOperations()
+    const ops = getAuthOperations(cookies)
     if (!ops)
       return authNotConfiguredError()
     return await ops.logout(accessToken)

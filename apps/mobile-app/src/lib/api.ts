@@ -1,11 +1,11 @@
 import { apiClient } from '@h-ai/api-client'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { capacitor } from '@h-ai/capacitor'
+import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { navigateToLogin } from './navigation.js'
 
 const DEFAULT_API_BASE = 'http://localhost:3000/api/v1'
-const DEFAULT_KEY_EXCHANGE_PATH = '/_hai/key-exchange'
 
 export const mobileApiClient = apiClient.create(apiServiceContract)
 
@@ -24,9 +24,13 @@ async function createTokenStorage() {
   return apiClient.tokenStorage.httpOnlyCookie()
 }
 
-function resolveApiBase(): string {
+function resolveApiBase(native: boolean): string {
   const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiBase?: string } }).__HAI_PUBLIC_CONFIG__
-  return runtime?.apiBase || import.meta.env.PUBLIC_API_BASE || DEFAULT_API_BASE
+  const origin = globalThis.location?.origin
+  const fallback = native || !origin
+    ? DEFAULT_API_BASE
+    : `${origin}/api/v1`
+  return runtime?.apiBase || import.meta.env.PUBLIC_API_BASE || fallback
 }
 
 function resolveTransport() {
@@ -34,9 +38,12 @@ function resolveTransport() {
   if ((runtime?.apiTransport || import.meta.env.PUBLIC_API_TRANSPORT) === 'off')
     return undefined
 
+  const keyExchangePath: unknown = runtime?.apiKeyExchangePath ?? import.meta.env.PUBLIC_API_KEY_EXCHANGE_PATH ?? crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
+  if (!crypto.transport.isKeyExchangePath(keyExchangePath))
+    throw new TypeError(`${core.i18n.coreM('core_configValidationFailed')} (PUBLIC_API_KEY_EXCHANGE_PATH)`)
   return {
     crypto,
-    keyExchangePath: runtime?.apiKeyExchangePath || import.meta.env.PUBLIC_API_KEY_EXCHANGE_PATH || DEFAULT_KEY_EXCHANGE_PATH,
+    keyExchangePath,
   }
 }
 
@@ -53,7 +60,7 @@ export async function initApi(): Promise<void> {
 
   const native = await isNativeCapacitor()
   const initResult = await mobileApiClient.init({
-    baseUrl: resolveApiBase(),
+    baseUrl: resolveApiBase(native),
     clientName: 'hai-mobile-app',
     headers: native
       ? { 'x-hai-token-transport': 'body' }

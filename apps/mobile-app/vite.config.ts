@@ -6,6 +6,7 @@
 
 import process from 'node:process'
 import { core } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 import { ui } from '@h-ai/ui/auto-import'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
@@ -27,10 +28,18 @@ export default defineConfig(({ mode, command }) => {
     throw new Error(envResult.error.message)
   const env = envResult.data
   Object.assign(process.env, env)
+  const apiProxy = { target: process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000', changeOrigin: true, ws: true }
+  const exchangePath = process.env.PUBLIC_API_KEY_EXCHANGE_PATH
+  const proxy = {
+    '/api': apiProxy,
+    ...(crypto.transport.isKeyExchangePath(exchangePath)
+      ? { [exchangePath]: apiProxy }
+      : {}),
+  }
 
   return {
-    server: { port: 5175 },
-    preview: { port: 5175 },
+    server: { port: 5175, proxy },
+    preview: { port: 5175, proxy },
     envDir: false,
     envPrefix: ['VITE_', 'PUBLIC_'],
     plugins: [

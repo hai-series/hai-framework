@@ -19,7 +19,7 @@
 
 ### 快速开始
 
-默认启用 transport，开发和测试所需的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 已在 `.env.dev`、`.env.test` 中提供，克隆后可运行真实 `pnpm dev` 或 `pnpm start:test`。这些密钥只用于示例环境。生产使用独立受管密钥，放入 `.env.prod.local` 或 Secret Manager，不使用公开示例值。密钥环结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`；同一环境所有节点共享 ring 与 reldb registry，运行时不随机生成。私钥不进入 PUBLIC_/VITE_、日志或浏览器。解析、轮换与撤销见 [Crypto 传输说明](../../packages/crypto/README.md)。
+传输加密默认启用，开发和测试从 `.env.dev`、`.env.test` 读取示例密钥环。生产通过 `.env.prod.local` 或 Secret Manager 注入独立的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`。各生产实例使用同一个密钥环和共享 Redis 登记客户端公钥，客户端可在实例间继续使用已建立的加密会话。 [Crypto 传输说明](../../packages/crypto/README.md)
 
 ```bash
 pnpm install
@@ -160,10 +160,10 @@ export async function callExampleService(credentials: IamLoginInput) {
 
 - 业务接口（默认 `/api/v1/*`）需要使用 `@h-ai/api-client`、`@h-ai/crypto` transport client 或等价的 transport-aware 客户端完成密钥协商。
 - API 前缀、基础设施路径、明文排除路径和跨端 Header 统一由 `config/_serv.yml` 定义。
-- 默认密钥协商端点为 `POST /api/v1/_hai/key-exchange`；修改配置时，客户端的完整 API Base 与密钥协商路径也需同步。
+- 默认密钥协商端点为 `POST /api/v1/_hai/key-exchange`；修改配置时，客户端的业务 API Base 与站点根绝对密钥交换路径也需同步。
 - 启用 `auth: {}` 与 `transport: { crypto }` 时，401 后的 `/auth/refresh` 也会复用同一 transport 会话，不会降级为明文刷新。
 - 浏览器 / WebView 跨 origin 联调统一配置 `config/_serv.yml` 的 `cors.origin` 与 `cors.nativeOrigins`。生产环境禁止空值和 `*`，并按规范化后的完整 Origin 精确匹配；不要在 `src/app.ts` 维护业务侧白名单函数。
-- `serv.createRuntimeSecurityPolicy(...)` 在生产环境默认给刷新 Cookie 加 `Secure`，并关闭 OpenAPI 和 docs。路径、来源和凭据策略来自 `_serv.yml`，宿主额外允许 `x-request-client` 和 `x-hai-token-transport` 协议头。
+- `serv.createRuntimeSecurityPolicy(...)` 在生产环境默认给刷新 Cookie 加 `Secure`，并关闭 OpenAPI 和 docs。路径、来源和凭据策略来自 `_serv.yml`，宿主额外允许 `x-request-client`、`x-hai-token-transport` 和 `x-hai-terminal` 协议头。
 
 ```yaml
 # config/_serv.yml
@@ -183,7 +183,7 @@ cors:
     - X-Encrypted
 
 transport:
-  keyExchangePath: /_hai/key-exchange
+  keyExchangePath: /api/v1/_hai/key-exchange
   maxFutureSkewSeconds: 30
   maxRequestAgeSeconds: 300
   excludePaths:
@@ -273,7 +273,7 @@ curl http://localhost:3000/ready
 
 #### 业务 API（默认需要传输加密）
 
-业务 `/api/v1/*` 端点默认要求先完成 `/_hai/key-exchange` 密钥协商，因此不再建议用明文 `curl` 直接 POST 登录/注册。
+业务 `/api/v1/*` 端点默认要求先完成 `/api/v1/_hai/key-exchange` 密钥协商，因此不再建议用明文 `curl` 直接 POST 登录/注册。
 推荐统一使用 `@h-ai/api-client` + `@h-ai/crypto`：
 
 ```ts
@@ -344,7 +344,9 @@ await crypto.close()
 - `_iam.yml`：认证与 RBAC 配置。
 - `_storage.yml`：对象存储配置。
 - `_vecdb.yml`：向量数据库配置。
-- `_ai.yml`：AI 与 A2A 配置。
+- `_ai.yml`：AI 与 A2A 配置。在 `_serv.yml.a2a` 启用后，应用注册示例执行器并挂载 Agent Card 和 JSON-RPC。 [Serv 与 Kit 的接入区别](../../docs/usage/function/serv.md#host-capabilities)
+
+`http.trustedProxies` 指定可信代理，`http.access` 设置访问规则。本应用默认关闭 `http.rateLimit`。为外部访问启用固定窗口时，可设置 `HAI_SERV_HTTP_RATELIMIT='{"windowMs":60000,"maxRequests":100}'`。生产实例通过共享 Redis 累计同一客户端的配额，超限返回 HTTP 429，计数存储失败返回 HTTP 503。 [Serv 限流配置](../../docs/usage/configuration/serv.md#rate-limit-config-example)
 
 常用环境变量：
 
@@ -359,6 +361,14 @@ camelCase key 不拆词，例如 `cors.nativeOrigins` 对应
 `HAI_SERV_CORS_NATIVEORIGINS`。
 
 独立的后端进程变量 `HAI_SERV_REFRESH_COOKIE_SECURE=false` 允许受控内网或 VPN 的生产 HTTP 入口使用刷新 Cookie。生产 `HAI_SERV_CORS_ORIGIN` 仍需配置实际入口的完整 Origin。修改后重启服务并重新登录。
+
+#### 让合作方调用 A2A 示例
+
+配置 `HAI_SERV_A2A='{"cardPath":"/.well-known/agent-card.json","rpcPath":"/a2a"}'` 和 `HAI_IAM_LOGIN_APIKEY=true`。`HAI_AI_A2A_AGENTCARD_URL` 填写合作方可访问的完整 JSON-RPC 地址。启动后读取 Agent Card，向公布的地址提交带 IAM API Key 的 `SendMessage`。示例执行器回显输入，用于确认合作方的连接与身份校验。业务执行器从 `ai.a2a.getCallerIdentity(context)` 读取该主体的有效权限，并据此决定可执行的操作。 [发现与调用示例](../../docs/usage/function/serv.md#shared-a2a-http) · [订单查询授权示例](../../docs/usage/function/ai.md#a2a-http-example)
+
+#### 让有权限的员工使用实时语音
+
+在 `_ai.yml` 配置语音模型，在 IAM 给员工角色授予 `ai:audio:use`，然后将 `HAI_SERV_AUDIO` 设为 `{"path":"/voice"}`。客户端用员工访问令牌调用 `POST /api/v1/ai/audio/tickets`，再用返回的一次性票据连接 `wss://<API 域名>/voice`。HTTPS 网关须转发 `Upgrade`。 [从签发到浏览器播放](../../docs/usage/function/serv.md#audio-ticket-example)
 
 #### 认证页面
 

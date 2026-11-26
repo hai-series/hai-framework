@@ -7,7 +7,7 @@
 | 文件                                                         | 用途                                               |
 | ------------------------------------------------------------ | -------------------------------------------------- |
 | `packages/{{projectName}}-serv/config/_iam.yml`              | 账号、密码、验证码、锁定、敏感操作、登录限制、会话 |
-| `packages/{{projectName}}-serv/config/_serv.yml`             | API 传输加密及请求时间窗口                          |
+| `packages/{{projectName}}-serv/config/_serv.yml`              | 可信代理、访问规则、固定窗口限流和 API 传输加密     |
 | `packages/{{projectName}}-serv/config/_audit.yml`            | 审计采集、脱敏、保留、备份、告警                   |
 | `packages/{{projectName}}-serv/config/_reach.yml`            | 邮件、短信或通知 API 及通知模板                    |
 | `packages/{{projectName}}-serv/config/_scheduler.yml`        | 已有 Scheduler 的持久化及调度参数                  |
@@ -327,6 +327,28 @@ alerts:
 告警功能和自动检查分别开启；仅手动检查可关闭 schedule，在可信服务端调用 `audit.checkAlerts()` 并同时检查 `success` 与报告的 `failed`。`maxNotificationsPerCheck` 限制一轮尝试数，报告 more 表示仍有待后续检查的目标。模板已接 Scheduler，开启计划后自动检查。
 
 通知只发送规则、等级、次数和窗口等摘要，不复制敏感事件正文。共享数据库认领避免多节点重复尝试；渠道接受/入队不等于人员已读。结果不明时核对渠道及审计告警记录，不盲目重发；停机超过两个窗口不会补发全部历史通知。
+
+## 配置请求来源、限流与密钥交换
+
+合作方只从固定网段读取报表时，先在现有契约中挂载报表接口，或把示例路径换成已有的合作方接口。然后在服务端 `config/_serv.yml` 中合并下面的 `http`。把示例地址换成实际反向代理和合作方的地址。普通主机的 `trustedProxies: auto` 忽略转发头，受管私有 Compose 可自动识别容器网段。自管入口按实际代理地址填写。
+
+```yaml
+http:
+  trustedProxies: [192.0.2.10]
+  access:
+    rules:
+      - id: partner-reports
+        paths: [/api/v1/external/reports]
+        methods: [GET]
+        allowIps: [198.51.100.0/24]
+  rateLimit:
+    windowMs: 10000
+    maxRequests: 2
+```
+
+`paths` 填写浏览器或客户端实际请求的路径。若已配置环境变量，如公共模式文件中的 `HAI_SERV_HTTP_RATELIMIT=false`，用所选模式的私有覆盖 `HAI_SERV_HTTP_RATELIMIT='{"windowMs":10000,"maxRequests":2}'` 启用示例配额。重启后从授权网段发送已认证请求，再换一个未获准网段核对 403。固定窗口限流默认关闭，启用后在通过访问检查的请求间按可信客户端 IP 共享额度，密钥交换也会消耗额度。验证时先让客户端完成密钥交换，等窗口到期后在同一窗口连续发送三次业务请求，确认第三次返回 429。根据 `Retry-After` 等待后重试，应恢复。生产实例共用 Redis，存储失败返回 503。
+
+自定义 `transport.keyExchangePath` 时使用从站点根开始的绝对路径，例如 `/session/keys`。默认是 `/api/v1/_hai/key-exchange`。受管 Fullstack 网关会为独立交换路径生成转发并发布给 Web 客户端。自管前端通过 `PUBLIC_API_KEY_EXCHANGE_PATH` 或公开运行配置使用同一绝对路径。变更网关路径后重新生成部署配置，再通过外部入口验证交换成功和随后业务请求的加密响应。
 
 ## 传输容量、通知隐私与升级预检
 

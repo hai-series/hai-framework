@@ -2,11 +2,16 @@ import type { CoreConfig } from '@h-ai/core'
 import type { ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
 {{#if features.crypto}}
 import process from 'node:process'
+{{/if}}
+{{#if features.ai}}{{#if features.iam}}
+import { ai } from '@h-ai/ai'
+{{/if}}{{/if}}
+{{#if features.crypto}}
 {{#if features.feedback}}
 import { apiContract } from '@h-ai/api-contract/feedback'
 {{/if}}
 {{/if}}
-{{#if features.crypto}}
+{{#if features.cache}}
 import { cache } from '@h-ai/cache'
 {{/if}}
 import { core } from '@h-ai/core'
@@ -37,10 +42,21 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
 {{#if features.feedback}}
   const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
 {{/if}}
+{{#if features.cache}}
+  const rateLimit = servConfig.http.rateLimit && {
+    ...servConfig.http.rateLimit,
+    store: core.access.createCacheRateLimitStore(cache, { namespace: '{{projectName}}', allowMemory: true }),
+  }
+{{else}}
+  if (servConfig.http.rateLimit)
+    throw new Error('http.rateLimit requires the cache feature')
+  const rateLimit = false
+{{/if}}
+  const { cors } = servConfig
   const security = serv.createRuntimeSecurityPolicy({
     environment: coreConfig.env,
-    corsOrigin: servConfig.cors.origin,
-    nativeOrigins: servConfig.cors.nativeOrigins,
+    corsOrigin: cors && cors.origin,
+    nativeOrigins: cors ? cors.nativeOrigins : undefined,
   })
 {{#if features.crypto}}
   const transportMode = _options.transport ?? 'config'
@@ -63,7 +79,7 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
         ...servConfig.transport.routePlaintextBytes,
       },
 {{else}}
-routePlaintextBytes: servConfig.transport.routePlaintextBytes,
+      routePlaintextBytes: servConfig.transport.routePlaintextBytes,
 {{/if}}
       excludePaths: [
         ...new Set([
@@ -97,7 +113,25 @@ routePlaintextBytes: servConfig.transport.routePlaintextBytes,
       }
 {{/if}}
 
+{{#if features.ai}}{{#if features.iam}}
+  const audio = serv.createIamAudio({
+    ai,
+    iam,
+    config: servConfig.audio,
+    permission: 'ai:audio:use',
+  })
+{{else}}
+  if (servConfig.audio)
+    throw new Error('audio requires the IAM feature')
+{{/if}}{{else}}
+  if (servConfig.audio)
+    throw new Error('audio requires the AI and IAM features')
+{{/if}}
+
   const appOptions: Parameters<typeof serv.createApp>[0] = {
+{{#if features.ai}}{{#if features.iam}}
+    audio: audio.config,
+{{/if}}{{/if}}
     contract: {{api.contractExportName}},
 {{#if features.feedback}}
     createContext: async input => ({
@@ -106,6 +140,9 @@ routePlaintextBytes: servConfig.transport.routePlaintextBytes,
     }),
 {{/if}}
     procedures: {{api.serviceProceduresFactoryName}}({
+{{#if features.ai}}{{#if features.iam}}
+      audio,
+{{/if}}{{/if}}
       app: {
         info: {
           name: coreConfig.name,
@@ -119,32 +156,50 @@ routePlaintextBytes: servConfig.transport.routePlaintextBytes,
     }),
     http: {
       ...servConfig.http,
+      rateLimit,
       openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
       docs: security.exposeApiDocs ? servConfig.http.docs : false,
     },
 {{#if features.iam}}
-    iam,
+    auth: { iam },
     refreshCookie,
 {{/if}}
 {{#if features.crypto}}
     transport,
 {{/if}}
-    middlewares: [
-      {
-        middleware: serv.cors({
-          origin: security.allowOrigin,
-          credentials: servConfig.cors.credentials,
-          allowedHeaders: [
-            ...new Set([
-              ...servConfig.cors.allowedHeaders,
-              'x-request-client',
-              'x-hai-token-transport',
-            ]),
-          ],
-          exposedHeaders: [...servConfig.cors.exposedHeaders],
-        }),
+{{#if features.ai}}{{#if features.iam}}
+    a2a: servConfig.a2a && ai.a2a.createHttpHandler({
+      ...servConfig.a2a,
+      authenticate: {
+        verifyApiKey: key => iam.apiKey.verifyApiKey(key),
       },
-    ],
+    }),
+{{/if}}{{/if}}
+    cors: cors && {
+      ...cors,
+      origin: security.allowOrigin,
+      credentials: cors.credentials,
+      allowedHeaders: [
+        ...new Set([
+          ...cors.allowedHeaders,
+          'x-request-client',
+          'x-hai-token-transport',
+          'x-hai-terminal',
+          'x-hai-reauthentication',
+        ]),
+      ],
+      exposedHeaders: [
+        ...cors.exposedHeaders,
+        ...(rateLimit
+          ? [
+              'Retry-After',
+              'X-RateLimit-Limit',
+              'X-RateLimit-Remaining',
+              'X-RateLimit-Reset',
+            ]
+          : []),
+      ],
+    },
   }
 
   return serv.createApp(appOptions)

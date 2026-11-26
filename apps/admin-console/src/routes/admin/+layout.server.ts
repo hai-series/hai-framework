@@ -8,11 +8,12 @@ import type { LayoutServerLoad } from './$types'
 import { core } from '@h-ai/core'
 import { feedback } from '@h-ai/feedback'
 import { iam } from '@h-ai/iam'
+import { kit } from '@h-ai/kit'
 import { redirect } from '@sveltejs/kit'
 import { readBusinessSettings } from '#lib/server/business-settings.js'
 import { requireAdminData } from '#lib/server/iam-admin.js'
 
-export const load: LayoutServerLoad = async ({ locals, url }) => {
+export const load: LayoutServerLoad = async ({ locals, setHeaders, url }) => {
   if (!locals.session) {
     const returnUrl = encodeURIComponent(url.pathname + url.search)
     throw redirect(302, `/auth/login?returnUrl=${returnUrl}`)
@@ -26,6 +27,13 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     defaultLocale?: string
   } | undefined
 
+  // 与认证页面共用 IAM 公开配置，session.maxAge 已包含在标准白名单中。
+  const iamPublicConfig = requireAdminData(await iam.getPublicConfig())
+  const sessionFingerprint = iamPublicConfig.session.endOnPageHide
+    ? kit.auth.sessionFingerprint(locals.accessToken)
+    : undefined
+  if (sessionFingerprint)
+    setHeaders({ 'cache-control': 'private, no-store' })
   return {
     user: {
       id: locals.session.userId,
@@ -42,8 +50,8 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
       env: coreConfig?.env ?? 'development',
       locale: coreConfig?.defaultLocale ?? 'zh-CN',
     },
-    // 与认证页面共用 IAM 公开配置，session.maxAge 已包含在标准白名单中。
-    iamPublicConfig: requireAdminData(await iam.getPublicConfig()),
+    iamPublicConfig,
+    sessionFingerprint,
     feedbackEnabled: feedback.isInitialized,
   }
 }

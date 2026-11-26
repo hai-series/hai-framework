@@ -1,11 +1,37 @@
 /**
  * @h-ai/kit — 内部工具函数
  *
- * 提取 Handler 与 Handle 共享的 SvelteKit 控制流检测逻辑。
+ * 提取 Handler、Handle 和中间件共享的请求处理工具。
  * @module kit-utils
  */
 
 import { isHttpError, isRedirect } from '@sveltejs/kit'
+
+/**
+ * 追加框架响应头，兼容 Fetch 和原生重定向的不可变 headers。
+ * @example 模块内部上下文
+ * ```ts
+ * const response = setResponseHeaders(new Response('OK'), { 'X-Request-Id': 'request-1' })
+ * void response
+ * ```
+ */
+export function setResponseHeaders(response: Response, headers: Record<string, string>): Response {
+  const write = (target: Response) => {
+    for (const [name, value] of Object.entries(headers))
+      target.headers.set(name, value)
+    return target
+  }
+
+  try {
+    return write(response)
+  }
+  catch (error) {
+    if (!(error instanceof TypeError))
+      throw error
+    // 复用原正文流，保留原 HTTP 状态和多值 Set-Cookie。
+    return write(new Response(response.body, response))
+  }
+}
 
 /**
  * 检测是否为 Response 对象（兼容跨模块 instanceof 失效场景）

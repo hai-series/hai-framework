@@ -12,6 +12,7 @@
 
 import type { ServConfig, ServNodeServer } from '@h-ai/serv'
 import type { AddressInfo } from 'node:net'
+import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -24,11 +25,12 @@ import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
-import { serv } from '@h-ai/serv'
+import { serv, ServConfigSchema } from '@h-ai/serv'
 import { HaiStorageError, storage } from '@h-ai/storage'
 import { vecdb } from '@h-ai/vecdb'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createApiServiceApp } from '../src/app.js'
+import { echoExecutor } from '../src/lib/server/a2a-agent.js'
 
 // ─── 测试全局状态 ────────────────────────────────────────────────────────────
 
@@ -48,9 +50,10 @@ let readyPath = ''
 let openapiPath = ''
 let docsPath = ''
 let apiPrefix = ''
-let transportKeyExchangePath = ''
-let keyExchangePath = ''
+let keyExchangePath: `/${string}`
 let apiBaseUrl = ''
+const partnerCardPath = '/partners/.well-known/agent-card.json'
+const partnerRpcPath = '/partners/a2a'
 
 function uniqueUser(prefix = 'e2e') {
   const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(-8)
@@ -84,8 +87,7 @@ beforeAll(async () => {
   readyPath = servConfig.http.health.readyPath ?? ''
   openapiPath = servConfig.http.openapi.path
   docsPath = servConfig.http.docs.path
-  transportKeyExchangePath = servConfig.transport.keyExchangePath
-  keyExchangePath = `${apiPrefix}${transportKeyExchangePath}`
+  keyExchangePath = servConfig.transport.keyExchangePath
 
   const cryptoResult = await crypto.init()
   if (!cryptoResult.success)
@@ -110,7 +112,9 @@ beforeAll(async () => {
   if (!vecdbResult.success)
     throw new Error(`vecdb: ${vecdbResult.error.message}`)
 
-  const iamResult = await iam.init({})
+  const iamResult = await iam.init({
+    login: { apikey: true },
+  })
   if (!iamResult.success)
     throw new Error(`iam: ${iamResult.error.message}`)
 
@@ -119,7 +123,14 @@ beforeAll(async () => {
     throw new Error(`storage: ${storageResult.error.message}`)
 
   // AI 使用占位 key；测试不发起真实 LLM 调用
-  const aiResult = await ai.init({})
+  const aiResult = await ai.init({
+    a2a: {
+      agentCard: { name: 'Partner Echo', url: `https://orders.example.test${partnerRpcPath}` },
+      security: {
+        apiKey: { in: 'header', name: 'x-api-key' },
+      },
+    },
+  })
   if (!aiResult.success)
     throw new Error(`ai: ${aiResult.error.message}`)
 
@@ -139,11 +150,11 @@ beforeAll(async () => {
   plainBase = `http://127.0.0.1:${plainAddr.port}`
   apiBaseUrl = `${encryptedBase}${apiPrefix}`
 
-  // 通过 api-client（默认 transport 配置）访问加密链路——走真实本机回环网络
+  // 用实际协商路径通过 api-client 访问真实本机回环加密链路。
   encryptedClient = apiClient.create(apiServiceContract)
   const encInit = await encryptedClient.init({
     baseUrl: apiBaseUrl,
-    transport: { crypto, keyExchangePath: transportKeyExchangePath },
+    transport: { crypto, keyExchangePath },
     auth: {
       storage: apiClient.tokenStorage.memory(),
     },
@@ -184,6 +195,99 @@ afterAll(async () => {
     rmSync(storageDir, { recursive: true, force: true })
   }
   catch { /* 忽略清理失败 */ }
+})
+
+describe('api-service A2A 合作方连接', () => {
+  it('公布 RPC 地址，核验真实 API Key，停用账户后拒绝请求', async () => {
+    const caller = vi.fn()
+    const registered = ai.a2a.registerExecutor({
+      ...echoExecutor,
+      async execute(context, bus) {
+        caller(ai.a2a.getCallerIdentity(context))
+        await echoExecutor.execute(context, bus)
+      },
+    })
+    if (!registered.success)
+      throw new Error(registered.error.message)
+
+    const config = core.config.getOrThrow<ServConfig>('serv')
+    const configLookup = vi.spyOn(core.config, 'getOrThrow').mockReturnValueOnce(ServConfigSchema.parse({
+      ...config,
+      a2a: {
+        cardPath: partnerCardPath,
+        rpcPath: partnerRpcPath,
+      },
+    }))
+    const partnerApp = (() => {
+      try {
+        return createApiServiceApp()
+      }
+      finally {
+        configLookup.mockRestore()
+      }
+    })()
+    const card = await partnerApp.request(partnerCardPath)
+    expect(card.status).toBe(200)
+    expect(await card.json()).toMatchObject({
+      supportedInterfaces: [
+        { url: `https://orders.example.test${partnerRpcPath}` },
+      ],
+    })
+
+    const partner = await iam.user.register(uniqueUser('a2a_partner'))
+    if (!partner.success)
+      throw new Error(partner.error.message)
+    const key = await iam.apiKey.createApiKey(partner.data.user.id, { name: 'Echo connectivity check' })
+    if (!key.success)
+      throw new Error(key.error.message)
+
+    function sendPartnerCheck(rawKey: string) {
+      return partnerApp.request(partnerRpcPath, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': rawKey,
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'echo-check',
+          method: 'SendMessage',
+          params: {
+            message: {
+              messageId: randomUUID(),
+              role: 'ROLE_USER',
+              parts: [
+                { text: 'Partner connection is up' },
+              ],
+            },
+          },
+        }),
+      })
+    }
+
+    const echo = await sendPartnerCheck(key.data.rawKey)
+    expect(echo.status).toBe(200)
+    expect(await echo.json()).toMatchObject({
+      result: {
+        message: {
+          parts: [
+            { text: 'Echo: Partner connection is up' },
+          ],
+        },
+      },
+    })
+    expect(caller).toHaveBeenCalledExactlyOnceWith({
+      agentId: partner.data.user.id,
+      apiKeyId: key.data.apiKey.id,
+      scopes: [],
+      permissions: [],
+    })
+
+    expect(await iam.user.updateUser(partner.data.user.id, { accountStatus: 'dormant' })).toMatchObject({ success: true })
+    const deactivated = await sendPartnerCheck(key.data.rawKey)
+    expect(deactivated.status).toBe(401)
+    expect(caller).toHaveBeenCalledTimes(1)
+  })
 })
 
 // ─── 基础设施端点（不在 oRPC contract 中，走原生 fetch） ─────────────────
@@ -240,7 +344,7 @@ describe('api-service 基础设施端点', () => {
       headers: {
         origin,
         'access-control-request-method': 'POST',
-        'access-control-request-headers': 'content-type, x-client-id, x-encrypted, authorization',
+        'access-control-request-headers': 'content-type, x-client-id, x-encrypted, authorization, x-hai-terminal',
       },
     })
 
@@ -249,6 +353,7 @@ describe('api-service 基础设施端点', () => {
     expect(res.headers.get('access-control-allow-credentials')).toBe('true')
     expect(res.headers.get('access-control-allow-headers')).toContain('x-client-id')
     expect(res.headers.get('access-control-allow-headers')).toContain('authorization')
+    expect(res.headers.get('access-control-allow-headers')).toContain('x-hai-terminal')
   })
 
   it('transport 响应会暴露认证协议头给浏览器读取', async () => {
@@ -273,6 +378,8 @@ describe('api-service 基础设施端点', () => {
     expect(response.headers.get('access-control-expose-headers')).toContain(crypto.transport.protocol.ENVELOPE_HEADER)
     expect(wire?.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe(crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
     const servConfig = core.config.getOrThrow<ServConfig>('serv')
+    if (!servConfig.cors)
+      throw new Error('CORS configuration is required')
     expect(servConfig.cors.exposedHeaders).toContain(crypto.transport.protocol.ENCRYPTED_HEADER)
     expect(servConfig.cors.exposedHeaders).toContain(crypto.transport.protocol.ENVELOPE_HEADER)
     client.destroy()
@@ -300,6 +407,37 @@ describe('api-service 基础设施端点', () => {
     const body = await res.json() as { clientId: string, serverPublicKey: string }
     expect(body.clientId).toBeTruthy()
     expect(body.serverPublicKey).toBeTruthy()
+  })
+
+  it('密钥协商公告覆盖配置中最大的路由明文预算', async () => {
+    const config = core.config.getOrThrow<ServConfig>('serv')
+    if (config.transport === false)
+      throw new Error('Transport configuration is required')
+    const path = `${apiPrefix}${apiContract.pathOf(apiServiceContract.app.info)}`
+    const configLookup = vi.spyOn(core.config, 'getOrThrow').mockReturnValueOnce(ServConfigSchema.parse({
+      ...config,
+      transport: {
+        ...config.transport,
+        maxPlaintextBytes: 2048,
+        routePlaintextBytes: { [path]: 4096 },
+      },
+    }))
+    try {
+      const app = createApiServiceApp()
+      const pair = crypto.asymmetric.generateKeyPair()
+      if (!pair.success)
+        throw new Error(pair.error.message)
+      const response = await app.request(keyExchangePath, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ clientPublicKey: pair.data.publicKey }),
+      })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({ maxPlaintextBytes: 4096 })
+    }
+    finally {
+      configLookup.mockRestore()
+    }
   })
 
   it('开启 transport 时，明文 POST /auth/login 被拒绝', async () => {

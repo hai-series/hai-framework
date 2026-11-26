@@ -5,11 +5,11 @@
  */
 
 import { CacheConfigSchema } from '@h-ai/cache'
-import { CoreConfigSchema } from '@h-ai/core'
+import { CoreConfigSchema, HttpHostA2AConfigSchema, HttpRateLimitConfigSchema } from '@h-ai/core'
 import { ReachConfigSchema } from '@h-ai/reach'
 import { ReldbConfigSchema } from '@h-ai/reldb'
 import { StorageConfigSchema } from '@h-ai/storage'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { generateConfigFile, generateEnvExample } from '../src/commands/cli-config-templates.js'
 import { loadConfigText } from './helpers/config.js'
 
@@ -37,6 +37,37 @@ describe('generateConfigFile', () => {
   ] as const)('%s 默认配置应通过模块公开 Schema 校验', (moduleKey, schema) => {
     expect(schema.safeParse(loadConfigText(moduleKey, generateConfigFile(moduleKey))).success).toBe(true)
   })
+  it.each(['kit', 'serv'])('%s 限流模板默认关闭，允许通过环境变量启用同一份配置', (moduleKey) => {
+    const content = generateConfigFile(moduleKey)
+    const variable = `HAI_${moduleKey.toUpperCase()}_HTTP_RATELIMIT`
+    const readPolicy = () => loadConfigText<{ http: { rateLimit: unknown } }>(moduleKey, content).http.rateLimit
+    expect(readPolicy()).toBe(false)
+    vi.stubEnv(variable, '{"windowMs":10000,"maxRequests":2}')
+    try {
+      expect(HttpRateLimitConfigSchema.parse(readPolicy())).toEqual({
+        windowMs: 10_000,
+        maxRequests: 2,
+      })
+    }
+    finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it.each(['kit', 'serv'])('%s 默认关闭 A2A，启用时接受配对的发现和 RPC 路径', (moduleKey) => {
+    const content = generateConfigFile(moduleKey)
+    const readA2A = () => loadConfigText<{ a2a: unknown }>(moduleKey, content).a2a
+    expect(readA2A()).toBe(false)
+    const endpoints = { cardPath: '/partners/card.json', rpcPath: '/partners/a2a' }
+    vi.stubEnv(`HAI_${moduleKey.toUpperCase()}_A2A`, JSON.stringify(endpoints))
+    try {
+      expect(HttpHostA2AConfigSchema.parse(readA2A())).toEqual(endpoints)
+    }
+    finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('应该生成 core 配置', () => {
     const content = generateConfigFile('core')
     expect(content).toContain('name: $' + '{HAI_CORE_NAME:my-app}')

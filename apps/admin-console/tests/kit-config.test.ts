@@ -1,17 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('$app/paths', () => ({
+  resolve: (path: string) => path,
+}))
+
 beforeEach(() => vi.resetModules())
 afterEach(() => vi.unstubAllEnvs())
 
 describe('admin runtime kit config', () => {
   it('服务端保留完整配置，SSR 只投影公开 transport，不泄露规则和代理', async () => {
-    vi.stubEnv('HAI_KIT_ACCESS', '{"rules":[{"id":"private-network-label","paths":["/api/private/**"],"allowIps":["192.0.2.0/24"]}]}')
-    vi.stubEnv('HAI_KIT_TRUSTEDPROXIES', '["192.0.2.10"]')
+    vi.stubEnv('HAI_KIT_HTTP_ACCESS', '{"rules":[{"id":"private-network-label","paths":["/api/private/**"],"allowIps":["192.0.2.0/24"]}]}')
+    vi.stubEnv('HAI_KIT_HTTP_TRUSTEDPROXIES', '["192.0.2.10"]')
     const { getAdminKitConfig } = await import('../src/lib/server/kit-config.js')
     const configured = getAdminKitConfig()
-    expect(configured.transport).toMatchObject({ keyExchangePath: '/api/_hai/key-exchange' })
+    expect(configured.transport).toMatchObject({ keyExchangePath: '/api/v1/_hai/key-exchange' })
     expect(configured.server).toMatchObject({ host: '127.0.0.1', port: 3000 })
-    expect(configured.access).toMatchObject({
+    expect(configured.http.access).toMatchObject({
       rules: [
         { id: 'private-network-label' },
       ],

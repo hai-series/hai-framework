@@ -193,12 +193,15 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // 构建不读取部署环境；启动时从进程 PUBLIC_API_BASE 获取公开地址。
+    // 构建不读取部署环境；启动时从进程环境获取公开 API 地址和密钥交换路径。
     let api = parse_runtime_api(
         &std::env::var("PUBLIC_API_BASE")
             .unwrap_or_else(|_| "http://localhost:3000/api/v1".to_string()),
     )
     .expect("Invalid runtime API configuration");
+    let api_key_exchange_path = std::env::var("PUBLIC_API_KEY_EXCHANGE_PATH")
+        .ok()
+        .filter(|path| !path.is_empty());
     let mut context = tauri::generate_context!();
     if let Some(policy) = context.config_mut().app.security.csp.take() {
         context.config_mut().app.security.csp =
@@ -206,7 +209,7 @@ pub fn run() {
     }
     let script = format!(
         "globalThis.__HAI_PUBLIC_CONFIG__={};",
-        serde_json::json!({ "apiBase": api.as_str() })
+        serde_json::json!({ "apiBase": api.as_str(), "apiKeyExchangePath": api_key_exchange_path })
     );
     let builder = tauri::Builder::default();
     #[cfg(all(

@@ -9,7 +9,7 @@ import type { AudioFormat, AudioWsStartMessage } from '@h-ai/ai'
  * 1. 解析 HTTP 配置
  * 2. 选择请求上下文工厂
  * 3. 挂基础安全 middleware
- * 4. 挂内置 CORS 包装及握手/预检的策略检查
+ * 4. 挂内置 CORS 包装及访问策略、按可信地址的固定窗口限流
  * 5. （可选）挂传输加密 middleware，再挂每次请求的访问策略
  * 6. 挂普通自定义 middleware（若提供）
  * 7. 挂基础路由（health / refresh-cookie）与业务路由（oRPC OpenAPI）
@@ -18,10 +18,10 @@ import type { AudioFormat, AudioWsStartMessage } from '@h-ai/ai'
  */
 
 import type { AuditContext } from '@h-ai/audit'
-import type { HaiResult } from '@h-ai/core'
-import type { AnyContractRouter, OpenAPI } from '@orpc/contract'
+import type { HaiResult, HttpA2AHandler, HttpCorsOptions, HttpRateLimitContext, HttpRateLimitOptions, HttpVerifyToken } from '@h-ai/core'
+import type { AnyContractRouter } from '@orpc/contract'
 import type { Router } from '@orpc/server'
-import type { Hono, Context as HonoContext, Next } from 'hono'
+import type { Hono, Context as HonoContext } from 'hono'
 import type { AudioWsDeps } from './features/serv-feature-audio.js'
 import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
 import type { ServHealthHttpConfig, ServHttpConfigInput } from './serv-config.js'
@@ -29,14 +29,11 @@ import type { CreateServContext, ServContext, ServIam, ServRequestMetadata, Serv
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportRoute } from './serv-route-transport.js'
 import type { ServTransportConfig } from './serv-transport.js'
-import type { ServValidationFailureBody } from './serv-validation.js'
-import { posix } from 'node:path'
-import { AUDIO_WS_PATH } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { audit } from '@h-ai/audit'
 import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { upgradeWebSocket } from '@hono/node-server'
-import { OpenAPIHandler } from '@orpc/openapi/fetch'
 import { Hono as HonoApp } from 'hono'
 import { WebSocketServer } from 'ws'
 import { registerAudioWsRoute } from './features/serv-feature-audio.js'
@@ -44,24 +41,13 @@ import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
 import { securityHeaders } from './pipelines/serv-pipeline-security-headers.js'
 import { readRemoteAddress } from './serv-client-ip.js'
 import { resolveServHttpConfig } from './serv-config.js'
-import { buildAuthContextFactory, parseRequestContext, resolveRequestId } from './serv-context.js'
+import { buildAuthContextFactory, parseRequestContext, resolveRequestId, ServAuthVerificationError } from './serv-context.js'
+import { createContractHandler } from './serv-contract-handler.js'
 import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
-import { isCorsMiddleware } from './serv-cors.js'
+import { isCorsMiddleware, isCorsPreflight } from './serv-cors.js'
 import { servM } from './serv-i18n.js'
-import { createDocsPage, generateSpec, getScalarScript, SCALAR_ROUTE } from './serv-openapi.js'
-import { createTransportRoutePreparer, isPrivateResponse } from './serv-route-transport.js'
 import { createTransportMiddleware } from './serv-transport.js'
-import { localizeZodError, resolveRequestLocale } from './serv-validation.js'
-
-/** 允许通过 oRPC OpenAPIHandler 转发的 HTTP 方法。 */
-const API_METHODS = [
-  'GET',
-  'POST',
-  'PUT',
-  'PATCH',
-  'DELETE',
-  'OPTIONS',
-] as const
+import { resolveRequestLocale } from './serv-validation.js'
 
 /**
  * `serv.createApp()` 的自定义 middleware 挂载项。
@@ -112,14 +98,14 @@ export interface ServHttpApp {
  *
  * **认证 / 会话填充设计**（遵循最小知识原则）：
  *
- * - **`iam`**（推荐）：单一顶层引用。提供后 serv 自动：
+ * - **`auth.iam`**（推荐）：单一服务引用。提供后 serv 自动：
  *   1. 使用 `iam.auth.verifyToken` 填充 `context.session` → route guard 生效
  *   2. 若同时启用 `refreshCookie`，使用 `iam.session.refresh` 实现 refresh token 轮换
  *
  * - **`refreshCookie`**（可选）：浏览器默认用 httpOnly cookie；受信原生客户端可配置 body 通道。与 `iam` 正交：
  *   `iam` 决定 *谁* 验证 token，`refreshCookie` 决定 refresh token *怎么* 传输。
  *
- * - **`verifyToken`**（高级）：不使用 IAM 模块的覆盖入口。优先于 `iam.auth.verifyToken`。
+ * - **`auth.verifyToken`**（高级）：不使用 IAM 模块的覆盖入口。优先于 `iam.auth.verifyToken`。
  *
  * - **`createContext`**（高级）：完全接管上下文构造，设置后 serv **不再**自动填充 session，
  *   由调用方负责。
@@ -140,7 +126,10 @@ export interface CreateServAppOptions<
 > {
   readonly contract: TContract
   readonly procedures: TProcedures
-  readonly http?: ServHttpConfigInput
+  readonly http?: Omit<ServHttpConfigInput, 'rateLimit'> & {
+    /** 固定窗口限流，默认关闭；启用时显式注入原子计数存储。 */
+    readonly rateLimit?: false | HttpRateLimitOptions<HttpRateLimitContext>
+  }
   /**
    * 自定义 HTTP middleware（当前内部由 Hono 承载，但应用 API 不暴露 Hono app）。
    *
@@ -151,35 +140,29 @@ export interface CreateServAppOptions<
    * 通过 serv.cors 创建的内置 CORS 会在外层补充响应头，预检仍执行请求访问策略。
    */
   readonly middlewares?: readonly ServMiddlewareMount[]
-  /**
-   * IAM 模块引用（推荐）。提供后 serv 自动使用 `iam.auth.verifyToken` 填充 session，
-   * 以及在 `refreshCookie` 启用时使用 `iam.session.refresh` 实现 cookie 刷新。
-   *
-   * 类型上要求 {@link ServIam}（`iam` 可以直接传入，结构类型保证兼容）。
-   */
-  readonly iam?: ServIam
+  /** 按来源控制浏览器跨域访问。省略或 false 关闭。 */
+  readonly cors?: false | HttpCorsOptions
+  /** 注入 IAM 或覆盖令牌验证器。两个选项同时提供时使用自定义验证器。 */
+  readonly auth?: { readonly iam?: ServIam, readonly verifyToken?: HttpVerifyToken }
   /**
    * 启用 refresh token 传输（opt-in）：浏览器使用 httpOnly Cookie，可选配置受信原生 body 通道。
-   * 需配合 `iam` 或 `refreshCookie.onRefresh` 使用。
+   * 需配合 auth.iam 或 refreshCookie.onRefresh 使用。
    */
   readonly refreshCookie?: RefreshCookieConfig
+  /** 由 ai.a2a.createHttpHandler() 创建的 HTTP 端点，省略或 false 关闭。 */
+  readonly a2a?: false | HttpA2AHandler
   /**
-   * 高级：自定义访问令牌校验回调，覆盖 `iam.auth.verifyToken`。
-   * 不使用 IAM 模块的场景下使用。
-   */
-  readonly verifyToken?: (token: string) => Promise<HaiResult<ServSession>>
-  /**
-   * 高级：完全接管上下文工厂。设置后上述 `iam` / `verifyToken` 均不生效（session 不会被自动填充）。
+   * 高级：完全接管上下文工厂。设置后上述 `auth.iam` / `auth.verifyToken` 均不生效（session 不会被自动填充）。
    */
   readonly createContext?: CreateServContext
   /**
    * 启用传输加密（opt-in）。提供后 serv 自动：
    * 1. 使用显式 serverKeyRing / keyStore 创建受管传输管理器
    * 2. 在 oRPC 路由之前挂载中间件，自动解密请求 / 加密响应
-   * 3. 在 `${apiPrefix}${keyExchangePath}` 暴露 POST 密钥协商端点
+   * 3. 在站点绝对路径 `keyExchangePath` 暴露 POST 密钥协商端点
    *
    */
-  readonly transport?: ServTransportConfig
+  readonly transport?: false | ServTransportConfig
   /** 由宿主在 HTTPS 入口启用的 multipart、文件和 SSE 契约端点。 */
   readonly transportRoutes?: readonly ServTransportRoute[]
   /**
@@ -231,9 +214,9 @@ export interface ServAudioConfig {
   readonly authorize?: (session: ServSession, request: AudioWsStartMessage, grant?: AudioTicketGrant) => Promise<HaiResult<AuthorizedAudioRequest>>
   /** 会话结束钩子，供应用释放并发占用；无论成功、失败或断连都至多调用一次。 */
   readonly onSessionEnd?: (session: ServSession, request: AuthorizedAudioRequest) => void | Promise<void>
-  /** 语音入口路径（相对 apiPrefix，默认 `/ai/audio`）。 */
-  readonly path?: string
-  /** 单条消息字节上限（默认 1 MiB）。 */
+  /** 完整站点路径。缺省时为业务 API 前缀加 `/ai/audio`。 */
+  readonly path?: `/${string}`
+  /** WebSocket 接收单条消息的上限（默认 1 MiB，整数范围 1～2147483647 字节）。 */
   readonly maxMessageBytes?: number
   /** 单连接累计接收音频字节上限（默认 10 MiB）。 */
   readonly maxBufferedBytes?: number
@@ -330,7 +313,10 @@ export interface AuthorizedAudioRequest {
  * // WeakMap 只绑定本地网络资源，不作为跨节点认证或业务状态。
  *```
  */
-export const audioWsServers = new WeakMap<ServHttpApp, WebSocketServer>()
+export const audioWsServers = new WeakMap<ServHttpApp, {
+  readonly server: WebSocketServer
+  readonly waitForSessionRelease: () => Promise<void>
+}>()
 
 /**
  * 创建并装配 HTTP app；同步校验配置和依赖，返回可交给 Node 或标准 fetch 适配器的应用。
@@ -358,21 +344,78 @@ export function createApp<
   TProcedures extends Router<AnyContractRouter, ServContext>,
 >(options: CreateServAppOptions<TContract, TProcedures>): ServHttpApp {
   // Step 1：先把用户输入的 HTTP 配置收敛成完整配置，后续挂载逻辑只处理一种形态。
-  const http = resolveServHttpConfig(options.http)
+  const { rateLimit, ...httpOptions } = options.http ?? {}
+  const http = resolveServHttpConfig(httpOptions)
+  const { keyGenerator, ...defaultKeyLimit } = rateLimit || {}
+  const limitsByIp = rateLimit
+    ? core.access.createRateLimiter<HttpRateLimitContext>({
+        ...rateLimit,
+        ...defaultKeyLimit,
+        keyGenerator: undefined,
+      })
+    : undefined
+  const limitsBySession = rateLimit && keyGenerator
+    ? core.access.createRateLimiter(rateLimit)
+    : undefined
+  const transport = options.transport || undefined
+  const { a2a } = options
+  const { keyExchangePath = crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH } = transport ?? {}
+  if (transport && !crypto.transport.isKeyExchangePath(keyExchangePath))
+    throw new TypeError(servM('serv_invalidKeyExchangePath'))
   const resolveIp = core.access.createClientIpResolver(http.trustedProxies)
   const checkAccess = core.access.createRequestCheck(http.access)
-  if (checkAccess.requiresEncryption && !options.transport)
+  if (checkAccess.requiresEncryption && !transport)
     throw new Error('Request access rules require transport encryption, but Serv transport is not configured')
+  const matchesA2AEndpoint = (path: string, method: string) => Boolean(a2a && (
+    (method === 'GET' && path === a2a.cardPath) || (method === 'POST' && path === a2a.rpcPath)
+  ))
+  const audioPath = options.audio
+    ? apiContract.resolveAudioWebSocketPath(http.apiPrefix, options.audio.path)
+    : undefined
+  const matchesAudioUpgrade = (request: Request, path: string) => path === audioPath && request.method === 'GET'
+    && request.headers.get('upgrade')?.toLowerCase() === 'websocket'
+  if (audioPath && checkAccess.encryption(audioPath, 'GET') === 'required')
+    throw new TypeError('Audio WebSocket requires a standard HTTPS upgrade without application-level encryption')
+  if (a2a) {
+    const occupied = [
+      transport && keyExchangePath,
+      audioPath,
+      http.health && http.health.path,
+      http.health && http.health.readyPath,
+      http.openapi && http.openapi.path,
+      http.docs && http.docs.path,
+      options.refreshCookie && `${http.apiPrefix}/auth/refresh`,
+    ]
+    if (occupied.some(path => path === a2a.cardPath || path === a2a.rpcPath)
+      || checkAccess.encryption(a2a.cardPath, 'GET') === 'required'
+      || checkAccess.encryption(a2a.rpcPath, 'POST') === 'required') {
+      throw new TypeError('A2A endpoints cannot overlap a host endpoint or require application-level encryption')
+    }
+  }
+  const encryption = (path: string, method: string, request: Request) => matchesA2AEndpoint(path, method) || matchesAudioUpgrade(request, path)
+    ? 'disabled' as const
+    : checkAccess.encryption(path, method)
   // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
   const app = new HonoApp()
-  // 仅保存本次 Request 的可信解析结果，弱引用随请求释放；不充当身份或审计真值。
-  const requestAuditContexts = new WeakMap<Request, AuditContext>()
+  // 使用每次派发的宿主上下文，Fetch Request 可被外部调用反复派发。
+  const requestAuditContexts = new WeakMap<HonoContext, AuditContext>()
   app.onError((error, c) => {
     const traceId = core.context.get().traceId ?? core.context.get().requestId ?? resolveRequestId(c.req.header('x-request-id') ?? null)
-    core.logger.error('HTTP handler failed', { traceId, error, method: c.req.method })
+    const verificationFailed = error instanceof ServAuthVerificationError
+    const status = verificationFailed ? error.httpStatus : 500
+    core.logger.error(verificationFailed ? error.message : 'HTTP handler failed', {
+      traceId,
+      method: c.req.method,
+      status,
+      error: verificationFailed ? error.cause : error,
+    })
     c.header('x-trace-id', traceId)
-    const safe = core.error.toPublic({ ...HaiCommonError.INTERNAL_ERROR, message: '' }, traceId)
-    return c.json({ success: false, error: safe }, 500)
+    const safe = core.error.toPublic({
+      ...HaiCommonError.INTERNAL_ERROR,
+      httpStatus: status,
+      message: '',
+    }, traceId, resolveRequestLocale(c.req.raw.headers))
+    return Response.json({ success: false, error: safe }, { status })
   })
   // 请求的语言沿异步处理链传递，模块错误消息不依赖共享的进程默认语言。
   app.use('*', async (c, next) => {
@@ -393,7 +436,7 @@ export function createApp<
       await next()
       // 契约校验、协议或中间件拒绝不会进入 procedure；按 HTTP 状态补齐这些事件。
       if (audit.isInitialized && c.res.status >= 400) {
-        const trusted = requestAuditContexts.get(c.req.raw)
+        const trusted = requestAuditContexts.get(c)
         const recorded = await audit.capture({
           action: 'http.reject',
           resource: c.req.routePath || 'unmatched',
@@ -424,15 +467,15 @@ export function createApp<
   // Step 3：决定请求上下文工厂。这个选择直接决定后续 procedure 是否能拿到 `context.session`。
   // 上下文工厂选择优先级（顶位优先）：
   //   1. options.createContext
-  //   2. options.verifyToken
-  //   3. options.iam.auth.verifyToken
+  //   2. options.auth?.verifyToken
+  //   3. options.auth?.iam.auth.verifyToken
   //   4. 都未提供 → parseRequestContext（仅解析元数据，session 始终 undefined）
   //
   // ⚠️ 对 `iam.auth.verifyToken` **不**做 `.bind()`：IAM 模块使用 NotInitializedKit Proxy 模式，
   //    `iam.auth` 的方法实现会在 `init()` 后切换。提前 bind 会捕获未初始化 Proxy 的方法引用。
   //    用闭包函数延迟到请求处理时再读取，确保始终调用最新实现。
-  const iamRef = options.iam
-  const verifyToken = options.verifyToken
+  const iamRef = options.auth?.iam
+  const verifyToken = options.auth?.verifyToken
     ?? (iamRef
       ? (token: string) => iamRef.auth.verifyToken(token)
       : undefined)
@@ -440,42 +483,54 @@ export function createApp<
     ?? (verifyToken
       ? buildAuthContextFactory(verifyToken)
       : parseRequestContext)
-  const createContext: CreateServContext = async (input) => {
-    const context = await contextFactory({
-      ...input,
-      ip: resolveIp(input.request, input.remoteAddress),
-    })
-    requestAuditContexts.set(input.request, {
-      actor: context.session
-        ? {
-            id: context.session.userId,
-            username: context.session.username,
-            roles: [...context.session.roles],
-          }
-        : null,
-      scopeId: context.scopeId,
-    })
-    return context
+  const requestContexts = new WeakMap<HonoContext, Promise<ServContext>>()
+  const createContext = async (c: HonoContext): Promise<ServContext> => {
+    let pending = requestContexts.get(c)
+    if (!pending) {
+      const request = c.req.raw
+      const remoteAddress = readRemoteAddress(c.env)
+      pending = Promise.resolve(contextFactory({
+        request,
+        remoteAddress,
+        ip: resolveIp(request, remoteAddress),
+      })).then((context) => {
+        requestAuditContexts.set(c, {
+          actor: context.session
+            ? {
+                id: context.session.userId,
+                username: context.session.username,
+                roles: [...context.session.roles],
+              }
+            : null,
+          scopeId: context.scopeId,
+        })
+        return context
+      })
+      requestContexts.set(c, pending)
+    }
+    return pending
   }
 
-  // Step 4：准备文档 spec 的懒缓存。只有真正访问 openapi/docs 时才生成，避免启动时做重活。
-  // OpenAPI spec 是相对昂贵的同步生成；延迟到第一次访问 `/openapi.json` 或 `/docs` 时再算一次。
-  let cachedSpec: Promise<OpenAPI.Document> | undefined
-  const getSpec = (): Promise<OpenAPI.Document> => {
-    cachedSpec ??= generateSpec(options.contract, { apiPrefix: http.apiPrefix })
-    return cachedSpec
+  const contractHandler = createContractHandler({
+    contract: options.contract,
+    procedures: options.procedures,
+    http,
+    transportRoutes: options.transportRoutes,
+  })
+  const contractTransport = {
+    enabled: transport !== undefined,
+    encryption: checkAccess.encryption,
   }
 
   // Step 5：最先挂全局安全响应头，让后续所有响应（包括错误响应）都自动带上保护性 header。
   app.use('*', securityHeaders())
 
-  const accessDenied = (c: HonoContext): Response | undefined => {
-    const ipAddress = resolveIp(c.req.raw, readRemoteAddress(c.env))
+  const accessDenied = (c: HonoContext, ipAddress = resolveIp(c.req.raw, readRemoteAddress(c.env))): Response | undefined => {
     const decision = checkAccess(c.req.path, c.req.method, ipAddress)
     if (decision.allowed) {
-      if (!options.transport && c.req.method !== 'OPTIONS'
+      if (!transport
         && (c.req.raw.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || c.req.raw.headers.has(crypto.transport.protocol.ENVELOPE_HEADER))
-        && checkAccess.encryption(c.req.path, c.req.method) === 'disabled') {
+        && encryption(c.req.path, c.req.method, c.req.raw) === 'disabled') {
         return c.json(buildHaiErrorBody(HaiCommonError.VALIDATION_ERROR, servM('serv_transportPlaintextRequired')), 400)
       }
       return undefined
@@ -489,6 +544,18 @@ export function createApp<
     return c.json(buildHaiErrorBody(HaiCommonError.REQUEST_ACCESS_DENIED, core.i18n.coreM('core_requestAccessDenied')), 403)
   }
   // CORS 保持在加密外层，为策略拒绝也补齐响应头；预检只执行策略，不执行业务处理器。
+  if (options.cors) {
+    const checkCors = core.access.createCors(options.cors)
+    app.use('*', async (c, next) => {
+      const cors = checkCors(c.req.raw)
+      if (!cors)
+        return next()
+      if (cors.preflight)
+        return core.access.applyCorsHeaders(accessDenied(c) ?? new Response(null, { status: 204 }), cors.headers)
+      await next()
+      c.res = core.access.applyCorsHeaders(c.res, cors.headers)
+    })
+  }
   const cors = options.middlewares?.filter(entry => isCorsMiddleware(entry.middleware)) ?? []
   const custom = options.middlewares?.filter(entry => !isCorsMiddleware(entry.middleware)) ?? []
   for (const entry of cors) {
@@ -497,52 +564,84 @@ export function createApp<
       continue
     }
     app.use(entry.path ?? '*', async (c, next) => {
-      if (c.req.method !== 'OPTIONS')
+      if (!isCorsPreflight(c.req.raw))
         return entry.middleware(c, next)
-      const rejected = accessDenied(c)
       const preflight = await entry.middleware(c, async () => {})
+      if (!(preflight instanceof Response))
+        return next()
+      const rejected = accessDenied(c)
       if (!rejected)
         return preflight
-      if (preflight instanceof Response) {
-        for (const [key, value] of preflight.headers)
-          rejected.headers.set(key, value)
-        rejected.headers.set('content-type', 'application/json; charset=utf-8')
-      }
+      for (const [key, value] of preflight.headers)
+        rejected.headers.set(key, value)
       return rejected
     })
   }
-  const keyExchangePath = options.transport
-    ? `${http.apiPrefix}${options.transport.keyExchangePath ?? '/_hai/key-exchange'}`
-    : undefined
-  if (http.access !== false && keyExchangePath) {
-    app.use('*', async (c, next) => c.req.path === keyExchangePath && c.req.method === 'POST'
-      ? accessDenied(c) ?? next()
-      : next())
+  // 预留判断结果可随 Hono 上下文穿过解密，避免重新检查时段或重复计数。
+  const pendingAdmissions = new WeakMap<HonoContext, Response | null>()
+  if (limitsByIp || (http.access !== false && transport)) {
+    app.use('*', async (c, next) => {
+      const { method, raw: request } = c.req
+      const pathname = new URL(request.url).pathname
+      const isKeyExchange = !!transport && method === 'POST' && pathname === keyExchangePath
+      const isProbe = http.health && (method === 'GET' || method === 'HEAD')
+        && (pathname === http.health.path || pathname === http.health.readyPath)
+      const limiter = !limitsBySession || isKeyExchange || matchesA2AEndpoint(pathname, method) || matchesAudioUpgrade(request, pathname)
+        ? limitsByIp
+        : undefined
+      if (!isKeyExchange && (!limiter || isProbe))
+        return next()
+
+      const clientAddress = resolveIp(request, readRemoteAddress(c.env))
+      const rejected = http.access === false
+        ? undefined
+        : accessDenied(c, clientAddress)
+      if (isKeyExchange && rejected)
+        return rejected
+      pendingAdmissions.set(c, rejected ?? null)
+      if (rejected || !limiter)
+        return next()
+
+      const requestId = core.context.get().requestId ?? resolveRequestId(c.req.header('x-request-id') ?? null)
+      const result = await limiter({
+        requestId,
+        clientAddress,
+        context: { request, requestId, clientAddress },
+      })
+      if (result instanceof Response) {
+        // 已提交传输认证信封的业务请求使用正常加密出口返回拒绝。
+        const hasEnvelope = request.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER)
+          || request.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)
+        if (!transport || isKeyExchange || !hasEnvelope)
+          return result
+        pendingAdmissions.set(c, result)
+        return next()
+      }
+      await next()
+      for (const [name, value] of result)
+        c.header(name, value)
+    })
   }
 
-  const prepareTransport = createTransportRoutePreparer(
-    options.procedures,
-    options.transportRoutes,
-    http.apiPrefix,
-    checkAccess.encryption,
-    options.transport !== undefined,
-  )
-  if (prepareTransport)
-    app.use('*', async (c, next) => prepareTransport.preflight(c.req.raw) ?? next())
+  app.use('*', async (c, next) => {
+    if (matchesA2AEndpoint(new URL(c.req.url).pathname, c.req.method))
+      return next()
+    return contractHandler.preflight(c.req.raw, contractTransport) ?? next()
+  })
 
   // Step 7：若启用传输加密，必须在业务路由之前挂载。
   // 这样请求能先被解密，响应也能在离开应用前被重新加密。
   // 传输加密必须在所有业务路由之前装载：
   // - 它需在 oRPC 读取 body 前完成解密
   // - 在下游响应返回后加密
-  if (options.transport) {
-    const policy = crypto.transport.createBodyPolicy(options.transport.maxPlaintextBytes, options.transport.routePlaintextBytes)
-    const mgr = options.transport.crypto.transport.createServer({
-      serverKeyRing: options.transport.serverKeyRing,
-      keyStore: options.transport.keyStore,
+  if (transport) {
+    const policy = crypto.transport.createBodyPolicy(transport.maxPlaintextBytes, transport.routePlaintextBytes)
+    const mgr = transport.crypto.transport.createServer({
+      serverKeyRing: transport.serverKeyRing,
+      keyStore: transport.keyStore,
       maxPlaintextBytes: policy.maximum.plaintextBytes,
-      maxFutureSkewSeconds: options.transport.maxFutureSkewSeconds,
-      maxRequestAgeSeconds: options.transport.maxRequestAgeSeconds,
+      maxFutureSkewSeconds: transport.maxFutureSkewSeconds,
+      maxRequestAgeSeconds: transport.maxRequestAgeSeconds,
     })
     if (!mgr.success) {
       // 直接抛已存在的 HaiError 实例，保留 code/system/module/cause，便于上层定位到
@@ -553,12 +652,48 @@ export function createApp<
         mgr.error,
       )
     }
-    app.use('*', createTransportMiddleware(mgr.data, keyExchangePath!, options.transport.excludePaths, policy, checkAccess.encryption))
+    app.use('*', createTransportMiddleware(mgr.data, keyExchangePath, transport.excludePaths, policy, encryption))
   }
 
   // 业务拒绝位于加密管线内，客户端仍能解析标准错误；自定义静态路由也必须经过策略。
-  if (http.access !== false)
-    app.use('*', async (c, next) => accessDenied(c) ?? next())
+  if (http.access !== false || limitsByIp || a2a) {
+    app.use('*', async (c, next) => {
+      const pending = pendingAdmissions.get(c)
+      return (pending === undefined && (http.access !== false || matchesA2AEndpoint(new URL(c.req.url).pathname, c.req.method))
+        ? accessDenied(c)
+        : pending) ?? next()
+    })
+  }
+  if (limitsBySession) {
+    app.use('*', async (c, next) => {
+      const { method, raw: request } = c.req
+      const { path } = c.req
+      const isProbe = http.health && (method === 'GET' || method === 'HEAD')
+        && (path === http.health.path || path === http.health.readyPath)
+      if ((transport && path === keyExchangePath && method === 'POST') || matchesA2AEndpoint(new URL(request.url).pathname, method) || matchesAudioUpgrade(request, path) || isProbe)
+        return next()
+      const ctx = await createContext(c)
+      const context = {
+        request,
+        requestId: ctx.requestId,
+        clientAddress: ctx.ip,
+        session: ctx.session,
+      }
+      const result = await limitsBySession({ requestId: ctx.requestId, clientAddress: ctx.ip, context })
+      if (result instanceof Response)
+        return result
+      await next()
+      for (const [name, value] of result)
+        c.header(name, value)
+    })
+  }
+  if (a2a) {
+    app.use('*', async (c, next) => {
+      if (!matchesA2AEndpoint(new URL(c.req.url).pathname, c.req.method))
+        return next()
+      return await a2a.handleRequest(c.req.raw, core.context.get().requestId) ?? new Response(null, { status: 404 })
+    })
+  }
   mountCustomMiddlewares(app, custom)
 
   // Step 8：挂基础探活路由。健康检查放在业务路由之外，便于基础设施直接探测。
@@ -568,12 +703,11 @@ export function createApp<
   // Step 9：refresh-cookie 路由要抢在 oRPC 通配符之前注册，否则会被 `${apiPrefix}/*` 吞掉。
   // refresh-cookie 路由必须在 oRPC 通配符路由之前注册，Hono 按注册顺序匹配。
   if (options.refreshCookie)
-    mountRefreshCookieRoutes(app, http.apiPrefix, options.refreshCookie, options.iam)
+    mountRefreshCookieRoutes(app, http.apiPrefix, options.refreshCookie, options.auth?.iam)
 
   // Step 9.5：语音 WebSocket 入口同样要在 oRPC 通配符之前注册，避免 GET 升级请求被 `${apiPrefix}/*` 吞掉。
-  if (options.audio) {
-    const audioPath = `${http.apiPrefix}${options.audio.path ?? AUDIO_WS_PATH}`
-    registerAudioWsRoute(app, audioPath, upgradeWebSocket, {
+  if (options.audio && audioPath) {
+    const audio = registerAudioWsRoute(app, audioPath, upgradeWebSocket, {
       ai: options.audio.ai,
       verifyTicket: options.audio.verifyTicket,
       authorize: options.audio.authorize,
@@ -586,56 +720,15 @@ export function createApp<
       maxPendingMessages: options.audio.maxPendingMessages,
       maxSendBufferBytes: options.audio.maxSendBufferBytes,
     })
-    audioWsServers.set(app, new WebSocketServer({ noServer: true }))
-  }
-
-  // Step 10：挂主业务 API 路由。所有 `${apiPrefix}/*` 请求都会在这里进入 contract + procedure 分发。
-  mountOpenAPIRoutes(app, options.procedures, http.apiPrefix, createContext, prepareTransport)
-
-  // Step 11：按需挂 OpenAPI JSON 文档端点。
-  if (http.openapi !== false) {
-    app.get(http.openapi.path, async c => c.json(await getSpec()))
-  }
-
-  // Step 12：按需挂 docs 页面；若要求登录，则重用同一套 context/session 判定逻辑。
-  if (http.docs !== false) {
-    const docs = http.docs
-    // 资源与页面共用目录；相对 URL 在外层网关添加或剥离前缀后仍留在同一入口。
-    const docsDirectory = docs.path.slice(0, docs.path.lastIndexOf('/') + 1)
-    app.get(`${docsDirectory}${SCALAR_ROUTE.slice(1)}`, async (c) => {
-      const content = await getScalarScript()
-      if (!content)
-        return c.notFound()
-      c.header('Content-Type', 'application/javascript; charset=utf-8')
-      c.header('Cache-Control', 'public, max-age=86400, immutable')
-      return c.body(content)
-    })
-
-    app.get(docs.path, async (c) => {
-      if (docs.requireAuth) {
-        const context = await createContext({
-          request: c.req.raw,
-          remoteAddress: readRemoteAddress(c.env),
-        })
-        // 与 procedure 层 `.auth()` 语义保持一致：必须是已验证 session，
-        // 不能只检查 Bearer 字符串是否存在，避免任意伪造 Token 访问受保护文档。
-        if (!context.session) {
-          return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', {
-            locale: resolveRequestLocale(c.req.raw.headers),
-          })), 401)
-        }
-      }
-      const specUrl = http.openapi === false
-        ? undefined
-        : posix.relative(docsDirectory, http.openapi.path) || '.'
-      return c.html(createDocsPage(await getSpec(), {
-        specUrl,
-        scriptUrl: SCALAR_ROUTE.slice(1),
-      }))
+    audioWsServers.set(app, {
+      server: new WebSocketServer({ noServer: true, maxPayload: audio.maxMessageBytes }),
+      waitForSessionRelease: audio.waitForSessionRelease,
     })
   }
 
-  // Step 13：所有运行时能力都已装配完毕，返回对外稳定的 HTTP app 抽象。
+  // 按装配后的契约分发请求；未命中留给宿主的 404 边界。
+  app.use('*', async (c, next) => await contractHandler.fetch(c.req.raw, () => createContext(c), contractTransport) ?? next())
+
   return app
 }
 
@@ -648,150 +741,4 @@ function mountHealthRoutes(app: Hono, config: ServHealthHttpConfig): void {
   app.get(config.path, c => c.json({ status: 'ok' }))
   if (config.readyPath)
     app.get(config.readyPath, c => c.json({ status: 'ready' }))
-}
-
-function mountOpenAPIRoutes(
-  app: Hono,
-  procedures: Router<AnyContractRouter, ServContext>,
-  apiPrefix: `/${string}`,
-  createContext: CreateServContext,
-  prepareTransport: ReturnType<typeof createTransportRoutePreparer>,
-): void {
-  const handler = new OpenAPIHandler(procedures)
-  // 这里只为 `${apiPrefix}/*` 这个挂载前缀注册一次 multi-method catch-all。
-  // 它不是“为 contract 中的每个 endpoint 各注册一遍 GET/POST/...”，
-  // 真实的路由命中与输入校验都在下游 oRPC handler 中完成。
-  app.on([...API_METHODS], `${apiPrefix}/*`, (c, next) => handleORPC(c, next, apiPrefix, handler, createContext, prepareTransport))
-}
-
-async function handleORPC(
-  c: HonoContext,
-  next: Next,
-  prefix: `/${string}`,
-  handler: OpenAPIHandler<ServContext>,
-  createContext: CreateServContext,
-  prepareTransport: ReturnType<typeof createTransportRoutePreparer>,
-): Promise<Response | void> {
-  // Step A：为本次请求创建 ServContext（可能只含元数据，也可能已带 session）。
-  const resolvedContext = await createContext({
-    request: c.req.raw,
-    remoteAddress: readRemoteAddress(c.env),
-  })
-  const context = prepareTransport && resolvedContext.request !== c.req.raw
-    ? { ...resolvedContext, request: c.req.raw }
-    : resolvedContext
-  // 文件和 SSE 在解码正文前校验宿主策略、身份及字节范围。
-  const request = await prepareTransport?.prepare(c.req.raw, context) ?? c.req.raw
-  if (request instanceof Response)
-    return request
-
-  // Step B：交给 oRPC handler 做 contract 匹配 + procedure 执行。
-  const { matched, response } = await core.context.run({ requestId: context.requestId, userId: context.session?.userId, scopeId: context.scopeId }, () => handler.handle(request, { prefix, context }))
-  const isPrivate = isPrivateResponse(context)
-  if (!matched) {
-    // Step C：当前前缀下没有匹配路由，继续交给 Hono 后续路由处理。
-    await next()
-    return
-  }
-  // Step D：若命中的是输入校验错误，这里统一改写成本地化的 HaiResult 失败体。
-  const result = await localizeValidationResponse(response, c.req.raw.headers)
-  if (isPrivate) {
-    result.headers.set('Cache-Control', 'no-store')
-    result.headers.set('X-Content-Type-Options', 'nosniff')
-    const disposition = result.headers.get('Content-Disposition')
-    if (disposition?.startsWith('inline;'))
-      result.headers.set('Content-Disposition', `attachment${disposition.slice('inline'.length)}`)
-  }
-  return result
-}
-
-/**
- * 拦截 oRPC 输入校验失败响应，重写为带 i18n 与 `errors[]` 的标准 HaiResult 失败体。
- *
- * 触发条件（保守判断，避免误伤业务自定义错误）：
- * - status === 400
- * - body 为 oRPC ORPCError JSON 形态：`{ defined, code, status, message, data }`
- * - `code === 'BAD_REQUEST'` 且 `data.issues` 存在
- *
- * 不符合上述条件的响应原样透传，确保业务层主动抛出的 BAD_REQUEST 不被改写。
- */
-async function localizeValidationResponse(response: Response, requestHeaders: Headers): Promise<Response> {
-  if (response.status !== 400)
-    return response
-  const contentType = response.headers.get('content-type') ?? ''
-  if (!contentType.includes('application/json'))
-    return response
-
-  // 克隆响应再读取，避免破坏调用方对 response 的潜在二次消费。
-  let payload: unknown
-  try {
-    payload = await response.clone().json()
-  }
-  catch {
-    return response
-  }
-
-  if (!isOrpcValidationErrorPayload(payload))
-    return response
-
-  const issues = payload.data.issues
-  const locale = resolveRequestLocale(requestHeaders)
-  const errors = localizeZodError({ issues }, locale)
-  // 与 `validateInputOrFail` 一致，客户端从 `error.cause` 读取字段错误。
-  const body: ServValidationFailureBody = {
-    success: false,
-    error: {
-      code: HaiCommonError.VALIDATION_ERROR.code,
-      traceId: core.context.get().traceId ?? core.context.get().requestId,
-      message: core.error.formatMessage({
-        message: servM('serv_validationFailed', { locale }),
-        traceId: core.context.get().traceId ?? core.context.get().requestId,
-      }),
-      httpStatus: HaiCommonError.VALIDATION_ERROR.httpStatus,
-      system: HaiCommonError.VALIDATION_ERROR.system,
-      module: HaiCommonError.VALIDATION_ERROR.module,
-      cause: errors,
-    },
-  }
-
-  // 保留原响应头（其中可能包含安全头），仅替换 body 与 status。
-  const headers = new Headers(response.headers)
-  headers.set('content-type', 'application/json; charset=utf-8')
-  return new Response(JSON.stringify(body), {
-    status: HaiCommonError.VALIDATION_ERROR.httpStatus,
-    headers,
-  })
-}
-
-/**
- * 内部 oRPC 输入校验错误形状；运行时检查后才转为安全的本地化字段错误。
- *
- * @example
- * ```ts
- * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
- * const payload: OrpcValidationErrorPayload = { defined: false, code: 'BAD_REQUEST', status: 400, message: 'Validation failed', data: { issues: [] } }
- * const recognized = isOrpcValidationErrorPayload(payload)
- *```
- */
-interface OrpcValidationErrorPayload {
-  readonly defined: boolean
-  readonly code: string
-  readonly status: number
-  readonly message: string
-  readonly data: { readonly issues: unknown[] }
-}
-
-function isOrpcValidationErrorPayload(value: unknown): value is OrpcValidationErrorPayload {
-  if (!value || typeof value !== 'object')
-    return false
-  const obj = value as Record<string, unknown>
-  if (obj.code !== 'BAD_REQUEST')
-    return false
-  if (typeof obj.status !== 'number' || obj.status !== 400)
-    return false
-  const data = obj.data
-  if (!data || typeof data !== 'object')
-    return false
-  const issues = (data as Record<string, unknown>).issues
-  return Array.isArray(issues)
 }

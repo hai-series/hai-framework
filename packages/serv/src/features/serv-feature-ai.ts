@@ -32,7 +32,7 @@ const aiContract = apiContract.ai
  *
  * @example
  * ```ts
- * import type { AiObjectAuthorizationRequest } from '@h-ai/serv/features/ai'
+ * import type { AiObjectAuthorizationRequest } from '@h-ai/serv'
  *
  * const authorize = ({ context, operation }: AiObjectAuthorizationRequest) =>
  *   operation === 'history' && context.session.permissions.includes('ai.history.manage')

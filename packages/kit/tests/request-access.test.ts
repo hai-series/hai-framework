@@ -5,8 +5,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { cache } from '@h-ai/cache'
-import { HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
+import { redirect as svelteKitRedirect } from '@sveltejs/kit'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
 
@@ -42,28 +43,30 @@ afterEach(() => vi.restoreAllMocks())
 
 it('策略按实际带前缀路径和每次请求的时间判断，窗口结束后不放过已有会话', async () => {
   const clock = vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-26T09:59:59Z').getTime())
-  const verifyToken = vi.fn().mockResolvedValue({
+  const verifyToken = vi.fn().mockResolvedValue(core.ok({
     userId: 'member',
     roles: ['user'],
     permissions: [],
-  })
+  }))
   const handle = kit.createHandle({
     logging: false,
     auth: { verifyToken },
-    access: {
-      rules: [
-        {
-          id: 'office',
-          paths: ['/yyy/api/external/**'],
-          windows: [
-            {
-              days: [1],
-              start: '09:00',
-              end: '10:00',
-            },
-          ],
-        },
-      ],
+    http: {
+      access: {
+        rules: [
+          {
+            id: 'office',
+            paths: ['/yyy/api/external/**'],
+            windows: [
+              {
+                days: [1],
+                start: '09:00',
+                end: '10:00',
+              },
+            ],
+          },
+        ],
+      },
     },
   })
   const request = () => new Request('https://example.test/yyy/api/external/sync', {
@@ -84,13 +87,53 @@ it('策略按实际带前缀路径和每次请求的时间判断，窗口结束�
   expect((await dispatch(handle, new Request('https://example.test/health'))).status).toBe(200)
 })
 
+it('页面数据请求同时遵守实际数据端点和页面的访问策略', async () => {
+  const handle = kit.createHandle({
+    logging: false,
+    http: {
+      access: {
+        rules: [
+          {
+            id: 'reports',
+            paths: ['/console/reports'],
+            allowIps: ['192.0.2.0/24'],
+          },
+          {
+            id: 'report-data',
+            paths: ['/console/reports/__data.json'],
+            allowIps: ['192.0.2.10', '198.51.100.10'],
+          },
+        ],
+      },
+    },
+  })
+  const resolve = vi.fn(() => Response.json({ ready: true }))
+  const loadReportData = (ip: string) => handle({
+    event: {
+      ...event(new Request('https://example.test/console/reports/__data.json'), ip),
+      url: new URL('https://example.test/console/reports'),
+      isDataRequest: true,
+    },
+    resolve,
+  })
+
+  const allowed = await loadReportData('192.0.2.10')
+  expect(allowed.status).toBe(200)
+  expect(await allowed.json()).toEqual({ ready: true })
+  expect((await loadReportData('192.0.2.20')).status).toBe(403)
+  expect((await loadReportData('198.51.100.10')).status).toBe(403)
+  expect(resolve).toHaveBeenCalledOnce()
+})
+
 it('可信代理解析后，业务 getClientAddress 与策略使用相同地址；伪造和无效链被拒绝', async () => {
   const handle = kit.createHandle({
     logging: false,
-    trustedProxies: ['192.0.2.1'],
-    access: {
-      global: {
-        allowIps: ['198.51.100.10'],
+    http: {
+      trustedProxies: ['192.0.2.1'],
+      access: {
+        global: {
+          allowIps: ['198.51.100.10'],
+        },
       },
     },
   })
@@ -117,7 +160,9 @@ it('保留宿主只读事件，通过事件视图向后续处理传递可信地�
   Object.freeze(original)
   const handle = kit.createHandle({
     logging: false,
-    trustedProxies: ['192.0.2.1'],
+    http: {
+      trustedProxies: ['192.0.2.1'],
+    },
   })
   const response = await handle({
     event: original,
@@ -138,12 +183,16 @@ it('文件只在创建 Handle 时读取，文件无效时不产生可处理业�
   const file = path.join(directory, 'access.yaml')
   try {
     expect(() => kit.createHandle({
-      access: { file },
+      http: {
+        access: { file },
+      },
     })).toThrow(/policy file could not be read/)
     await writeFile(file, 'global: {allowIps: [192.0.2.10]}\n')
     const handle = kit.createHandle({
       logging: false,
-      access: { file },
+      http: {
+        access: { file },
+      },
     })
     expect((await dispatch(handle, new Request('https://example.test/api/external'))).status).toBe(403)
     await writeFile(file, 'rules: []\n')
@@ -154,14 +203,16 @@ it('文件只在创建 Handle 时读取，文件无效时不产生可处理业�
 
 it('路径可选择明文或强制加密，IP/时间继续生效，明确规则优先于默认范围和排除列表', async () => {
   expect(() => kit.createHandle({
-    access: {
-      rules: [
-        {
-          id: 'required',
-          paths: ['/api/private'],
-          encryption: 'required',
-        },
-      ],
+    http: {
+      access: {
+        rules: [
+          {
+            id: 'required',
+            paths: ['/api/private'],
+            encryption: 'required',
+          },
+        ],
+      },
     },
   })).toThrow(/transport is not configured/)
   expect((await crypto.init()).success).toBe(true)
@@ -171,38 +222,38 @@ it('路径可选择明文或强制加密，IP/时间继续生效，明确规则�
   const clock = vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-26T09:59:59Z').getTime())
   const handle = kit.createHandle({
     logging: false,
-    access: {
-      rules: [
-        {
-          id: 'partner',
-          paths: ['/api/partner/**'],
-          encryption: 'disabled',
-          allowIps: ['198.51.100.10'],
-          windows: [
-            {
-              days: [1],
-              start: '09:00',
-              end: '10:00',
-            },
-          ],
-        },
-        {
-          id: 'custom-json',
-          paths: ['/custom-json'],
-          encryption: 'required',
-        },
-      ],
-    },
-    crypto: {
-      crypto,
-      transport: {
-        serverKeyRing: {
-          activeKeyId: 'v1',
-          keys: { v1: pair.data },
-        },
-        keyStore: crypto.transport.createKeyStore({ cache }),
-        excludePaths: ['/custom-json'],
+    http: {
+      access: {
+        rules: [
+          {
+            id: 'partner',
+            paths: ['/api/partner/**'],
+            encryption: 'disabled',
+            allowIps: ['198.51.100.10'],
+            windows: [
+              {
+                days: [1],
+                start: '09:00',
+                end: '10:00',
+              },
+            ],
+          },
+          {
+            id: 'custom-json',
+            paths: ['/custom-json'],
+            encryption: 'required',
+          },
+        ],
       },
+    },
+    transport: {
+      crypto,
+      serverKeyRing: {
+        activeKeyId: 'v1',
+        keys: { v1: pair.data },
+      },
+      keyStore: crypto.transport.createKeyStore({ cache }),
+      excludePaths: ['/custom-json'],
     },
   })
   const resolve = (event: RequestEvent) => Response.json({
@@ -211,7 +262,7 @@ it('路径可选择明文或强制加密，IP/时间继续生效，明确规则�
   })
   let encrypted = false
   const client = crypto.transport.createClient({
-    keyExchangeUrl: 'https://example.test/api/_hai/key-exchange',
+    keyExchangeUrl: 'https://example.test/api/v1/_hai/key-exchange',
     fetch: async (input, init) => {
       const response = await dispatch(handle, new Request(input, init), '198.51.100.10', resolve)
       if (new URL(String(input)).pathname === '/custom-json')
@@ -253,17 +304,19 @@ it('路径可选择明文或强制加密，IP/时间继续生效，明确规则�
 it('明文端点不绕过身份守卫，未启用宿主加密时也拒绝传输信封', async () => {
   const handle = kit.createHandle({
     logging: false,
-    access: {
-      rules: [
-        {
-          id: 'plain',
-          paths: ['/api/private'],
-          encryption: 'disabled',
-        },
-      ],
+    http: {
+      access: {
+        rules: [
+          {
+            id: 'plain',
+            paths: ['/api/private'],
+            encryption: 'disabled',
+          },
+        ],
+      },
     },
     auth: {
-      verifyToken: async () => null,
+      verifyToken: async () => core.err(HaiCommonError.UNAUTHORIZED),
       protectedPaths: ['/api/private'],
     },
   })
@@ -292,20 +345,26 @@ it('真实加密请求的策略拒绝仍可解密，密钥交换与预检也执�
   }
   const handle = kit.createHandle({
     logging: false,
-    access: {
-      rules: [
-        {
-          id: 'external',
-          paths: ['/api/external'],
-          allowIps: ['192.0.2.10'],
-        },
-      ],
+    cors: {
+      origin: 'https://console.test',
+      paths: ['/api/external'],
     },
-    crypto: { crypto, transport },
+    http: {
+      access: {
+        rules: [
+          {
+            id: 'external',
+            paths: ['/api/external'],
+            allowIps: ['192.0.2.10'],
+          },
+        ],
+      },
+    },
+    transport: { crypto, ...transport },
   })
   let encrypted = false
   const client = crypto.transport.createClient({
-    keyExchangeUrl: 'https://example.test/api/_hai/key-exchange',
+    keyExchangeUrl: 'https://example.test/api/v1/_hai/key-exchange',
     fetch: async (input, init) => {
       const response = await dispatch(handle, new Request(input, init))
       if (response.status === 403) {
@@ -324,21 +383,135 @@ it('真实加密请求的策略拒绝仍可解密，密钥交换与预检也执�
     expect(await response.json()).toMatchObject({
       error: { code: 'hai:common:104', traceId: 'policy-kit-1' },
     })
-    expect((await dispatch(handle, new Request('https://example.test/api/external', { method: 'OPTIONS' }))).status).toBe(403)
+    expect((await dispatch(handle, new Request('https://example.test/api/external', {
+      method: 'OPTIONS',
+      headers: { 'origin': 'https://console.test', 'access-control-request-method': 'GET' },
+    }))).status).toBe(403)
     const global = kit.createHandle({
       logging: false,
-      access: {
-        global: {
-          allowIps: ['192.0.2.10'],
+      http: {
+        access: {
+          global: {
+            allowIps: ['192.0.2.10'],
+          },
         },
       },
-      crypto: { crypto, transport },
+      transport: { crypto, ...transport },
     })
-    const handshake = await dispatch(global, new Request('https://example.test/api/_hai/key-exchange', { method: 'POST', body: '{}' }))
+    const handshake = await dispatch(global, new Request('https://example.test/api/v1/_hai/key-exchange', { method: 'POST', body: '{}' }))
     expect(handshake.status).toBe(403)
     expect(await handshake.json()).toMatchObject({
       error: { code: 'hai:common:104' },
     })
+  }
+  finally {
+    client.destroy()
+    await crypto.close()
+  }
+})
+
+it.each(['Kit 守卫', 'SvelteKit 控制流', '附带 Cookie 的响应'])('页面数据的登录跳转使用认证响应，普通页面保留跳转行为（%s）', async (source) => {
+  expect((await crypto.init()).success).toBe(true)
+  const pair = crypto.asymmetric.generateKeyPair()
+  if (!pair.success)
+    throw new Error(pair.error.message)
+  const verifyToken = vi.fn(async () => source === 'Kit 守卫'
+    ? core.err(HaiCommonError.UNAUTHORIZED)
+    : core.ok({ userId: 'member', roles: [], permissions: [] }))
+  const handle = kit.createHandle({
+    logging: false,
+    auth: {
+      verifyToken,
+      protectedPaths: ['/reports'],
+      loginUrl: '/auth/login',
+    },
+    http: {
+      rateLimit: {
+        maxRequests: 2,
+        store: core.access.createMemoryRateLimitStore(),
+      },
+    },
+    transport: {
+      crypto,
+      serverKeyRing: {
+        activeKeyId: 'v1',
+        keys: { v1: pair.data },
+      },
+      keyStore: crypto.transport.createKeyStore({ cache }),
+    },
+  })
+  const pageUrl = 'https://example.test/reports?quarter=2'
+  const dataUrl = 'https://example.test/reports/__data.json?quarter=2'
+  const loginUrl = `/auth/login?returnUrl=${encodeURIComponent('/reports?quarter=2')}`
+  const cookies = ['notice=delivered; Path=/; HttpOnly', 'view=compact; Path=/']
+  const resolve = vi.fn(() => {
+    if (source === 'SvelteKit 控制流')
+      svelteKitRedirect(302, loginUrl)
+    const headers = new Headers({ Location: loginUrl })
+    for (const cookie of cookies)
+      headers.append('Set-Cookie', cookie)
+    return new Response(null, { status: 302, headers })
+  })
+  const client = crypto.transport.createClient({
+    keyExchangeUrl: 'https://example.test/api/v1/_hai/key-exchange',
+    fetch: async (input, init) => {
+      const request = new Request(input, init)
+      if (request.url !== dataUrl)
+        return dispatch(handle, request)
+      const response = await handle({
+        event: {
+          ...event(request),
+          url: new URL(pageUrl),
+          isDataRequest: true,
+          route: { id: '/reports' },
+        },
+        resolve,
+      })
+      expect(response.headers.get('x-encrypted')).toBe('true')
+      expect(response.headers.get('location')).toBeNull()
+      return response
+    },
+  })
+  try {
+    const auth = {
+      headers: { authorization: 'Bearer fixture' },
+    }
+    const redirect = await client.encryptedFetch(dataUrl, auth)
+    expect(redirect.status).toBe(200)
+    expect(redirect.headers.get('cache-control')).toBe('private, no-store')
+    expect(redirect.headers.get('x-request-id')).toMatch(/^req_/)
+    expect(redirect.headers.getSetCookie()).toEqual(source === '附带 Cookie 的响应'
+      ? cookies
+      : [])
+    expect(await redirect.json()).toEqual({ type: 'redirect', status: 302, location: loginUrl })
+
+    const limited = await client.encryptedFetch(dataUrl, auth)
+    expect(limited.status).toBe(429)
+    expect(limited.headers.get('retry-after')).toMatch(/^[1-9]\d*$/)
+    expect(await limited.json()).toMatchObject({
+      error: { code: HaiCommonError.RATE_LIMIT_EXCEEDED.code },
+    })
+    expect(verifyToken).toHaveBeenCalledOnce()
+    expect(resolve).toHaveBeenCalledTimes(source === 'Kit 守卫'
+      ? 0
+      : 1)
+
+    const document = await handle({
+      event: {
+        ...event(new Request(pageUrl), '127.0.0.2'),
+        route: { id: '/reports' },
+      },
+      resolve,
+    })
+    expect(document.status).toBe(302)
+    expect(document.headers.get('location')).toBe(loginUrl)
+
+    if (source === 'SvelteKit 控制流') {
+      await expect(handle({
+        event: event(new Request(pageUrl, auth), '127.0.0.3'),
+        resolve,
+      })).rejects.toMatchObject({ status: 302, location: loginUrl })
+    }
   }
   finally {
     client.destroy()
@@ -353,4 +526,18 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await cache.close()
+})
+
+it('运行时拒绝旧 Handle 配置，避免未迁移的策略被忽略', () => {
+  const oldHttp = {
+    logging: false,
+    access: { file: './config/policy.yml' },
+  }
+  expect(() => kit.createHandle(oldHttp)).toThrow('Use http.trustedProxies and http.access')
+
+  const oldTransport = {
+    logging: false,
+    crypto: { crypto, transport: false },
+  }
+  expect(() => kit.createHandle(oldTransport)).toThrow('Use top-level transport')
 })

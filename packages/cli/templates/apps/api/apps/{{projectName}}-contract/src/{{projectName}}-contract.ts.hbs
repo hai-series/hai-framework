@@ -12,7 +12,14 @@ export const {{api.contractExportName}} = frameworkApiContract.create({
   storage: frameworkApiContract.storage,
 {{/if}}
 {{#if features.ai}}
+{{#if features.iam}}
+  ai: {
+    ...frameworkApiContract.ai,
+    audio: { issueTicket: frameworkApiContract.extensions.ai.audio.issueTicket },
+  },
+{{else}}
   ai: frameworkApiContract.ai,
+{{/if}}
 {{/if}}
 {{#if features.feedback}}
   feedback: frameworkApiContract.feedback,

@@ -67,9 +67,31 @@ describe('resolveServHttpConfig', () => {
   it('returns sane defaults when input omitted', () => {
     const config = resolveServHttpConfig()
     expect(config.apiPrefix).toBe('/api/v1')
+    expect(config.rateLimit).toBe(false)
     expect(config.openapi).toBe(false)
     expect(config.docs).toBe(false)
     expect(config.health).toEqual({ path: '/health', readyPath: '/ready' })
+  })
+
+  it('限流由 HTTP 配置启用，保留显式上限并填充窗口', () => {
+    expect(ServConfigSchema.parse({
+      http: {
+        rateLimit: { maxRequests: 2 },
+      },
+    }).http.rateLimit).toEqual({
+      maxRequests: 2,
+      windowMs: 60_000,
+    })
+    expect(ServConfigSchema.safeParse({
+      http: {
+        rateLimit: { windowMs: 0 },
+      },
+    }).success).toBe(false)
+    expect(ServConfigSchema.safeParse({
+      http: {
+        rateLimit: { store: {} },
+      },
+    }).success).toBe(false)
   })
 
   it('accepts partial overrides and fills defaults', () => {
@@ -127,18 +149,10 @@ describe('resolveServHttpConfig', () => {
     expect(config.http.apiPrefix).toBe('/api/v1')
     expect(config.http.docs).toEqual({ path: '/docs' })
     expect(config.http.health).toEqual({ path: '/health', readyPath: '/ready' })
-    expect(config.cors).toEqual({
-      allowedHeaders: [
-        'Authorization',
-        'Content-Type',
-        'X-Requested-With',
-        'X-Hai-Reauthentication',
-        'X-Hai-Terminal',
-      ],
-      exposedHeaders: [],
-      credentials: false,
-    })
+    expect(config.cors).toBe(false)
     expect(config.transport).toBe(false)
+    expect(config.a2a).toBe(false)
+    expect(config.audio).toBe(false)
   })
 
   it('parses cross-client CORS headers from _serv.yml config', () => {
@@ -152,11 +166,35 @@ describe('resolveServHttpConfig', () => {
       },
     })
 
-    expect(config.cors.origin).toBe('https://app.example.com')
-    expect(config.cors.nativeOrigins).toBe('capacitor://localhost,tauri://localhost')
-    expect(config.cors.allowedHeaders).toContain('X-Client-Id')
-    expect(config.cors.exposedHeaders).toEqual(['X-Encrypted'])
-    expect(config.cors.credentials).toBe(true)
+    expect(config.cors).toMatchObject({
+      origin: 'https://app.example.com',
+      nativeOrigins: 'capacitor://localhost,tauri://localhost',
+      allowedHeaders: ['Authorization', 'X-Client-Id'],
+      exposedHeaders: ['X-Encrypted'],
+      credentials: true,
+    })
+    expect(ServConfigSchema.safeParse({
+      cors: { origin: '*', credentials: true },
+    }).success).toBe(false)
+  })
+
+  it('a2A 保留站点端点，语音在业务前缀下解析默认端点', () => {
+    const config = ServConfigSchema.parse({
+      http: { apiPrefix: '/custom/api' },
+      a2a: {},
+      audio: {},
+    })
+    expect(config.a2a).toEqual({ cardPath: '/.well-known/agent-card.json', rpcPath: '/a2a' })
+    expect(config.audio).toEqual({ path: '/custom/api/ai/audio' })
+    expect(ServConfigSchema.parse({
+      audio: { path: '/voice/socket' },
+    }).audio).toEqual({ path: '/voice/socket' })
+    expect(ServConfigSchema.safeParse({
+      audio: { path: '/voice/socket?mode=debug' },
+    }).success).toBe(false)
+    expect(ServConfigSchema.safeParse({
+      a2a: { cardPath: '/a2a' },
+    }).success).toBe(false)
   })
 
   it('fills transport defaults from _serv.yml config', () => {
@@ -165,8 +203,19 @@ describe('resolveServHttpConfig', () => {
     })
 
     expect(config.transport).toEqual({
-      keyExchangePath: '/_hai/key-exchange',
+      keyExchangePath: '/api/v1/_hai/key-exchange',
       excludePaths: [],
     })
+  })
+
+  it('保留独立于 API 前缀的密钥协商路径', () => {
+    const transport = { keyExchangePath: '/gateway/key-exchange' }
+    expect(ServConfigSchema.parse({
+      http: { apiPrefix: '/custom/api' },
+      transport,
+    }).transport).toMatchObject(transport)
+    expect(ServConfigSchema.safeParse({
+      transport: { keyExchangePath: '/gateway/key-exchange?mode=debug' },
+    }).success).toBe(false)
   })
 })

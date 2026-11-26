@@ -45,7 +45,10 @@ const application = serv.createApp({
     docs: false,
   },
 })
-const handle = kit.createHandle({ logging: false, access: policy, trustedProxies: 'auto' })
+const handle = kit.createHandle({
+  logging: false,
+  http: { access: policy, trustedProxies: 'auto' },
+})
 const backend = createServer(async (incoming, outgoing) => {
   try {
     const headers = new Headers()

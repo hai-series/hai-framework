@@ -4,6 +4,7 @@ import type { JsonifiedClient } from '@orpc/openapi-client'
 import type { TokenManager } from './api-client-auth.js'
 import type { ApiClientConfig } from './api-client-types.js'
 import { core } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 import { createORPCClient, ORPCError } from '@orpc/client'
 import { OpenAPILink } from '@orpc/openapi-client/fetch'
 import { createHttpOnlyCookieTokenStorage, createTokenManager } from './api-client-auth.js'
@@ -75,12 +76,11 @@ export function buildTokenManager(config: ApiClientConfig, transport: TransportC
 export function buildTransportSession(config: ApiClientConfig): TransportClient | undefined {
   if (!config.transport)
     return undefined
+  const { keyExchangePath = crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH } = config.transport
+  if (!crypto.transport.isKeyExchangePath(keyExchangePath))
+    throw new TypeError(apiClientM('apiClient_invalidKeyExchangePath'))
   const baseFetch = config.fetch ?? globalThis.fetch.bind(globalThis)
-  const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
-  const path = config.transport.keyExchangePath ?? '/_hai/key-exchange'
-  const keyExchangeUrl = `${baseUrl}${path.startsWith('/')
-    ? path
-    : `/${path}`}`
+  const keyExchangeUrl = new URL(keyExchangePath, config.baseUrl).href
   return config.transport.crypto.transport.createClient({ keyExchangeUrl, fetch: baseFetch, maxPlaintextBytes: config.transport.maxPlaintextBytes })
 }
 

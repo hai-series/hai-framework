@@ -111,9 +111,12 @@ it('自定义路由和 CORS 预检同样受策略约束，拒绝响应保留跨�
     ],
   })
   for (const method of ['GET', 'OPTIONS']) {
+    const headers = new Headers({ origin: 'https://client.test' })
+    if (method === 'OPTIONS')
+      headers.set('access-control-request-method', 'GET')
     const response = await app.fetch(new Request('https://example.test/early', {
       method,
-      headers: { origin: 'https://client.test' },
+      headers,
     }), { remoteAddress: '198.51.100.10' })
     expect(response.status).toBe(403)
     expect(response.headers.get('access-control-allow-origin')).toBe('https://client.test')

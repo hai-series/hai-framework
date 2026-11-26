@@ -29,8 +29,8 @@ it('账号与角色的管理权限受资源范围限制，创建及吊销使用�
         operations: ['iam.apiKeys.create', 'iam.apiKeys.delete', 'iam.roles.replacePermissions'],
       },
     }))
-    const actor = dataOf(await iam.user.createUser({ username: 'iam-extension-owner', password })).user
-    const privateUser = dataOf(await iam.user.createUser({ username: 'iam-extension-unmanaged', password })).user
+    const actor = dataOf(await iam.user.createUser({ username: 'iam-management-owner', password })).user
+    const privateUser = dataOf(await iam.user.createUser({ username: 'iam-management-unmanaged', password })).user
     const permissions = await Promise.all([
       'iam.apiKeys.read',
       'iam.apiKeys.write',
@@ -40,8 +40,8 @@ it('账号与角色的管理权限受资源范围限制，创建及吊销使用�
     ].map(async code => dataOf(await iam.authz.createPermission({ code, name: code }))))
     const otherPermission = dataOf(await iam.authz.createPermission({ code: 'reports:delete', name: 'Delete report' }))
     const ownerRole = dataOf(await iam.authz.createRole({
-      code: 'extension-admin',
-      name: 'Extension admin',
+      code: 'management-admin',
+      name: 'Management admin',
       permissionIds: permissions.map(permission => permission.id),
     }))
     const managedRole = dataOf(await iam.authz.createRole({ code: 'managed-reader', name: 'Managed reader' }))
@@ -51,10 +51,10 @@ it('账号与角色的管理权限受资源范围限制，创建及吊销使用�
     let createCacheControl: string | null = null
     const app = serv.createApp({
       contract,
-      iam,
+      auth: { iam },
       procedures: {
         iam: serv.createIamProcedures({ iam }),
-        iamManagement: serv.createIamExtensionProcedures({
+        iamManagement: serv.createIamManagementProcedures({
           iam,
           authorize: request => 'userId' in request
             ? request.userId === request.context.session.userId
@@ -63,7 +63,7 @@ it('账号与角色的管理权限受资源范围限制，创建及吊销使用�
       },
     })
     dataOf(await client.init({
-      baseUrl: 'https://extensions.example/api/v1',
+      baseUrl: 'https://iam-admin.example/api/v1',
       auth: {
         storage: apiClient.tokenStorage.memory(),
       },

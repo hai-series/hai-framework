@@ -22,7 +22,7 @@ import process from 'node:process'
  */
 export interface ServRuntimeSecurityPolicyInput {
   readonly environment?: string
-  readonly corsOrigin?: string
+  readonly corsOrigin?: false | string | readonly string[]
   readonly nativeOrigins?: string
 }
 
@@ -70,7 +70,7 @@ export function createRuntimeSecurityPolicy(
   const configuredNativeOrigins = parseNativeOrigins(input.nativeOrigins)
   const allowsEveryOrigin = configuredOrigins === '*'
 
-  if (production && (allowsEveryOrigin || configuredOrigins.length === 0))
+  if (production && input.corsOrigin !== false && (allowsEveryOrigin || configuredOrigins.length === 0))
     throw new Error('serv.cors.origin must contain explicit HTTP(S) origins in production')
 
   const allowedOrigins = allowsEveryOrigin
@@ -110,11 +110,16 @@ export function resolveSecureRefreshCookie(defaultSecure: boolean): boolean {
   return defaultSecure
 }
 
-function parseOrigins(value: string | undefined): '*' | string[] {
-  const entries = (value ?? '*').split(',').map(origin => origin.trim()).filter(Boolean)
-  if (entries.includes('*'))
+function parseOrigins(value: ServRuntimeSecurityPolicyInput['corsOrigin']): '*' | string[] {
+  if (value === false)
+    return []
+  const entries = typeof value === 'string'
+    ? value.split(',')
+    : value ?? ['*']
+  const origins = entries.map(origin => origin.trim()).filter(Boolean)
+  if (origins.includes('*'))
     return '*'
-  return entries.map(normalizeWebOrigin)
+  return origins.map(normalizeWebOrigin)
 }
 
 function parseNativeOrigins(value: string | undefined): string[] {

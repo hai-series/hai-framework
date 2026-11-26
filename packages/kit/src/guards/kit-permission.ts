@@ -6,6 +6,7 @@
  */
 
 import type { GuardResult, RouteGuard, SessionLike } from '../kit-types.js'
+import { core } from '@h-ai/core'
 import { kitM } from '../kit-i18n.js'
 
 /**
@@ -100,32 +101,13 @@ export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
  * ```ts
  * import { kit } from '@h-ai/kit'
  *
- * const allowed = kit.matchPermission('article:read', ['article:*'])
- * void allowed
+ * // 按页面已有的权限列表决定是否显示文章列表链接。
+ * const showArticleList = kit.guard.matchPermission('article:read', ['article:*'])
+ * void showArticleList
  * ```
  */
 export function matchPermission(required: string, userPermissions: string[]): boolean {
-  for (const userPerm of userPermissions) {
-    // 完全匹配
-    if (userPerm === required) {
-      return true
-    }
-
-    // 用户有超级权限
-    if (userPerm === '*') {
-      return true
-    }
-
-    // 通配符匹配
-    if (userPerm.endsWith(':*')) {
-      const prefix = userPerm.slice(0, -1) // 移除 *
-      if (required.startsWith(prefix)) {
-        return true
-      }
-    }
-  }
-
-  return false
+  return core.auth.matchPermission(required, userPermissions)
 }
 
 /**

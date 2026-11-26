@@ -78,7 +78,11 @@ test('挂载目录下资源、运行配置、认证和刷新保持有效', async
     expect(runtime.headers()['cache-control']).toBe('no-store')
     await page.goto(`${prefix}/`)
     await expect(page.getByTestId('login-form')).toBeVisible()
-    expect(await page.evaluate(() => (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiBase?: string } }).__HAI_PUBLIC_CONFIG__?.apiBase)).toBe(`${new URL(page.url()).origin}${prefix}/api/v1`)
+    const publicConfig = await page.evaluate(() => Reflect.get(globalThis, '__HAI_PUBLIC_CONFIG__'))
+    expect(publicConfig).toMatchObject({
+      apiBase: `${new URL(page.url()).origin}${prefix}/api/v1`,
+      apiKeyExchangePath: `${prefix}/auth/key-exchange`,
+    })
     expect((await request.get('/api/v1/auth/me')).status()).toBe(404)
     expect((await request.get('/health')).status()).toBe(404)
     expect((await page.reload())?.status()).toBe(200)

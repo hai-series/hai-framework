@@ -6,7 +6,7 @@ import { storage } from '@h-ai/storage'
 import { createAppProcedures } from './app-procedures.js'
 
 /** 创建 API Service 的应用级 procedures。 */
-export function createApiServiceProcedures(deps: { app: AppProcedureDeps }) {
+export function createApiServiceProcedures(deps: { app: AppProcedureDeps, audio: ReturnType<typeof serv.createIamAudio> }) {
   return {
     iam: serv.createIamProcedures({ iam }),
     storage: serv.createStorageProcedures({
@@ -15,7 +15,10 @@ export function createApiServiceProcedures(deps: { app: AppProcedureDeps }) {
         key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
     }),
     // AI 默认绑定可信 session.userId，跨主体访问需另行提供 authorizeObject 策略。
-    ai: serv.createAiProcedures({ ai }),
+    ai: {
+      ...serv.createAiProcedures({ ai }),
+      audio: { issueTicket: deps.audio.issueTicket },
+    },
     app: createAppProcedures(deps.app),
   }
 }

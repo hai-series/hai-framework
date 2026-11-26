@@ -4,22 +4,23 @@ import type { ServContext } from '../serv-context.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
 import { apiContract } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
+import { requireSensitiveOperation } from '../pipelines/serv-pipeline-guard.js'
 import { servM } from '../serv-i18n.js'
 import { markServResponsePrivate } from '../serv-route-transport.js'
 import { implement } from '../serv-router.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
 
 /**
- * IAM 扩展的资源授权请求。上下文来自已验证会话，账号或角色 ID 是待授权的目标。
+ * IAM 管理的资源授权请求。上下文来自已验证会话，账号或角色 ID 是待授权的目标。
  * @example
  * ```ts
- * import type { IamExtensionAccessRequest } from '@h-ai/serv'
- * function canManage(request: IamExtensionAccessRequest) {
+ * import type { IamManagementAccessRequest } from '@h-ai/serv'
+ * function canManage(request: IamManagementAccessRequest) {
  *   return 'userId' in request && request.userId === request.context.session.userId
  * }
  * ```
  */
-export type IamExtensionAccessRequest = {
+export type IamManagementAccessRequest = {
   readonly operation: 'listApiKeys' | 'createApiKey' | 'getApiKey' | 'revokeApiKey'
   readonly context: AuthenticatedServContext
   readonly userId: string
@@ -30,19 +31,19 @@ export type IamExtensionAccessRequest = {
 }
 
 /**
- * IAM 扩展工厂的依赖。应用必须按自己的账号、角色和租户范围授权目标。
+ * IAM 管理工厂的依赖。应用必须按自己的账号、角色和租户范围授权目标。
  * @example
  * ```ts
- * import type { IamExtensionProcedureDeps } from '@h-ai/serv'
+ * import type { IamManagementProcedureDeps } from '@h-ai/serv'
  * import { iam } from '@h-ai/iam'
- * const deps: IamExtensionProcedureDeps = { iam, authorize: request => 'userId' in request && request.userId === request.context.session.userId }
+ * const deps: IamManagementProcedureDeps = { iam, authorize: request => 'userId' in request && request.userId === request.context.session.userId }
  * void deps
  * ```
  */
-export interface IamExtensionProcedureDeps {
+export interface IamManagementProcedureDeps {
   readonly iam: IamFunctions
   /** 只有返回 true 才允许访问目标账号或角色。 */
-  readonly authorize: (request: IamExtensionAccessRequest) => boolean | Promise<boolean>
+  readonly authorize: (request: IamManagementAccessRequest) => boolean | Promise<boolean>
 }
 
 function forbidden({ locale }: ServContext): HaiResult<never> {
@@ -63,24 +64,22 @@ function canDelegate(context: AuthenticatedServContext, code: string): boolean {
  * @param deps - 已初始化的 IAM 和应用提供的目标授权规则。
  * @param deps.iam - 已初始化的 IAM 模块。
  * @param deps.authorize - 当前会话对目标账号或角色的资源授权策略。
- * @returns 可组装进 `serv.createApp` 的 IAM 扩展 router。
+ * @returns 可组装进 `serv.createApp` 的 IAM 管理 router。
  * @example
  * ```ts
  * import { iam } from '@h-ai/iam'
  * import { serv } from '@h-ai/serv'
- * const procedures = serv.createIamExtensionProcedures({ iam, authorize: request => 'userId' in request && request.userId === request.context.session.userId })
+ * const procedures = serv.createIamManagementProcedures({ iam, authorize: request => 'userId' in request && request.userId === request.context.session.userId })
  * void procedures
  * ```
  */
-export function createIamExtensionProcedures({ iam, authorize }: IamExtensionProcedureDeps) {
-  async function allowed(request: IamExtensionAccessRequest): Promise<boolean> {
+export function createIamManagementProcedures({ iam, authorize }: IamManagementProcedureDeps) {
+  async function allowed(request: IamManagementAccessRequest): Promise<boolean> {
     return typeof authorize === 'function' && await authorize(request) === true
   }
 
   async function checkSensitive(context: AuthenticatedServContext, operation: string): Promise<HaiResult<void>> {
-    if (!iam.publicConfig?.reauthentication.enabled)
-      return core.ok(undefined)
-    return iam.auth.checkSensitiveOperation(context.accessToken ?? '', operation, context.request.headers.get('x-hai-reauthentication') ?? undefined)
+    return requireSensitiveOperation(iam, context, operation)
   }
 
   return implement(apiContract.extensions.iam)

@@ -1,4 +1,8 @@
+{{#if features.ai}}
+import type { AgentExecutor } from '@h-ai/ai'
+{{/if}}
 import type { CoreConfig, HaiResult } from '@h-ai/core'
+import type { ServConfig } from '@h-ai/serv'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -25,6 +29,13 @@ import { startAuditJobs } from './audit-jobs.js'
 import { initBusinessSettings } from './business-settings.js'
 import { serverM } from './messages.js'
 import { bootstrapDutyAccount, seedAppDuties } from './security-roles.js'
+
+{{#if features.ai}}
+/** 启用 serv.a2a 前，在此接入应用自己的执行器并检查调用方权限。 */
+function createA2AExecutor(): AgentExecutor | undefined {
+  return undefined
+}
+{{/if}}
 
 {{#if features.feedback}}
 async function startFeedback() {
@@ -146,6 +157,43 @@ const runtime = core.module.createRuntime([
     close: () => ai.close(),
   },
 {{/if}}
+  {
+    name: 'a2a-http',
+    enabled: () => Boolean(core.config.getOrThrow<ServConfig>('serv').a2a),
+    start: () => {
+{{#if features.ai}}
+      if (!iam.config?.login.apikey) {
+        return core.err({
+          ...HaiConfigError.CONFIG_VALIDATION_ERROR,
+          message: '',
+          ext: {
+            fields: ['iam.login.apikey'],
+          },
+        })
+      }
+      const executor = createA2AExecutor()
+      if (!executor) {
+        return core.err({
+          ...HaiConfigError.CONFIG_VALIDATION_ERROR,
+          message: '',
+          ext: {
+            fields: ['serv.a2a', 'createA2AExecutor'],
+          },
+        })
+      }
+      return ai.a2a.registerExecutor(executor)
+{{else}}
+      return core.err({
+        ...HaiConfigError.CONFIG_VALIDATION_ERROR,
+        message: '',
+        ext: {
+          fields: ['serv.a2a', 'ai.a2a'],
+        },
+      })
+{{/if}}
+    },
+    close: () => { },
+  },
   {
     name: 'bootstrap',
     start: async () => {

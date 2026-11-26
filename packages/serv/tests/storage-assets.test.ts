@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { STORAGE_PROXY_MAX_FILE_BYTES } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
 import { storage as localStorage } from '@h-ai/storage'
 import { Hono } from 'hono'
@@ -159,6 +160,42 @@ describe('serv.storageAssets', () => {
     expect(response.headers.get('content-length')).toBe(String(CONTENT.length))
     expect(storage.file.head).toHaveBeenCalledExactlyOnceWith(METADATA.key)
     expect(storage.file.getStreamWithMetadata).not.toHaveBeenCalled()
+  })
+
+  it('文件元数据超过公开 HTTP 容量时，GET 和 HEAD 都拒绝且不下载内容', async () => {
+    const metadata = { ...METADATA, size: STORAGE_PROXY_MAX_FILE_BYTES + 1 }
+    const read = createRead({ metadata })
+    const app = createApp(createStorage({
+      head: vi.fn().mockResolvedValue(core.ok(metadata)),
+      getStreamWithMetadata: vi.fn().mockResolvedValue(core.ok(read)),
+    }))
+    for (const method of ['GET', 'HEAD']) {
+      const response = await app.request('/api/v1/avatar-assets/avatars/persona-1/avatar-1.png', { method })
+      expect(response.status).toBe(404)
+      expect(response.headers.get('cache-control')).toBe('no-store')
+    }
+    expect(read.stream[Symbol.asyncIterator]).not.toHaveBeenCalled()
+    expect(read.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('读取时按实际收到的字节数检查文件容量并释放读取', async () => {
+    const read = createRead({
+      stream: {
+        async* [Symbol.asyncIterator]() {
+          yield new Uint8Array(STORAGE_PROXY_MAX_FILE_BYTES)
+          yield new Uint8Array(1)
+        },
+      },
+    })
+    const app = createApp(createStorage({
+      getStreamWithMetadata: vi.fn().mockResolvedValue(core.ok(read)),
+    }))
+    const response = await app.request('/api/v1/avatar-assets/avatars/persona-1/avatar-1.png')
+
+    expect(response.status).toBe(404)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.text()).toBe('')
+    expect(read.close).toHaveBeenCalledTimes(1)
   })
 
   it('匹配弱 ETag 时返回 304 且不下载文件内容', async () => {

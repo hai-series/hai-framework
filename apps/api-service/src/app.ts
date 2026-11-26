@@ -1,5 +1,6 @@
 import type { ServConfig, ServTransportConfig } from '@h-ai/serv'
 import process from 'node:process'
+import { ai } from '@h-ai/ai'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
@@ -26,17 +27,22 @@ interface AppCoreConfig {
  * 调用方负责在调用前完成 `initApp()`。由于返回值持有各业务模块的闭包技术引用，
  * 需避免在模块顶层提前实例化 app（那会在 `initApp()` 之前触发 procedure 创建路径）。
  *
- * **认证装配（最小知识原则）**：只需在顶层传入 `iam`，serv 自动派生：
+ * **认证装配（最小知识原则）**：只需在 `auth.iam` 注入 IAM，serv 自动派生：
  * - access token 校验（填充 `context.session`）
  * - refresh token 轮换（若启用 `refreshCookie`）
  */
 export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
   const servConfig = core.config.getOrThrow<ServConfig>('serv')
   const coreConfig = core.config.get<AppCoreConfig>('core')
+  const rateLimit = servConfig.http.rateLimit && {
+    ...servConfig.http.rateLimit,
+    store: core.access.createCacheRateLimitStore(cache, { namespace: pkg.name, allowMemory: true }),
+  }
+  const { cors } = servConfig
   const security = serv.createRuntimeSecurityPolicy({
     environment: coreConfig?.env,
-    corsOrigin: servConfig.cors.origin,
-    nativeOrigins: servConfig.cors.nativeOrigins,
+    corsOrigin: cors && cors.origin,
+    nativeOrigins: cors ? cors.nativeOrigins : undefined,
   })
   const transportMode = options.transport ?? 'config'
   const refreshCookieMode = options.refreshCookie ?? 'enabled'
@@ -46,13 +52,10 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
     if (!ring.success)
       throw new Error(ring.error.message)
     transport = {
+      ...servConfig.transport,
       crypto,
       serverKeyRing: ring.data,
       keyStore: crypto.transport.createKeyStore({ cache, ttlSeconds: 3600 }),
-      keyExchangePath: servConfig.transport.keyExchangePath,
-      maxPlaintextBytes: servConfig.transport.maxPlaintextBytes,
-      maxFutureSkewSeconds: servConfig.transport.maxFutureSkewSeconds,
-      maxRequestAgeSeconds: servConfig.transport.maxRequestAgeSeconds,
       excludePaths: [
         ...new Set([
           ...servConfig.transport.excludePaths,
@@ -70,9 +73,17 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
     }
   }
 
+  const audio = serv.createIamAudio({
+    ai,
+    iam,
+    config: servConfig.audio,
+    permission: 'ai:audio:use',
+  })
   return serv.createApp({
+    audio: audio.config,
     contract: apiServiceContract,
     procedures: createApiServiceProcedures({
+      audio,
       app: {
         info: {
           name: pkg.name,
@@ -84,22 +95,41 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
     }),
     http: {
       ...servConfig.http,
+      rateLimit,
       openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
       docs: security.exposeApiDocs ? servConfig.http.docs : false,
     },
-    iam,
-    middlewares: [
-      {
-        middleware: serv.cors({
-          origin: security.allowOrigin,
-          credentials: servConfig.cors.credentials,
-          allowedHeaders: [
-            ...new Set([...servConfig.cors.allowedHeaders, 'x-request-client', 'x-hai-token-transport']),
-          ],
-          exposedHeaders: [...servConfig.cors.exposedHeaders],
-        }),
+    auth: { iam },
+    a2a: servConfig.a2a && ai.a2a.createHttpHandler({
+      ...servConfig.a2a,
+      authenticate: {
+        verifyApiKey: key => iam.apiKey.verifyApiKey(key),
       },
-    ],
+    }),
+    cors: cors && {
+      ...cors,
+      origin: security.allowOrigin,
+      credentials: cors.credentials,
+      allowedHeaders: [
+        ...new Set([
+          ...cors.allowedHeaders,
+          'x-request-client',
+          'x-hai-token-transport',
+          'x-hai-terminal',
+        ]),
+      ],
+      exposedHeaders: [
+        ...cors.exposedHeaders,
+        ...(rateLimit
+          ? [
+              'Retry-After',
+              'X-RateLimit-Limit',
+              'X-RateLimit-Remaining',
+              'X-RateLimit-Reset',
+            ]
+          : []),
+      ],
+    },
     refreshCookie: refreshCookieMode === 'disabled'
       ? undefined
       : {

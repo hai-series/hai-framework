@@ -13,9 +13,7 @@ import { IamSessionErrorCodeSchema } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { getDefaultBrowserTokenStore } from '../kit-auth.js'
-import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, normalizeTransportBasePath, resolveTransportPath, shouldUseTransportForUrl } from '../modules/crypto/kit-transport-paths.js'
-
-const DEFAULT_KEY_EXCHANGE_URL = `/api${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
+import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, normalizeTransportBasePath, resolveKeyExchangePath, resolveTransportContractApiPrefix, shouldUseTransportForUrl } from '../modules/crypto/kit-transport-paths.js'
 
 // ─── 类型 ───
 
@@ -32,12 +30,14 @@ const DEFAULT_KEY_EXCHANGE_URL = `/api${crypto.transport.protocol.DEFAULT_KEY_EX
 export interface ClientTransportConfig {
   /** 宿主构建挂载目录，默认空字符串；SvelteKit 使用 paths.relative=false 时的 resolve('/').replace(/\/$/, '')。 */
   basePath?: string
+  /** 契约 API 的完整站点前缀，包含宿主子目录，使用与服务端契约相同的 apiPrefix。 */
+  contractApiPrefix?: `/${string}`
   /** 可选本地明文上限；缺省跟随服务端握手。 */
   maxPlaintextBytes?: number
   /** @h-ai/crypto 服务实例 */
   crypto: CryptoFunctions
-  /** 密钥交换端点 URL（默认 `'/api/_hai/key-exchange'`） */
-  keyExchangeUrl?: string
+  /** 当前服务来源下的实际绝对请求路径，默认 `/api/v1/_hai/key-exchange`。 */
+  keyExchangePath?: `/${string}`
   /** 排除路径（命中后强制走明文），需与服务端 transport.excludePaths 保持一致 */
   excludePaths?: readonly string[]
 }
@@ -68,7 +68,7 @@ export interface KitClientConfig {
   /** CSRF Header 名称（默认 `'X-CSRF-Token'`） */
   csrfHeaderName?: string
   /**
-   * 认证配置：自动从浏览器存储读取 Access Token 并注入请求头。
+   * 认证配置：自动从浏览器存储读取 Access Token 并注入同源请求头。
    * - `true`：使用默认页面内存存储（由 `kit.auth.setBrowserToken()` 写入，不读写 localStorage）
    * - `BrowserTokenStore`：使用自定义存储
    * - 不提供 / `false`：不自动注入
@@ -163,6 +163,19 @@ function getCurrentOrigin(): string {
   return 'http://localhost'
 }
 
+function resolveRequestUrl(input: RequestInfo | URL): URL {
+  if (input instanceof Request)
+    return new URL(input.url)
+
+  const documentBase = typeof document === 'undefined'
+    ? undefined
+    : document.baseURI
+  const pageUrl = typeof window === 'undefined'
+    ? undefined
+    : window.location?.href
+  return new URL(input, documentBase ?? pageUrl ?? getCurrentOrigin())
+}
+
 function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
   if (input instanceof Request) {
     return init
@@ -170,7 +183,7 @@ function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
       : input
   }
 
-  return new Request(input, init)
+  return new Request(resolveRequestUrl(input), init)
 }
 
 /**
@@ -207,6 +220,11 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
   if (typeof window === 'undefined' || !transportConfig)
     return
 
+  if ('keyExchangeUrl' in transportConfig)
+    throw new TypeError('Use transport.keyExchangePath instead of transport.keyExchangeUrl')
+  const keyExchangePath = resolveKeyExchangePath(transportConfig.keyExchangePath)
+  const basePath = normalizeTransportBasePath(transportConfig.basePath)
+  const contractApiPrefix = resolveTransportContractApiPrefix(transportConfig.contractApiPrefix)
   const fetchState = globalThis as BrowserTransportFetchState
   if (fetchState.__haiKitTransportFetchInstalled)
     return
@@ -215,9 +233,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
   fetchState.__haiKitOriginalFetch = originalFetch
 
   const origin = getCurrentOrigin()
-  const basePath = normalizeTransportBasePath(transportConfig.basePath)
-  const keyExchangeUrl = new URL(transportConfig.keyExchangeUrl ?? DEFAULT_KEY_EXCHANGE_URL, origin).toString()
-  const keyExchangePath = resolveTransportPath(keyExchangeUrl, origin)
+  const keyExchangeUrl = new URL(keyExchangePath, origin).toString()
   const transportClient = transportConfig.crypto.transport.createClient({
     keyExchangeUrl,
     fetch: originalFetch,
@@ -234,6 +250,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
       keyExchangePath,
       excludePaths: transportConfig.excludePaths,
       basePath,
+      contractApiPrefix,
     })) {
       return originalFetch(input, init)
     }
@@ -260,12 +277,13 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  * - 否则启动 {@link installBrowserTransportFetch}，并在 Crypto 尚未就绪时预热。
  *
  * 应用层（SvelteKit `+layout.svelte` 或浏览器入口）只需调用此函数一次，
- * 之后宿主 basePath 下的同源 `/api/*` 与 `__data.json` 请求都会自动走传输加密。
+ * 已挂载的契约 API，以及宿主 basePath 下的同源 `/api/*` 与 `__data.json` 请求会自动走传输加密。
  *
  * @param config 已解析的 kit 公共传输配置
  * @param deps  外部依赖
  * @param deps.crypto `@h-ai/crypto` 模块实例
  * @param deps.basePath 宿主构建挂载目录，默认空字符串；SvelteKit 使用 paths.relative=false 时的 resolve('/').replace(/\/$/, '')。
+ * @param deps.contractApiPrefix 契约 API 的完整站点前缀，与服务端 contract.apiPrefix 一致。
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -273,13 +291,13 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  * import { crypto } from '@h-ai/crypto'
  *
  * function installAfterCryptoInit() {
- *   kit.client.installBrowserTransport({ transport: { keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/health'] } }, { crypto })
+ *   kit.client.installBrowserTransport({ transport: { keyExchangePath: '/api/v1/_hai/key-exchange', excludePaths: ['/api/health'] } }, { crypto })
  * }
  *```
  */
 export function installBrowserTransport(
   config: KitPublicConfig,
-  deps: { crypto: CryptoFunctions, basePath?: string },
+  deps: { crypto: CryptoFunctions, basePath?: string, contractApiPrefix?: `/${string}` },
 ): void {
   if (typeof window === 'undefined' || config.transport === false)
     return
@@ -291,7 +309,8 @@ export function installBrowserTransport(
   installBrowserTransportFetch({
     crypto: deps.crypto,
     basePath: deps.basePath,
-    keyExchangeUrl: config.transport.keyExchangePath,
+    contractApiPrefix: deps.contractApiPrefix,
+    keyExchangePath: config.transport.keyExchangePath,
     excludePaths: [...config.transport.excludePaths],
   })
 }
@@ -342,13 +361,15 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   // ── 传输加密状态 ──
   const transportOrigin = getCurrentOrigin()
   const transportBasePath = normalizeTransportBasePath(transportConfig?.basePath)
-  const transportKeyExchangeUrl = transportConfig?.keyExchangeUrl ?? DEFAULT_KEY_EXCHANGE_URL
+  const contractApiPrefix = resolveTransportContractApiPrefix(transportConfig?.contractApiPrefix)
+  if (transportConfig && 'keyExchangeUrl' in transportConfig)
+    throw new TypeError('Use transport.keyExchangePath instead of transport.keyExchangeUrl')
   const transportKeyExchangePath = transportConfig
-    ? resolveTransportPath(transportKeyExchangeUrl, transportOrigin)
+    ? resolveKeyExchangePath(transportConfig.keyExchangePath)
     : DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH
   const transportClient: TransportClient | null = transportConfig
     ? transportConfig.crypto.transport.createClient({
-        keyExchangeUrl: transportKeyExchangeUrl,
+        keyExchangeUrl: transportKeyExchangePath,
         fetch,
         maxPlaintextBytes: transportConfig.maxPlaintextBytes,
       })
@@ -357,7 +378,7 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   /**
    * 统一 API fetch
    */
-  async function performFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  async function performFetch(input: RequestInfo | URL, requestUrl: URL, init: RequestInit = {}): Promise<Response> {
     const request = input instanceof Request
       ? input
       : undefined
@@ -375,40 +396,40 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
       ? canUseTransportForRequest({ method, headers, body: request.body })
       : canEncryptRequestBody(init.body)
 
-    // ── Auth ──
-    if (authStore) {
-      const token = authStore.get()
-      if (token) {
-        headers.set('Authorization', `Bearer ${token}`)
-      }
-    }
-
-    // ── CSRF ──
-    if (isWriteMethod) {
-      const csrfToken = getCookie(csrfCookieName)
-      if (csrfToken) {
+    const fetchInit = { ...init, headers }
+    if (transportOrigin !== 'null' && requestUrl.origin === transportOrigin && (init.mode ?? request?.mode) !== 'no-cors') {
+      const accessToken = authStore?.get()
+      const csrfToken = isWriteMethod
+        ? getCookie(csrfCookieName)
+        : undefined
+      if (accessToken)
+        headers.set('Authorization', `Bearer ${accessToken}`)
+      if (csrfToken)
         headers.set(csrfHeaderName, csrfToken)
-      }
+      // Fetch 仍可跟随同源重定向，跨源重定向不能携带 Kit 注入的头。
+      if (accessToken || csrfToken)
+        fetchInit.mode = 'same-origin'
     }
 
     // ── 传输加密 ──
     if (
       transportClient
       && canUseTransport
-      && shouldUseTransportForUrl(request?.url ?? (input instanceof URL
-        ? input
-        : String(input)), {
+      && shouldUseTransportForUrl(requestUrl, {
         origin: transportOrigin,
         keyExchangePath: transportKeyExchangePath,
         excludePaths: transportConfig?.excludePaths,
         basePath: transportBasePath,
+        contractApiPrefix,
       })
     ) {
-      return send(() => transportClient.encryptedFetch(input, { ...init, headers }))
+      return send(() => transportClient.encryptedFetch(request ?? requestUrl, fetchInit))
     }
 
     // ── 发送（FormData/Blob/Stream 等保持原样，不破坏浏览器边界） ──
-    return send(() => fetch(input, { ...init, headers }))
+    return send(() => fetch(fetchInit.mode === 'same-origin'
+      ? request ?? requestUrl
+      : input, fetchInit))
 
     async function send(operation: () => Promise<Response>): Promise<Response> {
       try {
@@ -427,16 +448,17 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   return {
     async apiFetch(input, init = {}, options) {
       const enabled = config.recoverSession && options?.recoverSession !== false
+      const requestUrl = resolveRequestUrl(input)
       const original = enabled || options?.reauthorize
         ? new Request(input instanceof Request
             ? input
-            : new URL(String(input), getCurrentOrigin()), init)
+            : requestUrl, init)
         : undefined
       const retry = original?.clone()
-      const response = await performFetch(original ?? input, original
+      const response = await performFetch(original ?? input, requestUrl, original
         ? {}
         : init)
-      if (!retry || retry.signal.aborted || new URL(retry.url).origin !== getCurrentOrigin())
+      if (!retry || retry.signal.aborted || transportOrigin === 'null' || requestUrl.origin !== transportOrigin)
         return response
       if (response.status !== 401 && !options?.reauthorize)
         return response
@@ -463,7 +485,7 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
           retry.headers.set('x-hai-reauthentication', ticket)
       }
       // 认证动作本身必须传 recoverSession:false，避免错误密码再次等待自己。
-      return performFetch(retry)
+      return performFetch(retry, requestUrl)
     },
     get ready() { return !transportClient || transportClient.ready() },
     async init() {

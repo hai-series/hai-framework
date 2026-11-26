@@ -6,9 +6,9 @@
  * @module serv-storage-assets
  */
 
-import type { FileMetadata, StorageFunctions } from '@h-ai/storage'
+import type { FileMetadata, StorageFileRead, StorageFunctions } from '@h-ai/storage'
 import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
-import { Buffer } from 'node:buffer'
+import { STORAGE_PROXY_MAX_FILE_BYTES } from '@h-ai/api-contract'
 
 /**
  * 可由只读资源 middleware 使用的最小 Storage 能力。
@@ -58,9 +58,9 @@ export interface ServStorageAssetsConfig {
 /**
  * 创建由 Storage 提供内容的只读资源 middleware。
  *
- * 仅允许 GET/HEAD；非法路径、非白名单 MIME 与 Storage 读取失败统一返回 404，
+ * 仅允许 GET/HEAD；非法路径、非白名单 MIME、文件超限与 Storage 读取失败统一返回 404，
  * 避免向外暴露文件是否存在或后端错误细节。
- * GET 从同一次 Storage 读取取得元数据与正文，先检查 MIME 和 ETag，再按需消费正文。
+ * 文件上限沿用 Storage HTTP 代理的 5 MiB，GET 从同一次读取检查元数据和实际正文字节数。
  *
  * @param config - Storage、路径、key、MIME 与缓存策略。
  * @returns 可挂载到 `serv.createApp({ middlewares })` 的 middleware。
@@ -80,6 +80,12 @@ export function storageAssets(config: ServStorageAssetsConfig): ServMiddleware {
     : `${config.pathPrefix}/`
   const allowedKeyPattern = new RegExp(config.keyPattern.source, config.keyPattern.flags.replace(/[gy]/g, ''))
   const allowedContentTypes = new Set(config.allowedContentTypes)
+
+  function isAllowed(metadata: FileMetadata): boolean {
+    return allowedContentTypes.has(metadata.contentType)
+      && Number.isSafeInteger(metadata.size)
+      && metadata.size >= 0 && metadata.size <= STORAGE_PROXY_MAX_FILE_BYTES
+  }
 
   function responseHeaders(metadata: FileMetadata, size = metadata.size): Record<string, string> {
     return {
@@ -111,7 +117,7 @@ export function storageAssets(config: ServStorageAssetsConfig): ServMiddleware {
     try {
       if (request.method === 'HEAD') {
         const result = await config.storage.file.head(key)
-        if (!result.success || !allowedContentTypes.has(result.data.contentType))
+        if (!result.success || !isAllowed(result.data))
           return notFound(c)
         const status = matchesEtag(ifNoneMatch, result.data.etag)
           ? 304
@@ -126,15 +132,15 @@ export function storageAssets(config: ServStorageAssetsConfig): ServMiddleware {
       const { metadata, stream } = result.data
       let body: Uint8Array<ArrayBuffer> | null = null
       try {
-        if (!allowedContentTypes.has(metadata.contentType))
+        if (!isAllowed(metadata))
           return notFound(c)
 
         if (!matchesEtag(ifNoneMatch, metadata.etag)) {
           // 在发送 200 前读完正文，读取失败仍可返回无详情的 404。
-          const chunks: Uint8Array[] = []
-          for await (const chunk of stream)
-            chunks.push(chunk)
-          body = Buffer.concat(chunks)
+          const content = await readAsset(stream, metadata.size, request.signal)
+          if (!content)
+            return notFound(c)
+          body = content
         }
       }
       finally {
@@ -148,6 +154,32 @@ export function storageAssets(config: ServStorageAssetsConfig): ServMiddleware {
       return notFound(c)
     }
   }
+}
+
+async function readAsset(
+  stream: StorageFileRead['stream'],
+  expectedBytes: number,
+  signal: AbortSignal,
+): Promise<Uint8Array<ArrayBuffer> | undefined> {
+  signal.throwIfAborted()
+  // 按元数据预分配，实际长度有出入时只在固定上限内扩容。
+  let body = new Uint8Array(expectedBytes)
+  let size = 0
+  for await (const chunk of stream) {
+    signal.throwIfAborted()
+    const nextSize = size + chunk.byteLength
+    if (nextSize > STORAGE_PROXY_MAX_FILE_BYTES)
+      return undefined
+    if (nextSize > body.byteLength) {
+      const grown = new Uint8Array(Math.min(STORAGE_PROXY_MAX_FILE_BYTES, Math.max(nextSize, body.byteLength * 2)))
+      grown.set(body)
+      body = grown
+    }
+    body.set(chunk, size)
+    size = nextSize
+  }
+  signal.throwIfAborted()
+  return body.subarray(0, size)
 }
 
 /** 解码并校验资源 key，拒绝绝对路径、反斜杠、NUL 与点路径段。 */

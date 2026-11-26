@@ -1,11 +1,11 @@
 /** 无定时器的内存限流：生命周期、容量、惰性回收与外部存储所有权。 */
 import type { RequestEvent } from '@sveltejs/kit'
 import type { MiddlewareContext } from '../src/kit-types.js'
-import { HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryRateLimitStore, rateLimitMiddleware } from '../src/middleware/kit-ratelimit.js'
+import { kit } from '../src/kit-main.js'
 
-function context(key = 'client'): MiddlewareContext {
+function context(key = '127.0.0.1'): MiddlewareContext {
   return {
     event: {
       getClientAddress: () => key,
@@ -19,10 +19,10 @@ describe('memory rate limit lifecycle', () => {
   afterEach(() => vi.useRealTimers())
 
   it('限流与存储故障返回统一错误和追踪编号，不公开内部故障详情', async () => {
-    const limited = rateLimitMiddleware({
+    const limited = kit.middleware.rateLimit({
       windowMs: 1000,
       maxRequests: 1,
-      store: createMemoryRateLimitStore(),
+      store: core.access.createMemoryRateLimitStore(),
     })
     const next = vi.fn(async () => new Response())
     await limited(context(), next)
@@ -32,7 +32,7 @@ describe('memory rate limit lifecycle', () => {
     expect(await denied.json()).toMatchObject({
       error: { code: HaiCommonError.RATE_LIMIT_EXCEEDED.code, httpStatus: 429, traceId: 'memory-lifecycle' },
     })
-    const unavailable = rateLimitMiddleware({
+    const unavailable = kit.middleware.rateLimit({
       windowMs: 1000,
       maxRequests: 1,
       store: {
@@ -51,10 +51,10 @@ describe('memory rate limit lifecycle', () => {
   it('重复创建和使用不产生计时器，丢弃引用即可回收', async () => {
     const timers = vi.getTimerCount()
     for (let index = 0; index < 100; index++) {
-      const middleware = rateLimitMiddleware({
+      const middleware = kit.middleware.rateLimit({
         windowMs: 1000,
         maxRequests: 1,
-        store: createMemoryRateLimitStore(),
+        store: core.access.createMemoryRateLimitStore(),
       })
       expect((await middleware(context(), async () => new Response())).status).toBe(200)
     }
@@ -64,23 +64,23 @@ describe('memory rate limit lifecycle', () => {
   })
 
   it('容量满时拒绝新 key，保留已有有效计数，过期后按请求回收空间', async () => {
-    const store = createMemoryRateLimitStore()
+    const store = core.access.createMemoryRateLimitStore()
     for (let index = 0; index < 10_000; index++)
-      store.increment(`client-${index}`, 1000)
-    const middleware = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store })
+      store.increment(`2001:db8::${index.toString(16)}`, 1000)
+    const middleware = kit.middleware.rateLimit({ windowMs: 1000, maxRequests: 1, store })
     const next = vi.fn(async () => new Response())
-    expect((await middleware(context('overflow'), next)).status).toBe(503)
+    expect((await middleware(context('2001:db8:1::1'), next)).status).toBe(503)
     expect(next).not.toHaveBeenCalled()
-    expect((await middleware(context('client-9999'), next)).status).toBe(429)
+    expect((await middleware(context('2001:db8::270f'), next)).status).toBe(429)
     await vi.advanceTimersByTimeAsync(1000)
     for (let index = 0; index < 200; index++)
-      expect((await middleware(context(`new-${index}`), next)).status).toBe(200)
-    expect(store.increment('client-9999', 1000).count).toBe(1)
+      expect((await middleware(context(`2001:db8:2::${index.toString(16)}`), next)).status).toBe(200)
+    expect(store.increment('2001:db8::270f', 1000).count).toBe(1)
     expect(vi.getTimerCount()).toBe(0)
   })
 
   it('窗口快照不泄漏内部可变状态，活动窗口不被惰性清理提前删除', () => {
-    const store = createMemoryRateLimitStore()
+    const store = core.access.createMemoryRateLimitStore()
     const original = store.increment('client', 1000)
     original.count = 0
     original.resetAt = 0
@@ -98,7 +98,7 @@ describe('memory rate limit lifecycle', () => {
       stopCleanup: vi.fn(),
     }
     for (let index = 0; index < 100; index++) {
-      const middleware = rateLimitMiddleware({ windowMs: 1000, maxRequests: 1, store: external })
+      const middleware = kit.middleware.rateLimit({ windowMs: 1000, maxRequests: 1, store: external })
       await middleware(context(), async () => new Response())
     }
     expect(external.close).not.toHaveBeenCalled()

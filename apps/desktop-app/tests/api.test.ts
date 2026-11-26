@@ -31,12 +31,16 @@ vi.mock('@h-ai/api-service-contract', () => ({
   apiServiceContract: { kind: 'api-service-contract' },
 }))
 
-vi.mock('@h-ai/crypto', () => ({
-  crypto: {
-    init: cryptoInit,
-    close: cryptoClose,
-  },
-}))
+vi.mock('@h-ai/crypto', async (importOriginal) => {
+  const { crypto } = await importOriginal<typeof import('@h-ai/crypto')>()
+  return {
+    crypto: {
+      init: cryptoInit,
+      close: cryptoClose,
+      transport: crypto.transport,
+    },
+  }
+})
 
 vi.mock('../src/lib/router.svelte.js', () => ({ navigate }))
 
@@ -70,7 +74,7 @@ describe('desktop api bootstrap', () => {
     const { desktopCryptoConfig } = await import('../src/lib/crypto-config.js')
 
     expect(desktopCryptoConfig.transport).toEqual({
-      keyExchangePath: '/_hai/key-exchange',
+      keyExchangePath: '/api/v1/_hai/key-exchange',
     })
   })
 
@@ -87,7 +91,7 @@ describe('desktop api bootstrap', () => {
     expect(createdClient.init).toHaveBeenCalledWith(expect.objectContaining({
       baseUrl: 'http://localhost:3000/api/v1',
       transport: expect.objectContaining({
-        keyExchangePath: '/_hai/key-exchange',
+        keyExchangePath: '/api/v1/_hai/key-exchange',
       }),
       auth: expect.objectContaining({
         storage: { kind: 'cookie' },

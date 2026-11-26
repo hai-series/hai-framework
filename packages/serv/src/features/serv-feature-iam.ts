@@ -11,6 +11,7 @@ import type { IamFunctions, TokenPair, User } from '@h-ai/iam'
 import type { ServContext } from '../serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
+import { requireSensitiveOperation } from '../pipelines/serv-pipeline-guard.js'
 import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
@@ -56,13 +57,10 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
   // 权限守卫先执行；额外鉴别只绑定已授权操作，不提升原有权限。
   async function sensitive<T>(context: ServContext, operation: string, run: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
-    const policy = iam.publicConfig?.reauthentication
-    if (policy?.enabled) {
-      const checked = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', operation, context.request.headers.get('x-hai-reauthentication') ?? undefined)
-      if (!checked.success)
-        return checked
-    }
-    return run()
+    const result = await requireSensitiveOperation(iam, context, operation)
+    return result.success
+      ? run()
+      : result
   }
 
   return implement(iamContract)

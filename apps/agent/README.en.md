@@ -79,6 +79,8 @@ Retained outputs include script, design, editable storyboard Markdown, WAVs, sub
 
 Keep private values in `.env.local`; process environment overrides matching fields. See [.env.example](.env.example) and [ACP configuration](../../docs/usage/configuration/ai.md#acp-接入与模型能力).
 
+`config/_kit.yml` sets trusted proxies, access rules and fixed-window rate limiting. The app allows 360 requests per trusted client IP every 60 seconds by default. Production instances share counters in Redis. [Kit HTTP configuration](../../docs/usage/configuration/kit.en.md)
+
 | Setting                                              | Purpose                                                                                                                                                                                                                                                                     |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HAI_AI_LLM`                                         | Model IDs, protocols, gateways, credentials and capabilities. Codex uses Responses; DeepSeek Harness may use Chat. Retrieval requires an embedding scenario and its true dimension                                                                                          |

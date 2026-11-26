@@ -316,7 +316,7 @@ describe('createProject — api 类型', () => {
     const content = await readText(projectPath, 'apps/proj-api-serv/config/_serv.yml')
     expect(content).toContain('maxPlaintextBytes:')
     expect(content).toContain('apiPrefix: $' + '{HAI_SERV_HTTP_APIPREFIX:/api/v1}')
-    expect(content).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:*}')
+    expect(content).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5175,http://127.0.0.1:5175,http://localhost:5176,http://127.0.0.1:5176}')
     expect(content).toContain('credentials: $' + '{HAI_SERV_CORS_CREDENTIALS:true}')
     expect(content).toContain(
       'nativeOrigins: $' + '{HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}',
@@ -543,11 +543,9 @@ describe('createProject — admin 类型 + iam', () => {
     expect(pkg.devDependencies?.['@inlang/paraglide-js']).toBeDefined()
   })
 
-  it('hooks.server.ts 包含 auth.verifyToken 配置', async () => {
+  it('hooks.server.ts 把已初始化的 IAM 接入 auth', async () => {
     const content = await readText(projectPath, 'src/hooks.server.ts')
-    expect(content).toContain('auth:')
-    expect(content).toContain('verifyToken:')
-    expect(content).toContain('iam.auth.verifyToken')
+    expect(content).toMatch(/auth: \{\s*iam,/)
   })
 
   it('hooks.server.ts 包含 i18nHandle', async () => {
@@ -956,7 +954,7 @@ describe('createProject — fullstack 类型', () => {
     expect(password).toMatch(/[a-z]/)
     expect(password).toMatch(/\d/)
     expect(password).toMatch(/\W/)
-    expect(await readText(projectPath, '.env')).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
+    expect(await readText(projectPath, '.env')).toMatch(/^PUBLIC_API_BASE=$/m)
     expect(await readText(projectPath, '.env')).not.toContain(password)
     expect(await readText(projectPath, '.env.example')).not.toContain(password)
     const serializedRing = parseEnv(await readText(projectPath, '.env.dev')).HAI_CRYPTO_TRANSPORT_SERVERKEYRING
@@ -1173,13 +1171,14 @@ describe('createProject — fullstack 类型', () => {
     ]))
 
     const servConfig = await readText(projectPath, 'packages/proj-fullstack-serv/config/_serv.yml')
-    expect(servConfig).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:*}')
+    expect(servConfig).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:http://localhost:4173,http://127.0.0.1:4173,http://localhost:5175,http://127.0.0.1:5175,http://localhost:5176,http://127.0.0.1:5176}')
     expect(servConfig).toContain('credentials: $' + '{HAI_SERV_CORS_CREDENTIALS:true}')
 
     const appServer = await readText(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')
-    expect(appServer).toContain('import type { CreateServContext, ServHttpApp } from \'@h-ai/serv\'')
     expect(appServer).toContain('createServerApp(): ServHttpApp')
     expect(appServer).toContain('serv.createApp')
+    expect(appServer).toContain('serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))')
+    expect(appServer).toContain('...await authenticate(input)')
     expect(appServer).not.toContain('from \'hono\'')
     expect(appServer).not.toContain(': Hono')
 
@@ -1232,7 +1231,7 @@ describe('createProject — fullstack 类型', () => {
     ])
       expect(envExample).not.toContain(`# ${name}=`)
     expect(envExample).toContain('HAI_ADMIN_DEFAULT_PASSWORD=')
-    expect(envExample).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
+    expect(envExample).toMatch(/^PUBLIC_API_BASE=$/m)
     expect(await exists(projectPath, 'src/routes/api/auth/login/+server.ts')).toBe(false)
     expect(appServer).toContain('refreshCookie:')
     expect(appServer).toContain('crypto.transport.createKeyStore')
@@ -1441,7 +1440,8 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-shared/src/index.ts')).toBe(true)
     const sharedClient = await readText(projectPath, 'packages/proj-fullstack-shared/src/lib/api/api-client.ts')
     expect(sharedClient).toContain('import.meta.env.PUBLIC_API_BASE')
-    expect(sharedClient).toContain('transport: { crypto }')
+    expect(sharedClient).toContain('import.meta.env.PUBLIC_API_KEY_EXCHANGE_PATH')
+    expect(sharedClient).toContain('transport: { crypto, keyExchangePath }')
     expect(sharedClient).toContain('credentials: \'include\'')
 
     const sharedStore = await readText(projectPath, 'packages/proj-fullstack-shared/src/lib/stores/management-store.svelte.ts')

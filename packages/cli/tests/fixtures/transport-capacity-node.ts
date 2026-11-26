@@ -11,6 +11,8 @@ import { crypto } from '@h-ai/crypto'
 import { createTransportWorkbook } from '../../../serv/tests/helpers/serv-transport-workbook.js'
 
 const maxPlaintextBytes = Number(process.env.HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES)
+const keyExchangePath = process.env.HAI_SERV_TRANSPORT_KEYEXCHANGEPATH ?? crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
+const proxyOrigin = 'http://127.0.0.1:18080'
 const workbook = createTransportWorkbook(4 * 1024 * 1024)
 const result = '合法响应'.repeat(100_000)
 
@@ -52,7 +54,7 @@ async function serveTransportBackend(): Promise<void> {
           : Readable.toWeb(incoming) as ReadableStream<Uint8Array>,
         duplex: 'half',
       } as RequestInit)
-      if (incoming.url?.endsWith('/_hai/key-exchange')) {
+      if (incoming.url === keyExchangePath) {
         stage = 'key-exchange'
         const input = JSON.parse(await crypto.transport.readBody(request.body, { maxBytes: crypto.transport.bodyLimits.keyExchangeBytes })) as { clientPublicKey: string }
         const clientId = await manager.registerClientKey(input.clientPublicKey)
@@ -129,8 +131,14 @@ async function verifyTransportCapacity(): Promise<void> {
       finished,
     ])
     assert.equal(ready, 'ready')
+    const runtimeConfig = await fetch(`${proxyOrigin}/runtime-config.js`)
+    assert.equal(runtimeConfig.status, 200)
+    const configuration = await runtimeConfig.text()
+    assert.match(configuration, /apiBase:globalThis\.location\.origin\+"\/api\/v1"/)
+    assert.ok(configuration.includes(`apiKeyExchangePath:${JSON.stringify(keyExchangePath)}`))
+    const keyExchangeUrl = new URL(keyExchangePath, proxyOrigin).href
     const client = crypto.transport.createClient({
-      keyExchangeUrl: 'http://127.0.0.1:18080/api/v1/_hai/key-exchange',
+      keyExchangeUrl,
       fetch: async (input, init) => {
         const response = await fetch(input, init)
         if (!response.ok)
@@ -139,7 +147,7 @@ async function verifyTransportCapacity(): Promise<void> {
       },
     })
     try {
-      const response = await client.encryptedFetch('http://127.0.0.1:18080/api/v1/import', {
+      const response = await client.encryptedFetch(`${proxyOrigin}/api/v1/import`, {
         method: 'POST',
         body: JSON.stringify({
           name: 'capacity.xlsx',
@@ -147,6 +155,7 @@ async function verifyTransportCapacity(): Promise<void> {
         }),
       })
       assert.deepEqual(await response.json(), { result })
+      process.stdout.write('KEY_EXCHANGE_ROUTE_PASS\n')
       let expectedRequests = 1
       for (const bytes of [12 * 1048576, 24 * 1048576]) {
         if (bytes > maxPlaintextBytes)
@@ -156,12 +165,12 @@ async function verifyTransportCapacity(): Promise<void> {
         })
         assert.equal(Buffer.byteLength(body), bytes)
         process.stdout.write(`TRANSPORT_CAPACITY_BODY_START:${bytes}\n`)
-        const ordinary = await client.encryptedFetch('http://127.0.0.1:18080/api/v1/import', { method: 'POST', body })
+        const ordinary = await client.encryptedFetch(`${proxyOrigin}/api/v1/import`, { method: 'POST', body })
         assert.deepEqual(await ordinary.json(), { result })
         process.stdout.write(`TRANSPORT_CAPACITY_BODY_PASS:${bytes}\n`)
         expectedRequests++
       }
-      const rejected = await fetch('http://127.0.0.1:18080/api/v1/import', {
+      const rejected = await fetch(`${proxyOrigin}/api/v1/import`, {
         method: 'POST',
         body: Buffer.alloc(crypto.transport.resolveBodyLimits(maxPlaintextBytes).encryptedPayloadBytes + 1),
       })

@@ -51,8 +51,9 @@ describe('kit transport config', () => {
     expect(resolveKitConfig({})).toEqual({
       server: DEFAULT_SERVER,
       transport: false,
-      trustedProxies: 'auto',
-      access: false,
+      http: { trustedProxies: 'auto', access: false, rateLimit: false },
+      cors: false,
+      a2a: false,
     })
   })
 
@@ -60,7 +61,7 @@ describe('kit transport config', () => {
     expect(resolveKitTransportConfig({
       excludePaths: ['/api/public'],
     })).toEqual({
-      keyExchangePath: '/api/_hai/key-exchange',
+      keyExchangePath: '/api/v1/_hai/key-exchange',
       excludePaths: ['/api/public'],
     })
   })
@@ -76,8 +77,9 @@ describe('kit transport config', () => {
       },
     })).toEqual({
       server: DEFAULT_SERVER,
-      trustedProxies: 'auto',
-      access: false,
+      http: { trustedProxies: 'auto', access: false, rateLimit: false },
+      cors: false,
+      a2a: false,
       transport: {
         keyExchangePath: '/custom/key-exchange',
         ...timing,
@@ -95,9 +97,82 @@ describe('kit transport config', () => {
     expect(KitConfigSchema.safeParse({ transport }).success).toBe(false)
   })
 
-  it('拒绝不合法的 keyExchangePath', () => {
-    expect(() => KitConfigSchema.parse({
-      transport: { keyExchangePath: 'custom/key-exchange' },
-    })).toThrow('path must start with /')
+  it.each([
+    'custom/key-exchange',
+    '/',
+    '/portal/exchange/',
+    '/portal/exchange?mode=demo',
+  ])('拒绝不规范的 keyExchangePath %s', (keyExchangePath) => {
+    expect(KitConfigSchema.safeParse({
+      transport: { keyExchangePath },
+    }).success).toBe(false)
+  })
+
+  it('a2A 端点和 CORS 采用共享配置及边界', () => {
+    expect(KitConfigSchema.parse({ a2a: {} }).a2a).toEqual({
+      cardPath: '/.well-known/agent-card.json',
+      rpcPath: '/a2a',
+    })
+    expect(KitConfigSchema.parse({
+      a2a: { cardPath: '/console/discover.json', rpcPath: '/console/call' },
+      cors: {
+        origin: ['https://orders.example.com'],
+        credentials: true,
+      },
+    })).toMatchObject({
+      a2a: { cardPath: '/console/discover.json', rpcPath: '/console/call' },
+      cors: {
+        origin: ['https://orders.example.com'],
+        credentials: true,
+      },
+    })
+    expect(KitConfigSchema.safeParse({
+      a2a: { cardPath: '/a2a' },
+    }).success).toBe(false)
+    expect(KitConfigSchema.safeParse({
+      cors: { origin: '*', credentials: true },
+    }).success).toBe(false)
+  })
+
+  it('hTTP 读取新字段并拒绝旧配置，避免失去访问策略', () => {
+    expect(KitConfigSchema.parse({
+      http: {
+        trustedProxies: ['192.0.2.10'],
+        access: { file: './config/policy.yml' },
+      },
+    }).http).toEqual({
+      trustedProxies: ['192.0.2.10'],
+      access: { file: './config/policy.yml' },
+      rateLimit: false,
+    })
+    expect(KitConfigSchema.safeParse({
+      access: { file: './config/policy.yml' },
+    }).success).toBe(false)
+    expect(KitConfigSchema.safeParse({ trustedProxies: [] }).success).toBe(false)
+  })
+
+  it('从 http.rateLimit 读取窗口和次数，拒绝旧字段与非序列化依赖', () => {
+    expect(KitConfigSchema.parse({
+      http: {
+        rateLimit: { maxRequests: 2 },
+      },
+    }).http.rateLimit)
+      .toEqual({ maxRequests: 2, windowMs: 60_000 })
+    expect(KitConfigSchema.safeParse({ rateLimit: false }).success).toBe(false)
+    expect(KitConfigSchema.safeParse({
+      http: {
+        rateLimit: { windowMs: 0 },
+      },
+    }).success).toBe(false)
+    expect(KitConfigSchema.safeParse({
+      http: {
+        rateLimit: { store: 'memory' },
+      },
+    }).success).toBe(false)
+  })
+
+  it.each(['HAI_KIT_ACCESS_FILE', 'HAI_KIT_TRUSTEDPROXIES', 'HAI_KIT_RATELIMIT'])('拒绝未迁移的进程变量 %s', (name) => {
+    vi.stubEnv(name, 'legacy')
+    expect(() => KitConfigSchema.parse({})).toThrow(name)
   })
 })

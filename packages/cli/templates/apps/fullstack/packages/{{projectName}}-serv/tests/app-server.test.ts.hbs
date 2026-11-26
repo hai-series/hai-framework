@@ -64,7 +64,7 @@ beforeAll(async () => {
   }))
   app = createServerApp()
   transport = crypto.transport.createClient({
-    keyExchangeUrl: `http://localhost${PREFIX}/_hai/key-exchange`,
+    keyExchangeUrl: `http://localhost${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`,
     fetch: async (input, init) => {
       const request = new Request(input, init)
       if (cookie && request.url.endsWith('/auth/refresh'))

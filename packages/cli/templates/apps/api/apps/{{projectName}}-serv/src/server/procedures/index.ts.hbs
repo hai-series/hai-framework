@@ -25,7 +25,7 @@ import { createAppProcedures } from './app-procedures.js'
 // @hai-generator:procedures:imports
 
 /** 创建应用级 procedures 聚合。 */
-export function {{api.serviceProceduresFactoryName}}(deps: { app: AppProcedureDeps }) {
+export function {{api.serviceProceduresFactoryName}}(deps: { app: AppProcedureDeps{{#if features.ai}}{{#if features.iam}}, audio: ReturnType<typeof serv.createIamAudio>{{/if}}{{/if}} }) {
   return {
     // @hai-generator:procedures:entries
 {{#if features.iam}}
@@ -40,7 +40,14 @@ export function {{api.serviceProceduresFactoryName}}(deps: { app: AppProcedureDe
 {{/if}}
 {{#if features.ai}}
     // AI 默认绑定可信 session.userId，跨主体访问需另行提供 authorizeObject 策略。
+{{#if features.iam}}
+    ai: {
+      ...serv.createAiProcedures({ ai }),
+      audio: { issueTicket: deps.audio.issueTicket },
+    },
+{{else}}
     ai: serv.createAiProcedures({ ai }),
+{{/if}}
 {{/if}}
 {{#if features.feedback}}
     feedback: serv.createFeedbackProcedures({

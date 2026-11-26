@@ -7,7 +7,6 @@
  */
 
 import type { AuditActorSnapshot } from '@h-ai/audit'
-import type { RequestAccessCheck } from '@h-ai/core'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { Handle, ResolveOptions } from '@sveltejs/kit/hooks'
 import type { GuardConfig, GuardResult, HandleConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
@@ -16,14 +15,15 @@ import process from 'node:process'
 import { audit } from '@h-ai/audit'
 import { core, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
-import { configureAuth, getAccessToken } from '../kit-auth.js'
+import { getAccessToken, withRequestAuth } from '../kit-auth.js'
+import { resolveKitHttpConfig } from '../kit-config.js'
 import { kitM } from '../kit-i18n.js'
 import { fromError } from '../kit-response.js'
-import { isSvelteKitControlFlow } from '../kit-utils.js'
+import { isSvelteKitControlFlow, setResponseHeaders } from '../kit-utils.js'
 import { loggingMiddleware as loggingMiddlewareFn } from '../middleware/kit-logging.js'
 import { rateLimitMiddleware as rateLimitMiddlewareFn } from '../middleware/kit-ratelimit.js'
-import { handleA2ARequest, resolveA2AConfig } from '../modules/a2a/kit-a2a-handle.js'
 import { transportEncryptionMiddleware } from '../modules/crypto/kit-transport-middleware.js'
+import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH } from '../modules/crypto/kit-transport-paths.js'
 import { createEncryptedCookieProxy } from './kit-cookie-proxy.js'
 
 /**
@@ -38,68 +38,90 @@ function generateId(prefix: string): string {
 }
 
 /**
- * 为 SvelteKit 响应补充默认安全头。
- *
- * 仅设置不会破坏页面渲染的基础头；CSP 需要应用结合 nonce / 静态资源策略单独配置。
- */
-function applyDefaultSecurityHeaders(response: Response): void {
-  response.headers.set('X-Content-Type-Options', 'nosniff')
-  response.headers.set('X-Frame-Options', 'DENY')
-  response.headers.set('Referrer-Policy', 'no-referrer')
-}
-
-/**
  * 创建 hai handle hook
  *
  * 整合会话解析、路由守卫、中间件链与统一错误处理的 SvelteKit Handle 工厂。
  *
  * 执行顺序：
  * 1. 生成 `requestId` 并写入 `event.locals`
- * 2. 根据 `auth` 配置从 Bearer / Cookie 解析会话
- * 3. 根据 `auth.protectedPaths` 自动执行路由守卫 + 额外自定义守卫
- * 4. 构建中间件链（内置 logging / rateLimit + 自定义）并执行
- * 5. 调用 `resolve(event)` 获取业务响应
- * 6. 附加 `X-Request-Id` 响应头
+ * 2. 检查请求访问策略和默认客户端地址限流，处理可选传输及 A2A 端点
+ * 3. 根据 `auth` 配置解析会话，执行认证和自定义守卫
+ * 4. 执行日志、自定义键限流和业务中间件，再调用 `resolve(event)`
+ * 5. 附加 `X-Request-Id` 和默认安全响应头
  *
  * @param config - Handle 配置（均有合理默认值，可零配置使用）
  * @returns SvelteKit Handle 函数
  * @example
  * ```ts
+ * import { core, HaiCommonError } from '@h-ai/core'
  * import { kit } from '@h-ai/kit'
  *
- * const handle = kit.createHandle({ auth: { verifyToken: async () => null, protectedPaths: ['/admin/**'] } })
+ * const handle = kit.createHandle({ auth: { verifyToken: async () => core.err(HaiCommonError.UNAUTHORIZED), protectedPaths: ['/admin/**'] } })
  * void handle
  *```
  */
 export function createHandle(config: HandleConfig = {}): Handle {
-  const resolveIp = core.access.createClientIpResolver(config.trustedProxies ?? 'auto')
-  const checkAccess = config.access && core.access.createRequestCheck(config.access)
+  if ('trustedProxies' in config || 'access' in config)
+    throw new TypeError('Use http.trustedProxies and http.access in Kit Handle configuration')
+  if ('rateLimit' in config)
+    throw new TypeError('Use http.rateLimit in Kit Handle configuration')
+  if (config.crypto && 'transport' in config.crypto)
+    throw new TypeError('Use top-level transport instead of crypto.transport in Kit Handle configuration')
+  const { rateLimit: rateLimitConfig, ...http } = config.http ?? {}
+  const { trustedProxies, access } = resolveKitHttpConfig(http)
+  const resolveIp = core.access.createClientIpResolver(trustedProxies)
+  const checkAccess = access && core.access.createRequestCheck(access)
   const {
     auth: authConfig,
-    rateLimit: rateLimitConfig,
+    cors,
     logging: loggingConfig = true,
     crypto: cryptoConfig,
+    transport,
     onError,
     guards: customGuards = [],
     middleware: customMiddleware = [],
-    a2a: a2aInput,
+    contract,
+    a2a,
   } = config
-  if (checkAccess && checkAccess.requiresEncryption && !cryptoConfig?.transport)
+  const checkCors = cors
+    ? core.access.createCors(cors)
+    : undefined
+  const keyExchangePath = transport
+    ? transport.keyExchangePath ?? DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH
+    : undefined
+  const matchesA2AEndpoint = (path: string, method: string) => Boolean(a2a && (
+    (method === 'GET' && path === a2a.cardPath) || (method === 'POST' && path === a2a.rpcPath)
+  ))
+  if (a2a) {
+    if (keyExchangePath === a2a.cardPath || keyExchangePath === a2a.rpcPath
+      || (checkAccess && (checkAccess.encryption(a2a.cardPath, 'GET') === 'required'
+        || checkAccess.encryption(a2a.rpcPath, 'POST') === 'required'))) {
+      throw new TypeError('A2A endpoints cannot overlap key exchange or require application-level encryption')
+    }
+  }
+  if (checkAccess && checkAccess.requiresEncryption && !transport)
     throw new Error('Request access rules require transport encryption, but Kit transport is not configured')
 
-  // ── A2A 配置解析 ──
-  const a2aResolved = resolveA2AConfig(a2aInput)
-
-  // ── 配置 Cookie 名 + 认证操作 ──
-  if (authConfig?.cookieName || authConfig?.operations) {
-    configureAuth({ cookieName: authConfig.cookieName, operations: authConfig.operations })
+  const encryption = (path: string, method: string) => matchesA2AEndpoint(path, method)
+    ? 'disabled' as const
+    : checkAccess
+      ? checkAccess.encryption(path, method)
+      : undefined
+  const contractTransport = {
+    enabled: Boolean(transport),
+    encryption,
   }
+  const iam = authConfig?.iam
+  const verifyToken = authConfig?.verifyToken ?? (iam
+    ? (token: string) => iam.auth.verifyToken(token)
+    : undefined)
+  const cookieAuthConfig = authConfig && { cookieName: authConfig.cookieName, iam: authConfig.iam }
 
   // ── 构建守卫列表（auth 自动守卫 + 自定义守卫） ──
   const guards: GuardConfig[] = []
   if (authConfig?.protectedPaths?.length) {
     guards.push({
-      guard: buildAuthGuard(authConfig.verifyToken, authConfig.loginUrl),
+      guard: buildAuthGuard(authConfig.loginUrl, contract?.apiPrefix),
       paths: authConfig.protectedPaths,
       exclude: authConfig.publicPaths,
     })
@@ -108,18 +130,24 @@ export function createHandle(config: HandleConfig = {}): Handle {
 
   // ── 构建中间件链 ──
   const builtinMiddleware: Middleware[] = []
+  let entryRateLimit: Middleware | undefined
+  let protocolRateLimit: Middleware | undefined
   if (loggingConfig) {
     const logOpts = typeof loggingConfig === 'object'
       ? loggingConfig
       : { logBody: false }
     builtinMiddleware.push(loggingMiddlewareFn(logOpts))
   }
-  if (rateLimitConfig) {
-    builtinMiddleware.push(rateLimitMiddlewareFn({
-      ...rateLimitConfig,
-      windowMs: rateLimitConfig.windowMs ?? 60000,
-      maxRequests: rateLimitConfig.maxRequests ?? 100,
-    }))
+  if (rateLimitConfig !== undefined && rateLimitConfig !== false) {
+    const rateLimit = rateLimitMiddlewareFn(rateLimitConfig)
+    if (rateLimitConfig.keyGenerator) {
+      const { keyGenerator: _keyGenerator, ...defaultKeyConfig } = rateLimitConfig
+      protocolRateLimit = rateLimitMiddlewareFn(defaultKeyConfig)
+      builtinMiddleware.push(rateLimit)
+    }
+    else {
+      entryRateLimit = rateLimit
+    }
   }
   const allMiddleware = [
     ...builtinMiddleware,
@@ -127,7 +155,9 @@ export function createHandle(config: HandleConfig = {}): Handle {
   ]
 
   // ── 传输加密中间件单独包裹整个 handle 流程 ──
-  const transportMiddleware = buildTransportMiddleware(cryptoConfig, checkAccess ? checkAccess.encryption : undefined)
+  const transportMiddleware = transport
+    ? transportEncryptionMiddleware({ ...transport, enabled: true, contractApiPrefix: contract?.apiPrefix }, encryption)
+    : null
 
   // ── Cookie 加密配置预处理 ──
   const cookieProxyConfig = buildCookieProxyConfig(cryptoConfig)
@@ -155,9 +185,28 @@ export function createHandle(config: HandleConfig = {}): Handle {
       }
     }
     clientAddress = resolvedAddress
-    const accessDecision = checkAccess
-      ? checkAccess(event.url.pathname, event.request.method, clientAddress)
+    const requestPath = new URL(event.request.url).pathname
+    const method = event.request.method
+    const isKeyExchange = method === 'POST' && requestPath === keyExchangePath
+    const isA2AEndpoint = matchesA2AEndpoint(requestPath, method)
+    const corsResult = checkCors?.(event.request)
+    const requestRateLimit = corsResult?.preflight
+      ? undefined
+      : (isKeyExchange || isA2AEndpoint
+          ? protocolRateLimit
+          : undefined) ?? entryRateLimit
+    const hasTransportEnvelope = event.request.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER)
+      || event.request.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)
+    const requestAccess = checkAccess
+      ? checkAccess(requestPath, method, clientAddress)
       : undefined
+    // 数据请求继续继承页面访问限制，同时检查实际 HTTP 数据端点的规则。
+    const pageAccess = checkAccess && requestAccess?.allowed && event.isDataRequest && requestPath !== event.url.pathname
+      ? checkAccess(event.url.pathname, method, clientAddress)
+      : undefined
+    const accessDecision = pageAccess?.allowed === false
+      ? pageAccess
+      : requestAccess
     return core.context.run({
       requestId,
       userId: undefined,
@@ -174,6 +223,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
       let actor: AuditActorSnapshot | null = null
       let guardDenied = false
       let requestFailed = false
+      let controlFlowStatus: number | undefined
       const captureRequest = async (status: number) => {
         // 与 Serv 自动审计边界一致：纯站点可不装配 Audit；已就绪模块的写入失败仍须报告。
         if (!audit.isInitialized)
@@ -199,12 +249,13 @@ export function createHandle(config: HandleConfig = {}): Handle {
         if (!written.success)
           core.logger.error('Request audit failed', { requestId, resource, error: written.error })
       }
-      if (cookieProxyConfig) {
-        event = {
-          ...event,
-          cookies: createEncryptedCookieProxy(event.cookies, cookieProxyConfig),
-        }
-      }
+      let cookies = event.cookies
+      if (cookieProxyConfig)
+        cookies = createEncryptedCookieProxy(cookies, cookieProxyConfig)
+      if (cookieAuthConfig)
+        cookies = withRequestAuth(cookies, cookieAuthConfig)
+      if (cookies !== event.cookies)
+        event = { ...event, cookies }
       const context: MiddlewareContext = {
         event,
         requestId,
@@ -214,6 +265,27 @@ export function createHandle(config: HandleConfig = {}): Handle {
       // Workaround：SvelteKit App.Locals 是项目侧声明的 interface，库代码无法靠模块增强检查动态 key。
       const locals = event.locals as unknown as Record<string, unknown>
       locals.requestId = requestId
+
+      const handleRequestError = (error: unknown): Response | Promise<Response> => {
+        // 控制流交给宿主或页面数据传输处理，到最终出口时一并审计。
+        if (isSvelteKitControlFlow(error)) {
+          if (typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number')
+            controlFlowStatus = error.status
+          throw error
+        }
+
+        requestFailed = true
+        if (onError) {
+          core.logger.error('Request failed', { requestId, error })
+          return onError(error, event)
+        }
+
+        return fromError({
+          ...HaiCommonError.INTERNAL_ERROR,
+          message: kitM('kit_internalError'),
+          cause: error,
+        }, requestId)
+      }
 
       const runRequest = async (): Promise<Response> => {
         try {
@@ -234,9 +306,9 @@ export function createHandle(config: HandleConfig = {}): Handle {
               },
             }, { status: 403 })
           }
-          if (!transportMiddleware && event.request.method !== 'OPTIONS'
-            && (event.request.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER) || event.request.headers.has(crypto.transport.protocol.ENVELOPE_HEADER))
-            && checkAccess && checkAccess.encryption(event.url.pathname, event.request.method) === 'disabled') {
+          if (corsResult?.preflight)
+            return new Response(null, { status: 204 })
+          if (!transportMiddleware && hasTransportEnvelope && encryption(requestPath, method) === 'disabled') {
             return Response.json(core.err({
               ...HaiCommonError.VALIDATION_ERROR,
               message: kitM('kit_transportPlaintextRequired'),
@@ -244,23 +316,29 @@ export function createHandle(config: HandleConfig = {}): Handle {
             }), { status: 400 })
           }
           // ── A2A 端点拦截（在认证/守卫之前，A2A 有专用认证） ──
-          if (a2aResolved) {
-            const a2aResponse = await handleA2ARequest(event, requestId, a2aResolved)
-            if (a2aResponse)
-              return a2aResponse
+          if (a2a && isA2AEndpoint) {
+            return await a2a.handleRequest(event.request, requestId) ?? new Response(null, { status: 404 })
           }
 
           // ── 会话解析 ──
           let session: SessionData | undefined
 
-          if (authConfig) {
+          if (verifyToken) {
             const token = getAccessToken(event.request, event.cookies)
             if (token) {
-              session = await authConfig.verifyToken(token) ?? undefined
-              locals.session = session
-              if (session) {
-                locals.accessToken = token
+              const verified = await core.auth.verifySession(verifyToken, token)
+              if (!verified.success) {
+                requestFailed = true
+                core.logger.error(verified.error.message, { requestId, error: verified.error.cause })
+                return fromError({
+                  ...verified.error,
+                  message: kitM('kit_internalError'),
+                }, requestId)
               }
+              session = verified.data
+              locals.session = session
+              if (session)
+                locals.accessToken = token
             }
           }
           context.session = session
@@ -296,52 +374,93 @@ export function createHandle(config: HandleConfig = {}): Handle {
             const response = await executeMiddlewareChain(
               allMiddleware,
               context,
-              () => resolve(event),
+              async () => {
+                const request = context.event.request
+                const response = await contract?.fetch(request, () => {
+                  const terminal = request.headers.get('x-hai-terminal')
+                  return {
+                    requestId,
+                    ip: clientAddress,
+                    locale: typeof locals.locale === 'string'
+                      ? locals.locale
+                      : undefined,
+                    userAgent: request.headers.get('user-agent') ?? undefined,
+                    terminalType: terminal === 'app' || terminal === 'desktop' || terminal === 'api'
+                      ? terminal
+                      : 'web',
+                    session,
+                    accessToken: session && typeof locals.accessToken === 'string'
+                      ? locals.accessToken
+                      : undefined,
+                    scopeId: core.context.get().scopeId,
+                  }
+                }, contractTransport)
+                return response ?? resolve(event)
+              },
             )
 
             return response
           }))
         }
         catch (error) {
-        // SvelteKit 控制流异常（redirect / error）必须继续抛出
-          if (isSvelteKitControlFlow(error)) {
-            // 控制流仍由 SvelteKit 处理；这里只记录结果，避免遗漏抛出的 HTTP 拒绝。
-            if (typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number')
-              await captureRequest(error.status)
-            throw error
-          }
-
-          requestFailed = true
-          if (onError) {
-            core.logger.error('Request failed', { requestId, error })
-            return onError(error, event)
-          }
-
-          // 默认错误响应
-          return fromError({
-            ...HaiCommonError.INTERNAL_ERROR,
-            message: kitM('kit_internalError'),
-            cause: error,
-          }, requestId)
+          return handleRequestError(error)
         }
       }
 
       // 密钥交换由传输层短路、响应本来就是明文，先让它经过同一访问策略。
-      const keyExchange = cryptoConfig?.transport
-        ? cryptoConfig.transport.keyExchangePath ?? '/api/_hai/key-exchange'
-        : undefined
-      const deniedHandshake = accessDecision && !accessDecision.allowed && event.request.method === 'POST' && event.url.pathname === keyExchange
-      const response = deniedHandshake
-        ? await runRequest()
-        : transportMiddleware
-          ? await transportMiddleware(context, runRequest)
-          : await runRequest()
+      const accessDenied = accessDecision?.allowed === false
+      const runTransport = () => {
+        if (!accessDenied && !corsResult?.preflight && !isKeyExchange && !isA2AEndpoint) {
+          const rejected = contract?.preflight(event.request, contractTransport)
+          if (rejected)
+            return Promise.resolve(rejected)
+        }
+        return transportMiddleware && !corsResult?.preflight && !(accessDenied && isKeyExchange)
+          ? transportMiddleware(context, runRequest)
+          : runRequest()
+      }
 
-      await captureRequest(response.status)
-      applyDefaultSecurityHeaders(response)
-      response.headers.set('X-Request-Id', requestId)
-      response.headers.set('X-Trace-Id', requestId)
-      return response
+      let response: Response | undefined
+      try {
+        if (requestRateLimit && !accessDenied) {
+          let proceeded = false
+          try {
+            response = await requestRateLimit(context, () => {
+              proceeded = true
+              return runTransport()
+            })
+          }
+          catch (error) {
+            if (proceeded)
+              throw error
+            response = await handleRequestError(error)
+          }
+          // 已携带密文的业务请求仍须获得认证响应，但无需再执行会话及业务逻辑。
+          if (!proceeded && transportMiddleware && hasTransportEnvelope && !isKeyExchange) {
+            const rejected = response
+            response = await transportMiddleware(context, async () => rejected)
+          }
+        }
+        else {
+          response = await runTransport()
+        }
+      }
+      finally {
+        const status = controlFlowStatus ?? response?.status
+        if (status !== undefined)
+          await captureRequest(status)
+      }
+
+      // 基础安全头避免影响页面渲染。CSP 由应用结合静态资源与 nonce 单独配置。
+      return setResponseHeaders(corsResult
+        ? core.access.applyCorsHeaders(response, corsResult.headers)
+        : response, {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'no-referrer',
+        'X-Request-Id': requestId,
+        'X-Trace-Id': requestId,
+      })
     }))
   }
 }
@@ -354,13 +473,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
  * - 应用内API路径（实际URL或route.id位于`/api/`）：未认证返回401 JSON
  * - 非 API 路径：未认证时重定向到 loginUrl（若配置），否则返回 401
  */
-function buildAuthGuard(
-  verifyToken: (token: string) => Promise<SessionData | null>,
-  loginUrl?: string,
-): (event: RequestEvent, session?: SessionData) => GuardResult {
-  // verifyToken 参数仅用于类型签名对齐，实际会话已在上层解析
-  void verifyToken
-
+function buildAuthGuard(loginUrl?: string, contractApiPrefix?: string): (event: RequestEvent, session?: SessionData) => GuardResult {
   return (event, session) => {
     if (session) {
       return { allowed: true }
@@ -368,7 +481,10 @@ function buildAuthGuard(
 
     // route.id不含挂载前缀；移除路由分组后仍按应用API识别，避免子目录API被当成页面重定向。
     const routePath = event.route.id?.replace(/\/\([^/]*\)/g, '')
-    const isApiRoute = event.url.pathname.startsWith('/api/') || routePath?.startsWith('/api/') === true
+    const pathname = decodeGuardPath(event.url.pathname)
+    const isApiRoute = pathname.startsWith('/api/')
+      || routePath?.startsWith('/api/') === true
+      || (contractApiPrefix !== undefined && pathname.startsWith(`${contractApiPrefix}/`))
 
     if (isApiRoute) {
       return {
@@ -405,7 +521,7 @@ async function executeGuard(
   session?: SessionData,
 ): Promise<GuardResult> {
   const { guard, paths, exclude } = config
-  const pathname = event.url.pathname
+  const pathname = decodeGuardPath(event.url.pathname)
 
   if (exclude?.some(pattern => matchPath(pathname, pattern))) {
     return { allowed: true }
@@ -443,47 +559,27 @@ async function executeMiddlewareChain(
  * 路径通配符匹配（`/*` `/**` 精确匹配）
  */
 function matchPath(pathname: string, pattern: string): boolean {
-  if (pattern.endsWith('/*')) {
-    const base = pattern.slice(0, -2)
-    return pathname === base || pathname.startsWith(`${base}/`)
-  }
+  const wildcard = /\/\*\*?$/.exec(pattern)?.[0]
+  const base = decodeGuardPath(wildcard
+    ? pattern.slice(0, -wildcard.length)
+    : pattern)
+  return pathname === base || (wildcard !== undefined && pathname.startsWith(`${base}/`))
+}
 
-  if (pattern.endsWith('/**')) {
-    const base = pattern.slice(0, -3)
-    return pathname === base || pathname.startsWith(`${base}/`)
+/** 保持与 SvelteKit 路由相同的解码方式，保留编码百分号与分隔符。 */
+function decodeGuardPath(pathname: string): string {
+  if (!pathname.includes('%'))
+    return pathname
+  try {
+    return pathname.split('%25').map(decodeURI).join('%25')
   }
-
-  return pathname === pattern
+  catch {
+    // 畸形路径由宿主路由处理；仍可匹配原样配置的守卫。
+    return pathname
+  }
 }
 
 // ─── 内部：Crypto 配置构建 ───
-
-/**
- * 构建最终中间件链：将传输加密中间件自动插入到最外层
- */
-function buildTransportMiddleware(
-  cryptoConfig: HandleConfig['crypto'],
-  encryption?: RequestAccessCheck['encryption'],
-): Middleware | null {
-  if (!cryptoConfig?.transport)
-    return null
-
-  const transportOpts = cryptoConfig.transport
-
-  return transportEncryptionMiddleware({
-    enabled: true,
-    crypto: cryptoConfig.crypto,
-    serverKeyRing: transportOpts.serverKeyRing,
-    basePath: transportOpts.basePath,
-    keyExchangePath: transportOpts.keyExchangePath,
-    excludePaths: transportOpts.excludePaths,
-    keyStore: transportOpts.keyStore,
-    maxPlaintextBytes: transportOpts.maxPlaintextBytes,
-    maxFutureSkewSeconds: transportOpts.maxFutureSkewSeconds,
-    maxRequestAgeSeconds: transportOpts.maxRequestAgeSeconds,
-    routePlaintextBytes: transportOpts.routePlaintextBytes,
-  }, encryption)
-}
 
 /**
  * 构建 Cookie 加密代理配置

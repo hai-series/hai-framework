@@ -19,6 +19,7 @@
   "serv_validationUuid": "有効なUUIDを入力してください",
   "serv_validationEnum": "有効な選択肢を選んでください",
   "serv_errorUnauthorized": "認証されていません",
+  "serv_refreshBodyTooLarge": "更新リクエストの本文が 16 KiB を超えています",
   "serv_errorForbidden": "アクセスが拒否されました",
   "serv_errorInternal": "サーバー内部エラー",
   "serv_storageKeyRequired": "ストレージキーを空にすることはできません",
@@ -35,5 +36,6 @@
   "serv_transportKeyExchangeFailed": "鍵交換に失敗しました",
   "serv_transportBusy": "暗号化通信が混み合っています。しばらくしてから再試行してください。",
   "serv_feedbackUnavailable": "フィードバックは一時的に利用できません。業務機能は引き続き利用できます。",
-  "serv_invalidApiPrefix": "API 接頭辞は空の区間・クエリ・フラグメント・相対移動を含まない絶対パスにしてください。"
+  "serv_invalidApiPrefix": "API 接頭辞は空の区間・クエリ・フラグメント・相対移動を含まない絶対パスにしてください。",
+  "serv_invalidKeyExchangePath": "鍵交換パスにはドットセグメント、ワイルドカード、エンコード、クエリ、フラグメントを含まない固定の絶対パスを指定してください。"
 }

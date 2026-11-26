@@ -6,7 +6,7 @@
  * @module adapters/serv-adapter-node
  */
 
-import type { ServerType } from '@hono/node-server'
+import type { Http2Bindings, HttpBindings, ServerType } from '@hono/node-server'
 import type { AddressInfo } from 'node:net'
 import type { ServHttpApp } from '../serv-app.js'
 import { errorMonitor } from 'node:events'
@@ -37,6 +37,9 @@ export const DEFAULT_SERV_HOST = '127.0.0.1'
  * ```
  */
 export const DEFAULT_SERV_PORT = 3000
+
+const STREAM_SHUTDOWN_GRACE_MS = 1000
+const AUDIO_RELEASE_TIMEOUT_MS = 5000
 
 /**
  * Node 服务器启动配置。
@@ -72,8 +75,8 @@ export interface ServListenOptions {
    * 优雅关闭回调（释放业务模块资源）。
    *
    * 传入后 `serv.listen` 自动监听 `SIGINT` / `SIGTERM`，按以下顺序关闭：
-   * 1. 停止接受新 HTTP 连接，关闭 Audio WebSocket（未配合者最多等待一秒）
-   * 2. 等待监听句柄关闭，再调用此回调释放业务资源
+   * 1. 停止接收新请求，在一秒内结束 SSE 和 Audio WebSocket 连接，等待其他 HTTP 请求完成
+   * 2. 最多再等待五秒让语音授权和会话释放完成，再调用此回调释放业务资源
    *
    * 应用层无需手动注册 `process.once('SIGINT', ...)` 或维护 `shuttingDown` 标志。
    */
@@ -97,9 +100,9 @@ export interface ServListenOptions {
 export interface ServNodeServer {
   /** 底层 Node.js HTTP Server 实例。 */
   readonly server: ServerType
-  /** 实际监听地址（host 与解析后的 port）。 */
+  /** 绑定前为请求地址。绑定成功后为实际地址，包括系统为端口 0 分配的端口。 */
   readonly address: { readonly host: string, readonly port: number }
-  /** 停止接入或取消待完成绑定；关闭语音连接最多等待一秒。并发关闭复用结果，真实监听失败仍会拒绝。 */
+  /** 停止接入并清理流连接。并发关闭复用结果，监听失败或语音清理超时仍会拒绝。 */
   readonly close: () => Promise<void>
 }
 
@@ -131,20 +134,51 @@ export interface ServNodeServer {
 export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServNodeServer {
   const host = options.host ?? DEFAULT_SERV_HOST
   const port = options.port ?? DEFAULT_SERV_PORT
-  const audioServer = audioWsServers.get(app)
+  const address = { host, port }
+  const audio = audioWsServers.get(app)
+  const audioServer = audio?.server
   const logger = core.logger.child({ module: 'serv', scope: 'node-adapter' })
+  const eventStreams = new Set<HttpBindings['outgoing'] | Http2Bindings['outgoing']>()
+  let stopping = false
 
   const server = serve(
     {
       // 保留原 bindings 对象，WebSocket 升级状态由 Node adapter 在同一对象上共享。
-      fetch: (request, bindings) => app.fetch(request, Object.assign(bindings, { remoteAddress: bindings.incoming.socket.remoteAddress })),
+      fetch: async (request, bindings) => {
+        if (stopping) {
+          return new Response(null, {
+            status: 503,
+            headers: { Connection: 'close' },
+          })
+        }
+
+        const response = await app.fetch(request, Object.assign(bindings, { remoteAddress: bindings.incoming.socket.remoteAddress }))
+        const { outgoing } = bindings
+        const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+        if (outgoing && response.body && contentType === 'text/event-stream') {
+          if (stopping || outgoing.destroyed) {
+            void response.body.cancel().catch(() => {})
+            return new Response(null, {
+              status: 503,
+              headers: { Connection: 'close' },
+            })
+          }
+          eventStreams.add(outgoing)
+          outgoing.once('close', () => eventStreams.delete(outgoing))
+        }
+        return response
+      },
       hostname: host,
       port,
       websocket: audioServer
         ? { server: audioServer }
         : undefined,
     },
-    options.onListening,
+    (info) => {
+      address.host = info.address
+      address.port = info.port
+      options.onListening?.(info)
+    },
   )
 
   let listenFailure: Error | undefined
@@ -159,11 +193,19 @@ export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServN
   let removeSignalListeners = () => {}
   const handle: ServNodeServer = {
     server,
-    address: { host, port },
+    address,
     close: () => closing ??= (async () => {
+      stopping = true
       removeSignalListeners()
       const httpClosed = new Promise<void>((resolve, reject) => {
+        const deadline = eventStreams.size > 0
+          ? setTimeout(() => {
+              for (const stream of eventStreams)
+                stream.destroy()
+            }, STREAM_SHUTDOWN_GRACE_MS)
+          : undefined
         server.close((error) => {
+          clearTimeout(deadline)
           server.removeListener(errorMonitor, rememberListenFailure)
           if (listenFailure) {
             reject(listenFailure)
@@ -184,7 +226,7 @@ export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServN
         const deadline = setTimeout(() => {
           for (const socket of audioServer.clients)
             socket.terminate()
-        }, 1000)
+        }, STREAM_SHUTDOWN_GRACE_MS)
         audioServer.close((error) => {
           clearTimeout(deadline)
           if (error)
@@ -194,7 +236,8 @@ export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServN
         for (const socket of audioServer.clients)
           socket.close(1001, 'Server shutting down')
       })
-      const results = await Promise.allSettled([httpClosed, audioClosed])
+      const audioReleased = audio && audioClosed.catch(() => {}).then(() => waitForAudioRelease(audio.waitForSessionRelease))
+      const results = await Promise.allSettled([httpClosed, audioClosed, audioReleased])
       const errors = results.filter(result => result.status === 'rejected').map(result => result.reason)
       if (errors.length)
         throw new AggregateError(errors, 'Service listener shutdown failed')
@@ -230,4 +273,20 @@ export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServN
   }
 
   return handle
+}
+
+async function waitForAudioRelease(waitForSessionRelease: () => Promise<void>): Promise<void> {
+  let deadline: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    deadline = setTimeout(() => reject(new Error('Audio WebSocket session release timed out')), AUDIO_RELEASE_TIMEOUT_MS)
+  })
+  try {
+    await Promise.race([
+      waitForSessionRelease(),
+      timedOut,
+    ])
+  }
+  finally {
+    clearTimeout(deadline)
+  }
 }

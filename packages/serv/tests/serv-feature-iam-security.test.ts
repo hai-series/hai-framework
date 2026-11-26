@@ -42,7 +42,7 @@ beforeAll(async () => {
     procedures: {
       iam: serv.createIamProcedures({ iam }),
     },
-    iam,
+    auth: { iam },
   })
   server = serv.listen(app, { host: '127.0.0.1', port: 0 })
   await once(server.server, 'listening')

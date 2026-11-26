@@ -12,15 +12,15 @@ import { implement } from '../serv-router.js'
  * 支付关单使用的已初始化 Payment 与宿主订单授权。
  * @example
  * ```ts
- * import type { PaymentExtensionProcedureDeps } from '@h-ai/serv'
+ * import type { PaymentCloseOrderProcedureDeps } from '@h-ai/serv'
  * import { payment } from '@h-ai/payment'
  *
- * function paymentDeps(authorizeClose: PaymentExtensionProcedureDeps['authorizeClose']): PaymentExtensionProcedureDeps {
+ * function paymentDeps(authorizeClose: PaymentCloseOrderProcedureDeps['authorizeClose']): PaymentCloseOrderProcedureDeps {
  *   return { payment, authorizeClose }
  * }
  * ```
  */
-export interface PaymentExtensionProcedureDeps {
+export interface PaymentCloseOrderProcedureDeps {
   readonly payment: Pick<PaymentFunctions, 'closeOrder'>
   /** 核验当前会话能否操作该订单，成功时返回可信业务记录中的渠道和商户订单号。 */
   readonly authorizeClose: (
@@ -33,19 +33,19 @@ export interface PaymentExtensionProcedureDeps {
  * 创建由宿主订单策略授权的关单 procedure。校验客户端声明的渠道和订单号后，使用可信记录调用支付渠道。
  * @example
  * ```ts
- * import type { PaymentExtensionProcedureDeps } from '@h-ai/serv'
+ * import type { PaymentCloseOrderProcedureDeps } from '@h-ai/serv'
  * import { apiContract } from '@h-ai/api-contract'
  * import { serv } from '@h-ai/serv'
  *
- * function createPaymentApp(deps: PaymentExtensionProcedureDeps) {
+ * function createPaymentApp(deps: PaymentCloseOrderProcedureDeps) {
  *   return serv.createApp({
  *     contract: apiContract.extensions.payment,
- *     procedures: serv.createPaymentExtensionProcedures(deps),
+ *     procedures: serv.createPaymentCloseOrderProcedures(deps),
  *   })
  * }
  * ```
  */
-export function createPaymentExtensionProcedures(deps: PaymentExtensionProcedureDeps) {
+export function createPaymentCloseOrderProcedures(deps: PaymentCloseOrderProcedureDeps) {
   return implement(apiContract.extensions.payment)
     .context<ServContext>()
     .route('orders.close')

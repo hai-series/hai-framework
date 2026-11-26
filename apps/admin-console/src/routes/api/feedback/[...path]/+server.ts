@@ -3,8 +3,8 @@ import { feedback } from '@h-ai/feedback'
 import { kit } from '@h-ai/kit'
 import { getFeedbackContext } from '#lib/server/feedback.js'
 
-const base = resolve('/').replace(/\/$/, '')
-const handler = kit.createFeedbackHandler({ feedback, resolveContext: getFeedbackContext, basePath: `${base}/api/feedback` })
+const basePath = `${resolve('/').replace(/\/$/, '')}/api/feedback`
+const handler = kit.createFeedbackHandler({ feedback, resolveContext: getFeedbackContext, basePath })
 
 export const GET = handler
 export const POST = handler

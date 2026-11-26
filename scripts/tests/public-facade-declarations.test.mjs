@@ -79,8 +79,8 @@ export const setBrowserToken = kit.auth.setBrowserToken
 export const clearBrowserToken = kit.auth.clearBrowserToken
 export const setLocale = kit.i18n.setLocale
 export const rateLimit = kit.middleware.rateLimit
-export const createCacheRateLimitStore = kit.middleware.createCacheRateLimitStore
-export const createMemoryRateLimitStore = kit.middleware.createMemoryRateLimitStore
+export const createCacheRateLimitStore = core.access.createCacheRateLimitStore
+export const createMemoryRateLimitStore = core.access.createMemoryRateLimitStore
 
 const contract = apiContract.create({
   ping: apiContract.route({ method: 'GET', path: '/ping' }).output(apiContract.haiResultSchema(z.string())),

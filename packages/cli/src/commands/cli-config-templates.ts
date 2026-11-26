@@ -101,13 +101,22 @@ function generateKitConfig(): string {
 server:
   host: 127.0.0.1
   port: 3000
-# auto 仅在受管私有 Compose 代理中采用容器网段；普通宿主忽略转发头。
-# 自建代理填写明确的 IP/CIDR；[] 显式忽略转发头。
-trustedProxies: auto
-access: false
-# access:
-#   file: ./config/security/request-access.yml
+http:
+  # auto 仅在受管私有 Compose 代理中采用容器网段；普通宿主忽略转发头。
+  # 自建代理填写明确的 IP/CIDR；[] 显式忽略转发头。
+  trustedProxies: auto
+  # 启用时填写 { windowMs: 60000, maxRequests: 100 }，由应用注入原子计数存储。
+  rateLimit: \${HAI_KIT_HTTP_RATELIMIT:false}
+  access: false
+  # access:
+  #   file: ./config/security/request-access.yml
+a2a: \${HAI_KIT_A2A:false}
+# 启用前配置 AI Agent Card、IAM API Key，并在服务端 init.ts 实现 createA2AExecutor。
+# a2a: { cardPath: /.well-known/agent-card.json, rpcPath: /a2a }
 transport: false
+# transport:
+#   keyExchangePath: /api/v1/_hai/key-exchange
+#   子目录部署填写浏览器访问的完整路径，如 /console/api/v1/_hai/key-exchange。
 `
 }
 
@@ -122,6 +131,8 @@ server:
 
 http:
   trustedProxies: auto
+  # 启用时填写 { windowMs: 60000, maxRequests: 100 }，由应用注入原子计数存储。
+  rateLimit: \${HAI_SERV_HTTP_RATELIMIT:false}
   access: false
   # access:
   #   file: ./config/security/request-access.yml
@@ -144,6 +155,10 @@ http:
     path: /health
     readyPath: /ready
 
+# 启用前配置 AI Agent Card、IAM API Key，并在服务端接入执行器。
+a2a: \${HAI_SERV_A2A:false}
+# a2a: { cardPath: /.well-known/agent-card.json, rpcPath: /a2a }
+
 # 按需开启跨域访问，生产环境填写明确的 Origin。
 # cors:
 #   origin: https://app.example.com
@@ -156,7 +171,7 @@ http:
 transport: false
 # transport:
 #   maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576} # 双向 UTF-8 明文，1 KiB～64 MiB
-#   keyExchangePath: /_hai/key-exchange
+#   keyExchangePath: /api/v1/_hai/key-exchange # 从站点根开始的完整路径
 #   excludePaths: [/health, /ready]
 # 单条路径需要更大请求体时填写字节数，* 只匹配一段路径。
 #   routePlaintextBytes: # HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES 可填 JSON 路径映射

@@ -260,7 +260,7 @@ export interface ApiClientConfig {
 // ─── 传输加密 ────────────────────────────────────────────────────────────────
 
 /**
- * 可选加密会话配置；密钥协商路径相对 baseUrl，并与服务端配置匹配。
+ * 可选加密会话配置；密钥协商路径从 `baseUrl` 的站点根开始，并与服务端配置匹配。
  * crypto 必须先初始化；服务器版本公钥通过受保护的 TLS 握手取得，不配置服务端私钥。
  * 传输防重放不能代替业务幂等性，失败后不要自动重放非幂等操作。
  *
@@ -271,7 +271,7 @@ export interface ApiClientConfig {
  * const cryptography = await crypto.init()
  * if (!cryptography.success) throw new Error(cryptography.error.message)
  * try {
- *   const transport: ApiClientTransportConfig = { crypto, keyExchangePath: '/_hai/key-exchange' }
+ *   const transport: ApiClientTransportConfig = { crypto, keyExchangePath: '/api/v1/_hai/key-exchange' }
  *   const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1', transport })
  *   if (!initialized.success) throw new Error(initialized.error.message)
  *   await apiClient.close()
@@ -288,11 +288,11 @@ export interface ApiClientTransportConfig {
    */
   readonly crypto: CryptoFunctions
   /**
-   * 密钥协商端点路径，相对于 `baseUrl`，默认 `/_hai/key-exchange`。
+   * 密钥协商端点的站点绝对路径，默认 `/api/v1/_hai/key-exchange`。
    *
    * 必须与服务端 `serv.createApp({ transport: { keyExchangePath } })` 一致。
    */
-  readonly keyExchangePath?: string
+  readonly keyExchangePath?: `/${string}`
 }
 
 // ─── Client 接口 ──────────────────────────────────────────────────────────────

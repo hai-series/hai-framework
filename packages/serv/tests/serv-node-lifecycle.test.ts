@@ -36,7 +36,9 @@ describe('node listener lifecycle', () => {
     try {
       if (!handle.server.listening)
         await once(handle.server, 'listening')
-      expect(handle.server.address()).not.toBeNull()
+      const bound = handle.server.address()
+      expect(bound).toMatchObject({ address: handle.address.host, port: handle.address.port })
+      expect(handle.address.port).toBeGreaterThan(0)
       await handle.close()
       expect(handle.server.listening).toBe(false)
       expect(handle.server.address()).toBeNull()
@@ -44,6 +46,58 @@ describe('node listener lifecycle', () => {
       expect(handle.server.listenerCount(errorMonitor)).toBe(0)
     }
     finally { await handle.close().catch(() => {}) }
+  })
+
+  it('停机断开持续的 SSE，并等待普通 HTTP 请求完成', async () => {
+    const requestStarted = Promise.withResolvers<void>()
+    const finishRequest = Promise.withResolvers<void>()
+    const cancelled = vi.fn()
+    const app = serv.createApp({
+      contract: {},
+      procedures: {},
+      middlewares: [
+        {
+          path: '/events',
+          middleware: () => new Response(new ReadableStream<Uint8Array>({
+            start: stream => stream.enqueue(new TextEncoder().encode('data: ready\n\n')),
+            cancel: cancelled,
+          }), {
+            headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+          }),
+        },
+        {
+          path: '/ordinary',
+          middleware: async (context) => {
+            requestStarted.resolve()
+            await finishRequest.promise
+            return context.text('finished')
+          },
+        },
+      ],
+    })
+    const handle = serv.listen(app, { port: 0 })
+    const requests = new AbortController()
+    try {
+      if (!handle.server.listening)
+        await once(handle.server, 'listening')
+      const baseUrl = `http://${handle.address.host}:${handle.address.port}`
+      const stream = await fetch(`${baseUrl}/events`, { signal: requests.signal })
+      expect(stream.ok).toBe(true)
+      const pendingRequest = fetch(`${baseUrl}/ordinary`, { signal: requests.signal })
+      void pendingRequest.catch(() => {})
+      await requestStarted.promise
+
+      const closed = handle.close()
+      await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce(), { timeout: 3000 })
+      finishRequest.resolve()
+      expect(await (await pendingRequest).text()).toBe('finished')
+      await closed
+    }
+    finally {
+      requests.abort()
+      finishRequest.resolve()
+      await handle.close().catch(() => {})
+    }
   })
 
   it('监听失败保留真实原因，不把地址占用当作幂等关闭', async () => {

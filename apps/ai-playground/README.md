@@ -34,6 +34,8 @@ Vite 通常显示 `http://localhost:5173`。运行对话、摘要、推理、语
 
 ### API 示例
 
+首页通过 `GET /api/status` 读取当前模型、音色和记忆模式。该端点由 Serv 契约分发器在 Kit Hook 内运行。同一契约与操作也可以挂载到独立 Serv，页面继续使用相同的请求路径和响应字段。
+
 以下请求使用 `GET /api/demos` 查看当前不可用项。`POST /api/demos` 接收 `{ id, input }`，`input` 为 1–4000 字符，请求体最多 16 KiB。保留同一个 Cookie 以便后续请求复用浏览器作用域。
 
 ```sh
@@ -182,7 +184,7 @@ mcp:
       allowedTools: [documents.extract] # 接受固定的文档提取操作。
 ```
 
-应用按 `RelDB → VecDB → Runner（可选）→ AI` 初始化，并在启动失败时逆序清理。生产 `.env.prod` 默认使用 PostgreSQL、Qdrant 与 Redis。按实际部署配置 `db/cache/vecdb` 的 DNS 地址、认证和访问规则。缺少共享依赖时启动失败。应用默认限流为每分钟 120 个请求，可在可信代理或应用侧补充用户授权和模型消费预算。具体参数见 [AI 配置手册](../../docs/usage/configuration/ai.md) 和 [Runner 配置](../../packages/runner/README.md#配置)。
+应用按 `RelDB → VecDB → Runner（可选）→ AI` 初始化，并在启动失败时逆序清理。生产 `.env.prod` 默认使用 PostgreSQL、Qdrant 与 Redis。按实际部署配置 `db/cache/vecdb` 的 DNS 地址、认证和访问规则。缺少共享依赖时启动失败。`config/_kit.yml` 的 `http.rateLimit` 默认允许每个可信客户端 IP 在 60 秒内发起 120 次请求，可用 `HAI_KIT_HTTP_RATELIMIT_MAXREQUESTS` 修改次数。 [Kit 入口配置](../../docs/usage/configuration/kit.md) · [AI 配置手册](../../docs/usage/configuration/ai.md) · [Runner 配置](../../packages/runner/README.md#配置)
 
 开启原生记忆向量检索时，在 `_ai.yml` 的 `memory.vectorNamespace` 或环境变量 `HAI_AI_MEMORY_VECTORNAMESPACE` 设置应用和环境名称，例如 `playground-dev`，默认值为 `default`。多个 Playground 可共用 Qdrant，使用独立关系库时会得到独立集合。共享记忆的实例使用相同关系库、命名空间及向量库。默认 PostgreSQL Store 支持空库首次部署时同时启动多个实例。首次同步记忆向量时创建专用集合，其他节点可以接手后台同步和巡检。[共享 Qdrant 配置](../../docs/usage/configuration/ai.md#shared-qdrant)
 

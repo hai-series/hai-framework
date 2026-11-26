@@ -11,8 +11,9 @@ import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
 import { core, HaiCommonError } from '@h-ai/core'
 import { crypto, HaiCryptoError, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
+import { isRedirect } from '@sveltejs/kit'
 import { kitM } from '../../kit-i18n.js'
-import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, normalizeTransportBasePath, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
+import { normalizeTransportBasePath, resolveKeyExchangePath, resolveTransportContractApiPrefix, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
 
 const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json', 'text/sveltekit-data']
 
@@ -37,8 +38,9 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
     return async (_context, next) => next()
   }
 
-  const keyExchangePath = config.keyExchangePath ?? DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH
+  const keyExchangePath = resolveKeyExchangePath(config.keyExchangePath)
   const basePath = normalizeTransportBasePath(config.basePath)
+  const contractApiPrefix = resolveTransportContractApiPrefix(config.contractApiPrefix)
   const excludePaths = config.excludePaths ?? []
 
   const policy = crypto.transport.createBodyPolicy(config.maxPlaintextBytes, config.routePlaintextBytes)
@@ -61,10 +63,6 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
     const { event } = context
     const pathname = getRequestPathname(event.request)
 
-    // CORS 预检没有业务密文，仍交由请求访问策略判断。
-    if (event.request.method === 'OPTIONS')
-      return next()
-
     // 密钥交换端点：委托给 keyExchangeHandler
     if (pathname === keyExchangePath && event.request.method === 'POST') {
       return handleKeyExchange(manager, event.request)
@@ -81,9 +79,9 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
       }
       return next()
     }
-    // 仅对同源 API endpoint 与 SvelteKit __data 请求启用 transport；
+    // 保护已挂载的契约 API、同源 /api 与 SvelteKit 页面数据请求。
     // 显式 required 也可保护自定义 JSON 端点；不能拿它包裹 HTML 页面。
-    if (mode !== 'required' && !shouldHandleTransportPath(pathname, keyExchangePath, basePath)) {
+    if (mode !== 'required' && !shouldHandleTransportPath(pathname, keyExchangePath, basePath, contractApiPrefix)) {
       return next()
     }
 
@@ -126,7 +124,31 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
       }
 
       // ── 执行后续中间件/端点 ──
-      const response = await next()
+      let response: Response
+      try {
+        response = await next()
+      }
+      catch (error) {
+        if (!event.isDataRequest || !isRedirect(error))
+          throw error
+        response = new Response(null, {
+          status: error.status,
+          headers: { Location: error.location },
+        })
+      }
+
+      // SvelteKit 会在 Hook 返回后重写数据请求的重定向。先生成它的页面数据响应，再封装传输。
+      const location = event.isDataRequest && response.status >= 300 && response.status <= 308
+        ? response.headers.get('Location')
+        : null
+      if (location) {
+        void response.body?.cancel().catch(() => {})
+        const headers = new Headers(response.headers)
+        headers.delete('Location')
+        headers.set('Content-Type', 'application/json')
+        headers.set('Cache-Control', 'private, no-store')
+        response = Response.json({ type: 'redirect', status: response.status, location }, { headers })
+      }
 
       // ── 加密响应 ──
 

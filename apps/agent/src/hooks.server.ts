@@ -1,3 +1,4 @@
+import type { KitConfig } from '@h-ai/kit'
 import type { Handle } from '@sveltejs/kit/hooks'
 import process from 'node:process'
 import { cache } from '@h-ai/cache'
@@ -22,13 +23,25 @@ process.once('sveltekit:shutdown', () => {
   })
 })
 
-const security = kit.createHandle({
-  rateLimit: {
-    windowMs: 60_000,
-    maxRequests: 360,
-    store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'agent', allowMemory: !production() }),
-  },
-})
+let configuredSecurity: Handle | undefined
+const security: Handle = (input) => {
+  if (!configuredSecurity) {
+    const { cors, http, transport } = core.config.getOrThrow<KitConfig>('kit')
+    if (transport !== false)
+      throw new Error('Agent does not install Kit transport encryption')
+    configuredSecurity = kit.createHandle({
+      cors,
+      http: {
+        ...http,
+        rateLimit: http.rateLimit && {
+          ...http.rateLimit,
+          store: core.access.createCacheRateLimitStore(cache, { namespace: 'agent', allowMemory: !production() }),
+        },
+      },
+    })
+  }
+  return configuredSecurity(input)
+}
 
 const session: Handle = async ({ event, resolve }) => {
   const cookie = event.cookies.get('agent_session')

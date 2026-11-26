@@ -23,8 +23,19 @@ import messagesZhCN from '../messages/zh-CN.json'
  */
 type ServMessageKey = keyof typeof messagesZhCN
 
-const SUPPORTED_SERV_LOCALES = ['zh-CN', 'en-US', 'ja-JP'] as const
-const DEFAULT_SERV_LOCALE = 'zh-CN'
+/**
+ * Serv 的默认请求语言，供请求解析与本地化校验复用。
+ * @example 模块内部上下文
+ * ```ts
+ * const fallback = normalizeServLocale(undefined) === DEFAULT_SERV_LOCALE
+ * ```
+ */
+export const DEFAULT_SERV_LOCALE = 'zh-CN'
+const supportedLanguages = new Map([
+  ['zh', DEFAULT_SERV_LOCALE],
+  ['en', 'en-US'],
+  ['ja', 'ja-JP'],
+])
 
 /**
  * 规范化 serv 请求 locale。
@@ -44,22 +55,15 @@ const DEFAULT_SERV_LOCALE = 'zh-CN'
  * ```
  */
 export function normalizeServLocale(locale: string | undefined): string {
-  const candidate = locale?.split(',')[0]?.trim()
-  if (!candidate)
-    return DEFAULT_SERV_LOCALE
-
-  const exact = SUPPORTED_SERV_LOCALES.find(item => item.toLowerCase() === candidate.toLowerCase())
-  if (exact)
-    return exact
-
-  const baseLanguage = candidate.split('-')[0]?.toLowerCase()
-  if (baseLanguage === 'en')
-    return 'en-US'
-  if (baseLanguage === 'ja')
-    return 'ja-JP'
-  if (baseLanguage === 'zh')
-    return 'zh-CN'
-
+  for (const entry of locale?.split(',') ?? []) {
+    const [tag = '', quality = ''] = entry.split(';', 2)
+    if (/^q\s*=\s*0(?:\.0*)?$/i.test(quality.trim()))
+      continue
+    const language = tag.trim().split('-', 1)[0]?.toLowerCase() ?? ''
+    const supported = supportedLanguages.get(language)
+    if (supported)
+      return supported
+  }
   return DEFAULT_SERV_LOCALE
 }
 

@@ -9,7 +9,7 @@ import { kit } from '../src/kit-main.js'
 
 let serverKeyRing: TransportServerKeyRing
 
-const KEY_EXCHANGE_PATH = `/api${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
+const KEY_EXCHANGE_PATH = crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
 
 function createEvent(request: Request): RequestEvent {
   return {
@@ -123,7 +123,7 @@ function createFailingEncryptManager(): TransportEncryptionManager {
   }
 }
 
-describe('kit.createHandle({ crypto: { transport } })', () => {
+describe('kit.createHandle({ transport })', () => {
   beforeAll(async () => {
     await crypto.init()
     const key = crypto.asymmetric.generateKeyPair()
@@ -164,12 +164,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       data: createFailingEncryptManager(),
     }))
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: transportCrypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(() => new Response(null, { status: 204 }))
@@ -199,12 +197,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       data: createFailingEncryptManager(),
     }))
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: transportCrypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(async (event: RequestEvent) => {
@@ -230,12 +226,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       data: createFailingEncryptManager(),
     }))
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: transportCrypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const response = await dispatch(handle, new Request('http://localhost/api/data', {
@@ -255,12 +249,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const register = vi.spyOn(manager, 'registerClientKey')
     const decrypt = vi.spyOn(manager, 'decryptRequest')
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: createCryptoWithTransportServer(() => core.ok(manager)),
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const cancel = vi.fn()
@@ -307,12 +299,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const manager = createFailingEncryptManager()
     const register = vi.spyOn(manager, 'registerClientKey')
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: createCryptoWithTransportServer(() => core.ok(manager)),
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const request = new Request(`http://localhost${KEY_EXCHANGE_PATH}`, {
@@ -327,12 +317,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   it('读取请求期间取消会停止原流并释放 reader', async () => {
     const manager = createFailingEncryptManager()
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: createCryptoWithTransportServer(() => core.ok(manager)),
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const controller = new AbortController()
@@ -361,12 +349,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     vi.spyOn(manager, 'getServerPublicKey').mockReturnValue('k'.repeat(crypto.transport.bodyLimits.publicKeyBytes + 1))
     const register = vi.spyOn(manager, 'registerClientKey')
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: createCryptoWithTransportServer(() => core.ok(manager)),
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const request = new Request(`http://localhost${KEY_EXCHANGE_PATH}`, {
@@ -381,12 +367,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const manager = createFailingEncryptManager()
     const encrypt = vi.spyOn(manager, 'encryptResponse')
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: createCryptoWithTransportServer(() => core.ok(manager)),
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const cancel = vi.fn()
@@ -419,12 +403,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const manager = createFailingEncryptManager()
     const encrypt = vi.spyOn(manager, 'encryptResponse').mockResolvedValue(core.ok(testResponse()))
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: createCryptoWithTransportServer(() => core.ok(manager)),
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const payloadSize = crypto.transport.bodyLimits.plaintextBytes - 8
@@ -445,12 +427,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const decrypt = vi.spyOn(manager, 'decryptRequest').mockResolvedValue(core.ok('你'.repeat(400_000)))
     vi.spyOn(manager, 'encryptResponse').mockResolvedValue(core.ok(testResponse()))
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: createCryptoWithTransportServer(() => core.ok(manager)),
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(async (event: RequestEvent) => {
@@ -471,15 +451,13 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it.each([undefined, 3600])('密钥协商传递客户端公钥登记有效期 %s', async (clientKeyTtlSeconds) => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: {
-            ...crypto.transport.createKeyStore({ cache }),
-            clientKeyTtlSeconds,
-          },
-          serverKeyRing,
+        keyStore: {
+          ...crypto.transport.createKeyStore({ cache }),
+          clientKeyTtlSeconds,
         },
+        serverKeyRing,
       },
     })
     const keyPair = crypto.asymmetric.generateKeyPair()
@@ -506,12 +484,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('强制加密时拒绝缺少 clientId 的业务请求', async () => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const request = new Request('http://localhost/api/data')
@@ -529,12 +505,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   it('transport 管理器初始化失败即拒绝创建 Handle，不产生部分可用的宿主', () => {
     const failingCrypto = createCryptoWithTransportServer(() => core.err(new Error('server unavailable')))
     expect(() => kit.createHandle({
-      crypto: {
+      transport: {
         crypto: failingCrypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     }))
       .toThrow(expect.objectContaining({
@@ -545,15 +519,13 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('挂载目录的 transport 默认保护 API，保留排除路径、页面和相邻目录边界', async () => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          basePath: '/yyy/',
-          keyExchangePath: '/my/exchange',
-          excludePaths: ['/yyy/api/public'],
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        basePath: '/yyy/',
+        keyExchangePath: '/my/exchange',
+        excludePaths: ['/yyy/api/public'],
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(() => Response.json({ reached: true }))
@@ -576,13 +548,11 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     '/scope%2fprivate',
   ])('挂载目录的 transport 在装配时拒绝无效目录 %s', (basePath) => {
     expect(() => kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          basePath,
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        basePath,
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })).toThrow(TypeError)
   })
@@ -593,10 +563,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const forwardingCrypto = createCryptoWithTransportServer(createServer)
 
     kit.createHandle({
-      crypto: {
-        crypto: forwardingCrypto,
-        transport: { serverKeyRing, keyStore },
-      },
+      transport: { crypto: forwardingCrypto, serverKeyRing, keyStore },
     })
 
     expect(createServer).toHaveBeenCalledOnce()
@@ -605,12 +572,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('页面文档请求仍然透传，不会要求 X-Client-Id', async () => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(() => new Response('<html>ok</html>', {
@@ -641,12 +606,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('默认也保护 SvelteKit __data.json 请求', async () => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(() => new Response('should not run'))
@@ -662,19 +625,17 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('受保护的 __data.json 即使会命中 auth guard，也必须先经过 transport 拦截', async () => {
-    const verifyToken = vi.fn().mockResolvedValue(null)
+    const verifyToken = vi.fn().mockResolvedValue(core.err(HaiCommonError.UNAUTHORIZED))
     const handle = kit.createHandle({
       auth: {
         verifyToken,
         loginUrl: '/auth/login',
         protectedPaths: ['/admin/*'],
       },
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(() => new Response('should not run'))
@@ -694,19 +655,17 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
 
   it('当 SvelteKit 将 event.url 标准化为页面路径时，仍必须按原始 __data.json 请求做 transport 判断', async () => {
-    const verifyToken = vi.fn().mockResolvedValue(null)
+    const verifyToken = vi.fn().mockResolvedValue(core.err(HaiCommonError.UNAUTHORIZED))
     const handle = kit.createHandle({
       auth: {
         verifyToken,
         loginUrl: '/auth/login',
         protectedPaths: ['/admin/*'],
       },
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(() => new Response('should not run'))
@@ -736,12 +695,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       data: createFailingEncryptManager(),
     }))
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto: failingCrypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
 
@@ -764,13 +721,11 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('显式排除上传路径后才允许明文上传', async () => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-          excludePaths: ['/api/upload'],
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
+        excludePaths: ['/api/upload'],
       },
     })
     const resolve = vi.fn(async (event: RequestEvent) => new Response(await event.request.text()))
@@ -780,12 +735,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   })
   it('通过 crypto.transport.createClient 完成端到端加解密', async () => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const serverFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -817,12 +770,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('已协商客户端的空 POST 不要求 X-Encrypted 请求体', async () => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const serverFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -851,12 +802,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
   it('svelteKit __data.json 响应使用 text/sveltekit-data 时也会被加密', async () => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const rawDataResponses: Response[] = []
@@ -893,15 +842,15 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     expect(await response.text()).toBe('{"type":"data","nodes":[]}')
   })
 
-  it('支持自定义 keyExchangePath', async () => {
+  it.each(['', '/portal'])('使用挂载目录 %s 时按显式完整路径协商', async (basePath) => {
+    const keyExchangePath = `${basePath}/custom/exchange` as const
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-          keyExchangePath: '/custom/exchange',
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
+        basePath,
+        keyExchangePath,
       },
     })
     const keyPair = crypto.asymmetric.generateKeyPair()
@@ -909,15 +858,17 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     if (!keyPair.success)
       return
 
-    const request = new Request('http://localhost/custom/exchange', {
+    const request = new Request(`http://localhost${keyExchangePath}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clientPublicKey: keyPair.data.publicKey }),
     })
 
-    const response = await dispatch(handle, request, () => new Response('should not run'))
+    const resolve = vi.fn(() => new Response('Unexpected route dispatch'))
+    const response = await dispatch(handle, request, resolve)
 
     expect(response.status).toBe(200)
+    expect(resolve).not.toHaveBeenCalled()
   })
 })
 

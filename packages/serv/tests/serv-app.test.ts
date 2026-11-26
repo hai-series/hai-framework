@@ -1,27 +1,26 @@
-import type { ServContext } from '../src/serv-context.js'
+import type { ServContext } from '../src/index.js'
 import { apiContract } from '@h-ai/api-contract'
 import { audit } from '@h-ai/audit'
 import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
-import { serv } from '../src/serv-main.js'
+import { serv } from '../src/index.js'
 
 const contract = apiContract.create({})
 const procedures = serv.implement(contract).context<ServContext>().build()
 
 describe('@h-ai/serv', () => {
-  it('根入口聚合预置工厂，feature 子路径转发同一服务对象', async () => {
-    const entries = await Promise.all([
-      import('../src/features/serv-feature-ai-entry.js'),
-      import('../src/features/serv-feature-iam-entry.js'),
-      import('../src/features/serv-feature-storage-entry.js'),
-      import('../src/features/serv-feature-feedback-entry.js'),
-    ])
-    for (const entry of entries)
-      expect(entry.serv).toBe(serv)
+  it('从根入口提供预置能力工厂', () => {
     for (const factory of [
       serv.createAiProcedures,
+      serv.createAiStreamingProcedures,
+      serv.createAiMemoryWriteProcedures,
+      serv.createAiMediaProcedures,
+      serv.createAuditProcedures,
       serv.createIamProcedures,
+      serv.createIamManagementProcedures,
+      serv.createPaymentCloseOrderProcedures,
       serv.createStorageProcedures,
+      serv.createStorageTransferProcedures,
       serv.createFeedbackProcedures,
     ])
       expect(typeof factory).toBe('function')
@@ -278,9 +277,11 @@ describe('@h-ai/serv', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      verifyToken: async token => token === 'valid-token'
-        ? core.ok({ userId: 'user-1', roles: [], permissions: [] })
-        : core.err(HaiCommonError.UNAUTHORIZED, 'invalid token'),
+      auth: {
+        verifyToken: async token => token === 'valid-token'
+          ? core.ok({ userId: 'user-1', roles: [], permissions: [] })
+          : core.err(HaiCommonError.UNAUTHORIZED, 'invalid token'),
+      },
       http: {
         docs: { path: '/docs', requireAuth: true },
         openapi: { path: '/openapi.json' },

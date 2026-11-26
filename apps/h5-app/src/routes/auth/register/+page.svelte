@@ -6,4 +6,6 @@
   import { authActions } from '#lib/services/auth.js'
 </script>
 
-<AuthPanel config={page.data.iamPublicConfig} actions={authActions} initialMode='register' loginUrl={resolve('auth/login')} registerUrl={resolve('auth/register')} onauthenticated={() => goto(resolve('profile'))} />
+<AuthPanel config={page.data.iamPublicConfig} actions={authActions} initialMode='register' loginUrl={resolve('auth/login')} registerUrl={resolve('auth/register')} onauthenticated={() => goto(resolve('profile'), {
+  invalidate: ['hai:session'],
+})} />

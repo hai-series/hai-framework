@@ -3,7 +3,8 @@
  * @module serv-route-transport
  */
 
-import type { HaiError, HaiResult, RequestAccessCheck } from '@h-ai/core'
+import type { HttpContractTransport } from '@h-ai/api-contract'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { AnyContractProcedure } from '@orpc/contract'
 import type { ServGuardRequirements } from './pipelines/serv-pipeline-guard.js'
 import type { ServContext } from './serv-context.js'
@@ -49,8 +50,39 @@ interface RegisteredRoute {
   readonly procedure: AnyContractProcedure
 }
 const registeredHandlers = new WeakMap<object, RegisteredRoute>()
-const admittedRoutes = new WeakMap<Request, RegisteredRoute>()
-const privateResponses = new WeakSet<Request>()
+const dispatchState = Symbol('serv.dispatch')
+
+/**
+ * 请求上下文中的分发状态。oRPC 在合并上下文时会保留此属性。
+ * @example 模块内部上下文
+ * ```ts
+ * function begin(context: ServContext): DispatchContext {
+ *   return { ...context, [dispatchState]: { privateResponse: false } }
+ * }
+ * ```
+ */
+interface DispatchContext extends ServContext {
+  readonly [dispatchState]?: {
+    admittedRoute?: RegisteredRoute
+    privateResponse: boolean
+  }
+}
+
+/**
+ * 为宿主本次分发创建独立的上下文状态。
+ * @example 模块内部上下文
+ * ```ts
+ * function dispatch(context: ServContext) {
+ *   return createDispatchContext(context)
+ * }
+ * ```
+ */
+export function createDispatchContext(context: ServContext): DispatchContext {
+  return {
+    ...context,
+    [dispatchState]: { privateResponse: false },
+  }
+}
 
 /**
  * 在当前 HTTP 请求中为包含一次性凭据的响应禁用缓存。
@@ -61,22 +93,29 @@ const privateResponses = new WeakSet<Request>()
  * }
  * ```
  */
-export function markServResponsePrivate(context: ServContext): void {
-  privateResponses.add(context.request)
+export function markServResponsePrivate(context: DispatchContext): void {
+  const state = context[dispatchState]
+  if (state)
+    state.privateResponse = true
 }
 
 /**
- * 生成响应时取出并清除本次请求的标记。
+ * 结束本次分发并判断响应是否需要禁用缓存。
  * @example 模块内部上下文
  * ```ts
  * function cachePolicy(context: ServContext) {
- *   return isPrivateResponse(context) ? 'no-store' : undefined
+ *   return finishDispatch(context) ? 'no-store' : undefined
  * }
  * ```
  */
-export function isPrivateResponse(context: ServContext): boolean {
-  const admitted = admittedRoutes.delete(context.request)
-  return privateResponses.delete(context.request) || admitted
+export function finishDispatch(context: DispatchContext): boolean {
+  const state = context[dispatchState]
+  if (!state)
+    return false
+  const isPrivate = state.privateResponse || state.admittedRoute !== undefined
+  state.privateResponse = false
+  state.admittedRoute = undefined
+  return isPrivate
 }
 
 /**
@@ -120,8 +159,8 @@ export function registerTransportHandler(handler: object, route: RegisteredRoute
  * }
  * ```
  */
-export function isAdmittedTransportRoute(context: ServContext, route: RegisteredRoute): boolean {
-  return admittedRoutes.get(context.request) === route
+export function isAdmittedTransportRoute(context: DispatchContext, route: RegisteredRoute): boolean {
+  return context[dispatchState]?.admittedRoute === route
 }
 
 function routeKey(method: string | undefined, path: string | undefined, prefix: string): string {
@@ -156,7 +195,7 @@ function registeredRoutes(router: unknown, prefix: string): Map<string, Register
  * 编译宿主白名单，先判定路由传输策略，再鉴权和有界读取正文。
  * @example 模块内部上下文
  * ```ts
- * const preparer = createTransportRoutePreparer({}, [], '/api/v1', () => undefined, false)
+ * const preparer = createTransportRoutePreparer({}, [], '/api/v1')
  * void preparer
  * ```
  */
@@ -164,8 +203,6 @@ export function createTransportRoutePreparer(
   procedures: unknown,
   configured: readonly ServTransportRoute[] | undefined,
   apiPrefix: string,
-  encryption: RequestAccessCheck['encryption'],
-  encryptByDefault: boolean,
 ) {
   const registered = registeredRoutes(procedures, apiPrefix)
   const allowed = new Map<string, number>()
@@ -181,7 +218,7 @@ export function createTransportRoutePreparer(
   if (registered.size === 0)
     return undefined
 
-  function admit(request: Request) {
+  function admit(request: Request, transport: HttpContractTransport) {
     const path = new URL(request.url).pathname
     // oRPC 和路由树会剥掉末尾斜线。别名禁止进入，避免按不同路径匹配访问和加密策略。
     const canonicalPath = path.replace(/\/+$/, '')
@@ -191,8 +228,8 @@ export function createTransportRoutePreparer(
       return undefined
 
     const maxBytes = allowed.get(key)
-    const mode = encryption(path, request.method)
-    if (path !== canonicalPath || maxBytes === undefined || mode === 'required' || (encryptByDefault && mode !== 'disabled'))
+    const mode = transport.encryption?.(path, request.method)
+    if (path !== canonicalPath || maxBytes === undefined || mode === 'required' || (transport.enabled && mode !== 'disabled'))
       return failure(HaiCommonError.REQUEST_ACCESS_DENIED, core.i18n.coreM('core_requestAccessDenied'))
     if (request.headers.has(crypto.transport.protocol.ENCRYPTED_HEADER)
       || request.headers.has(crypto.transport.protocol.ENVELOPE_HEADER)) {
@@ -206,14 +243,14 @@ export function createTransportRoutePreparer(
   }
 
   return {
-    preflight(request: Request) {
-      const admitted = admit(request)
+    preflight(request: Request, transport: HttpContractTransport) {
+      const admitted = admit(request, transport)
       return admitted instanceof Response
         ? admitted
         : undefined
     },
-    async prepare(request: Request, context: ServContext) {
-      const admitted = admit(request)
+    async prepare(request: Request, context: DispatchContext, transport: HttpContractTransport) {
+      const admitted = admit(request, transport)
       if (admitted instanceof Response)
         return admitted
       if (!admitted)
@@ -232,7 +269,9 @@ export function createTransportRoutePreparer(
         return failure({ ...HaiCommonError.TIMEOUT, httpStatus: 408 }, core.i18n.coreM('core_errorTimeout'), context)
       if (!bounded)
         return failure({ ...HaiCommonError.VALIDATION_ERROR, httpStatus: 413 }, servM('serv_transportInvalidPayload'), context)
-      admittedRoutes.set(context.request, admitted.route)
+      const state = context[dispatchState]
+      if (state)
+        state.admittedRoute = admitted.route
       return bounded
     },
   }

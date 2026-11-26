@@ -4,7 +4,7 @@ import { crypto } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const KEY_EXCHANGE_URL = `/api${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
+const KEY_EXCHANGE_URL = crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
 
 let fetchSpy: ReturnType<typeof vi.fn>
 
@@ -230,11 +230,21 @@ describe('createKitClient - 传输加密', () => {
     expect(fetchSpy).toHaveBeenCalledWith(KEY_EXCHANGE_URL, expect.objectContaining({ method: 'POST' }))
   })
 
+  it('拒绝旧的交换 URL 字段及非 pathname 值', () => {
+    const oldClient = {
+      transport: { crypto, keyExchangeUrl: '/legacy/key-exchange' },
+    }
+    expect(() => kit.client.create(oldClient)).toThrow('Use transport.keyExchangePath')
+    expect(() => kit.client.create({
+      transport: { crypto, keyExchangePath: '/handshake?mode=demo' },
+    })).toThrow('canonical absolute request path')
+  })
+
   it('自定义密钥交换端点', async () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
     const client = kit.client.create({
-      transport: { crypto, keyExchangeUrl: '/my/exchange' },
+      transport: { crypto, keyExchangePath: '/my/exchange' },
     })
 
     await client.init()
@@ -255,7 +265,7 @@ describe('createKitClient - 传输加密', () => {
     })
 
     const [url, init] = fetchSpy.mock.calls[1]!
-    expect(url).toBe('/api/data')
+    expect(new URL(String(url), 'http://localhost').pathname).toBe('/api/data')
     const headers = new Headers(init.headers)
     expect(headers.get(crypto.transport.protocol.CLIENT_ID_HEADER)).toBeTruthy()
     expect(headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe(crypto.transport.protocol.ENCRYPTED_HEADER_VALUE)
@@ -270,7 +280,7 @@ describe('createKitClient - 传输加密', () => {
     fetchSpy = createTransportFetch()
     vi.stubGlobal('fetch', fetchSpy)
     const client = kit.client.create({
-      transport: { crypto, basePath: '/yyy', keyExchangeUrl: '/my/exchange' },
+      transport: { crypto, basePath: '/yyy', keyExchangePath: '/my/exchange' },
     })
     try {
       expect(await (await client.apiFetch('/yyy/api/private')).text()).toBe('OK')
@@ -406,7 +416,7 @@ describe('createKitClient - 传输加密', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(2)
     expect(fetchSpy.mock.calls[0]![0]).toBe(KEY_EXCHANGE_URL)
-    expect(fetchSpy.mock.calls[1]![0]).toBe('/api/users')
+    expect(new URL(String(fetchSpy.mock.calls[1]![0]), 'http://localhost').pathname).toBe('/api/users')
   })
 
   it('并发请求共用同一次密钥交换', async () => {
@@ -482,6 +492,58 @@ describe('createKitClient - auth', () => {
     const headers = new Headers(init.headers)
     expect(headers.get('Authorization')).toBe('Bearer custom_token')
   })
+
+  it('只为同源请求添加 Kit 凭据并限制重定向范围', async () => {
+    vi.stubGlobal('window', {
+      location: new URL('https://app.example.test/workspace/'),
+    })
+    setDocumentCookie('hai_csrf=local-csrf')
+    kit.auth.setBrowserToken('local-access-token')
+    const client = kit.client.create({ auth: true })
+
+    await client.apiFetch('settings', { method: 'POST' })
+    await client.apiFetch(new URL('https://service.example.test/settings'), { method: 'POST' })
+    await client.apiFetch(new Request('https://service.example.test/settings', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer service-token', 'X-CSRF-Token': 'service-csrf' },
+    }))
+
+    const [sameOriginUrl, sameOrigin] = fetchSpy.mock.calls[0]! as [URL, RequestInit]
+    expect(sameOriginUrl.href).toBe('https://app.example.test/workspace/settings')
+    expect(new Headers(sameOrigin.headers).get('Authorization')).toBe('Bearer local-access-token')
+    expect(new Headers(sameOrigin.headers).get('X-CSRF-Token')).toBe('local-csrf')
+    expect(sameOrigin.mode).toBe('same-origin')
+
+    const crossOrigin = fetchSpy.mock.calls[1]![1] as RequestInit
+    expect(new Headers(crossOrigin.headers).has('Authorization')).toBe(false)
+    expect(new Headers(crossOrigin.headers).has('X-CSRF-Token')).toBe(false)
+    expect(crossOrigin.mode).toBeUndefined()
+
+    const explicit = new Headers(fetchSpy.mock.calls[2]![1].headers)
+    expect(explicit.get('Authorization')).toBe('Bearer service-token')
+    expect(explicit.get('X-CSRF-Token')).toBe('service-csrf')
+  })
+
+  it('文档基址解析到其他来源时不自动填充凭据', async () => {
+    vi.stubGlobal('window', {
+      location: new URL('https://app.example.test/workspace/'),
+    })
+    vi.stubGlobal('document', { baseURI: 'https://service.example.test/default/', cookie: 'hai_csrf=local-csrf' })
+    const auth = {
+      get: vi.fn(() => 'local-access-token'),
+      set: vi.fn(),
+      clear: vi.fn(),
+    }
+    const client = kit.client.create({ auth })
+
+    await client.apiFetch('settings', { method: 'POST' })
+
+    const [input, init] = fetchSpy.mock.calls[0]!
+    expect(input).toBe('settings')
+    expect(new Headers(init.headers).has('Authorization')).toBe(false)
+    expect(new Headers(init.headers).has('X-CSRF-Token')).toBe(false)
+    expect(auth.get).not.toHaveBeenCalled()
+  })
 })
 
 describe('installBrowserTransportFetch', () => {
@@ -503,7 +565,7 @@ describe('installBrowserTransportFetch', () => {
     fetchSpy = createTransportFetch({ encryptedResponseBody: originalPayload })
     stubBrowserFetch(fetchSpy)
 
-    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangePath: KEY_EXCHANGE_URL })
 
     const response = await fetch('http://localhost/admin/iam/roles/__data.json?x-sveltekit-invalidated=011')
 
@@ -533,13 +595,41 @@ describe('installBrowserTransportFetch', () => {
       expect(requests.find(request => new URL(request.url).pathname === pathname)?.headers.has(crypto.transport.protocol.CLIENT_ID_HEADER)).toBe(false)
   })
 
+  it.each(['全局 fetch', '独立客户端'])('%s 使用挂载后的完整契约前缀加密报告', async (clientKind) => {
+    fetchSpy = createTransportFetch()
+    stubBrowserFetch(fetchSpy)
+    vi.stubGlobal('document', { baseURI: 'http://localhost/console/' })
+    const publicConfig = { keyExchangePath: '/my/exchange', excludePaths: [] } as const
+    const host = { crypto, basePath: '/console', contractApiPrefix: '/console/reports' } as const
+    const makeFetch = () => {
+      if (clientKind === '独立客户端') {
+        return kit.client.create({
+          transport: {
+            ...publicConfig,
+            ...host,
+          },
+        }).apiFetch
+      }
+      kit.client.installBrowserTransport({ transport: publicConfig }, host)
+      return fetch
+    }
+    const get = makeFetch()
+    for (const path of ['reports', 'reports/daily', 'reports-history'])
+      expect(await (await get(path)).text()).toBe('OK')
+
+    const requests = fetchSpy.mock.calls.map(call => toRequest(call[0], call[1]))
+    for (const pathname of ['/console/reports', '/console/reports/daily'])
+      expect(requests.find(request => new URL(request.url).pathname === pathname)?.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe('true')
+    expect(requests.at(-1)?.headers.has(crypto.transport.protocol.CLIENT_ID_HEADER)).toBe(false)
+  })
+
   it('普通页面文档请求保持明文透传', async () => {
     fetchSpy = vi.fn().mockResolvedValue(new Response('<html>ok</html>', {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     }))
     stubBrowserFetch(fetchSpy)
 
-    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangePath: KEY_EXCHANGE_URL })
 
     const response = await fetch('http://localhost/admin/iam/roles')
 
@@ -554,7 +644,7 @@ describe('installBrowserTransportFetch', () => {
     formData.append('file', new Blob(['avatar'], { type: 'image/png' }), 'avatar.png')
     stubBrowserFetch(fetchSpy)
 
-    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangePath: KEY_EXCHANGE_URL })
 
     await fetch('http://localhost/api/auth/profile/avatar', {
       method: 'POST',
@@ -571,8 +661,8 @@ describe('installBrowserTransportFetch', () => {
     fetchSpy = createTransportFetch()
     stubBrowserFetch(fetchSpy)
 
-    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
-    kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangePath: KEY_EXCHANGE_URL })
+    kit.client.installBrowserTransportFetch({ crypto, keyExchangePath: KEY_EXCHANGE_URL })
 
     await fetch('http://localhost/api/users')
 

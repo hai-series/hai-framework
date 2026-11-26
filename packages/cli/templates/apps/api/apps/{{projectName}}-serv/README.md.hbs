@@ -33,9 +33,12 @@ pnpm --filter {{api.servPackageName}} test
 
 ### 关键目录
 
-{{#if features.crypto}}启用 transport 时，`serverKeyRing` 与客户端 `keyStore` 都必须显式提供。CLI 在本服务 `.env.dev.local/.env.test.local/.env.prod.local` 中分别生成独立 ring，私有文件不提交 Git，克隆后通过受保护配置或 Secret Manager 分发，变量为 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`；运行时不生成密钥。部署直接复用所选环境文件的 ring，或由 Secret Manager 向所有节点分发相同受管 ring，配合共享数据库 registry。公钥/版本参与协商，私钥不进入普通 YAML、PUBLIC_/VITE_、日志或公开响应。轮换先分发新旧版本再切 activeKeyId，过渡期后撤销旧 ID；无需会话粘性。
-{{#unless features.db}}本模板未选择 db，registry 仅在 development/test 显式使用内存；production/staging 会拒绝启动 transport。选择 db 并配置共享数据库后再部署，或显式关闭 transport。
-{{/unless}}{{/if}}
+在 `config/_serv.yml` 的 `http` 下设置 `trustedProxies`、`access` 和 `rateLimit`。限流默认关闭。启用时须有 Cache 功能，应用会注入固定窗口计数存储。生产实例共用 Redis，否则无法共享计数。超限返回 HTTP 429，按 `Retry-After` 指示的秒数等待后重试。存储失败返回 503。
+
+{{#if features.crypto}}启用传输加密时，服务端提供密钥环和通过 `crypto.transport.createKeyStore({ cache })` 创建的登记存储。同一生产环境的所有实例连接同一 Redis，并加载同一受管密钥环。内存 Cache 只供开发与显式测试。CLI 的本地开发和测试示例位于 `.env.dev`、`.env.test`。生产密钥写入忽略的 `.env.prod.local`，或通过受保护配置注入 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`。运行时读取已有密钥。私钥只留在服务端。轮换时先分发包含新旧版本的密钥环，再切换 `activeKeyId`，过渡期后撤销旧版本。
+
+密钥交换默认使用 `/api/v1/_hai/key-exchange`。修改 `transport.keyExchangePath` 后，客户端应使用同一个从站点根开始的绝对路径。
+{{/if}}
 
 - `config/`：service 配置
 - `src/app.ts`：HTTP App 装配
@@ -53,6 +56,12 @@ LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IA
 
 完整契约见生成应用的 `.agents/skills/hai-iam/reference.md`。
 {{/if}}
+
+{{#if features.ai}}{{#if features.iam}}
+### 实时语音
+
+在 `_ai.yml` 配置语音模型，给 IAM 员工角色授予 `ai:audio:use`。设置 `HAI_SERV_AUDIO='{"path":"/voice"}'`。员工用访问令牌调用 `POST /api/v1/ai/audio/tickets`，把收到的一次性票据传给 `wss://<API 域名>/voice`。公开 HTTPS 网关须转发 WebSocket `Upgrade`。 [Serv 技能](../../.agents/skills/hai-serv/reference.md)
+{{/if}}{{/if}}
 
 ## 开发测试
 

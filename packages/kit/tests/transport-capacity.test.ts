@@ -22,17 +22,15 @@ afterAll(async () => crypto.close())
 function fixture(maxPlaintextBytes: number, resolve: (event: RequestEvent) => Promise<Response> | Response) {
   const handle = kit.createHandle({
     csrf: false,
-    crypto: {
+    transport: {
       crypto,
-      transport: {
-        serverKeyRing,
-        keyStore: crypto.transport.createKeyStore({ cache }),
-        maxPlaintextBytes,
-      },
+      serverKeyRing,
+      keyStore: crypto.transport.createKeyStore({ cache }),
+      maxPlaintextBytes,
     },
   })
   return crypto.transport.createClient({
-    keyExchangeUrl: 'http://localhost/api/_hai/key-exchange',
+    keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange',
     fetch: (input, init) => {
       const request = new Request(input, init)
       const event = {

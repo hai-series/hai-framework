@@ -2,10 +2,19 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
-  import { kit } from '@h-ai/kit'
+  import { kit } from '@h-ai/kit/client'
   import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
 
   const actions = kit.client.createAuthActions({ basePath: `${resolve('/').replace(/\/$/, '')}/api/auth` })
 </script>
 
-<AuthPanel config={page.data.iamPublicConfig} {actions} initialMode='login' loginUrl={resolve('auth/login')} registerUrl={resolve('auth/register')} onauthenticated={() => goto(resolve('admin'))} />
+<AuthPanel
+  config={page.data.iamPublicConfig}
+  {actions}
+  initialMode='login'
+  loginUrl={resolve('auth/login')}
+  registerUrl={resolve('auth/register')}
+  onauthenticated={() => goto(resolve('admin'), {
+    invalidate: ['hai:session'],
+  })}
+/>

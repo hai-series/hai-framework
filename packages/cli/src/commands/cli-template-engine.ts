@@ -712,6 +712,7 @@ export interface FullstackTemplateContext {
   selectedFrontendsJson: string
   /** 可运行前端应用 */
   frontendApps: readonly FullstackFrontendApp[]
+  developmentCorsOriginEnv: string
   /** Playwright 默认验证前端 */
   e2eFrontend?: FullstackFrontendApp
   /** 前端选择布尔表，用于模板条件创建 */
@@ -1069,6 +1070,7 @@ function buildFullstackTemplateContext(
     selectedFrontends,
     selectedFrontendsJson: `[${selectedFrontends.map(f => `'${f}'`).join(', ')}]`,
     frontendApps,
+    developmentCorsOriginEnv: `\${HAI_SERV_CORS_ORIGIN:${frontendApps.flatMap(({ port }) => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]).join(',')}}`,
     e2eFrontend: frontendApps[0],
     frontends: {
       web: selectedFrontends.includes('web'),

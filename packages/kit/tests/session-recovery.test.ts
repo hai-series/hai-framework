@@ -117,6 +117,28 @@ it('恢复后保留POST正文与终端，只续接一次', async () => {
   finally { client.destroy() }
 })
 
+it('首次请求和会话恢复重试都使用文档基址解析相对路径', async () => {
+  vi.stubGlobal('window', {
+    location: new URL('https://app.example.test/workspace/page'),
+  })
+  vi.stubGlobal('document', { baseURI: 'https://app.example.test/base/', cookie: '' })
+  const sentUrls: string[] = []
+  vi.stubGlobal('fetch', vi.fn(async (request: Request) => {
+    sentUrls.push(request.url)
+    return sentUrls.length === 1
+      ? denied()
+      : Response.json({ success: true })
+  }))
+  const recoverSession = vi.fn(async () => true)
+  const client = kit.client.create({ recoverSession })
+  try {
+    expect((await client.apiFetch('settings')).ok).toBe(true)
+    expect(sentUrls).toEqual(Array.from({ length: 2 }).fill('https://app.example.test/base/settings'))
+    expect(recoverSession).toHaveBeenCalledOnce()
+  }
+  finally { client.destroy() }
+})
+
 it.each(['hai:iam:002', 'hai:iam:027'])('二次认证错误 %s 不打开重新登录弹窗', async (code) => {
   const fetch = vi.fn(async () => denied(code))
   vi.stubGlobal('fetch', fetch)

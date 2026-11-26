@@ -2,15 +2,24 @@
 {{#unless isSvelteOnlyApp}}
 import type { CoreConfig } from '@h-ai/core'
 import type { KitPublicConfig } from '@h-ai/kit'
+{{#if features.iam}}
+import type { LayoutServerLoad } from './$types'
+{{/if}}
 import { core } from '@h-ai/core'
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
+import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
 {{/if}}
 import { getKitConfig } from '#lib/server/kit-config.js'
 
 /** 只向浏览器提供公开配置，避免暴露日志上下文、凭证或其它模块配置。 */
+{{#if features.iam}}
+export const load: LayoutServerLoad = async ({ depends, locals, setHeaders }) => {
+  depends('hai:session')
+{{else}}
 export async function load() {
+{{/if}}
   const config = core.config.getOrThrow<CoreConfig>('core')
 {{#if features.iam}}
   const publicConfig = await iam.getPublicConfig()
@@ -18,11 +27,17 @@ export async function load() {
     core.logger.error('Failed to load public authentication configuration', { error: publicConfig.error })
     error(503, core.error.toPublic(publicConfig.error).message)
   }
+  const sessionFingerprint = publicConfig.data.session.endOnPageHide
+    ? kit.auth.sessionFingerprint(locals.accessToken)
+    : undefined
+  if (sessionFingerprint)
+    setHeaders({ 'cache-control': 'private, no-store' })
 {{/if}}
   return {
     kitConfig: { transport: getKitConfig().transport } satisfies KitPublicConfig,
 {{#if features.iam}}
     iamPublicConfig: publicConfig.data,
+    sessionFingerprint,
 {{/if}}
     appConfig: {
       name: config.name,

@@ -15,7 +15,7 @@ import { hasPermission, matchPermission, requirePermission } from './guards/kit-
 
 import { requireSensitiveOperation } from './guards/kit-sensitive.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
-import { authApiPublicPaths, createAuthApi } from './kit-auth-api.js'
+import { authApiPublicPaths, createAuthApi, createSessionFingerprint } from './kit-auth-api.js'
 import {
   clearBrowserToken,
   login,
@@ -32,10 +32,7 @@ import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
 import { IdParamSchema, PaginationQuerySchema, validateFormOrFail, validateParamsOrFail, validateQueryOrFail } from './kit-validation.js'
-import { createCacheRateLimitStore, createMemoryRateLimitStore, rateLimitMiddleware } from './middleware/kit-ratelimit.js'
-import { createA2AApiKeyAuthenticator } from './modules/a2a/kit-a2a-auth.js'
-import { handleA2ARequest, resolveA2AConfig } from './modules/a2a/kit-a2a-handle.js'
-import { createA2AHandler, createAgentCardHandler } from './modules/a2a/kit-a2a-helpers.js'
+import { rateLimitMiddleware } from './middleware/kit-ratelimit.js'
 import { transportEncryptionMiddleware } from './modules/crypto/kit-transport-middleware.js'
 
 export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
@@ -54,26 +51,14 @@ export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
  * ```
  */
 export const kit: KitFunctions = {
-  a2a: {
-    createApiKeyAuthenticator: createA2AApiKeyAuthenticator,
-    createHandler: createA2AHandler,
-    createAgentCardHandler,
-    handleRequest: handleA2ARequest,
-    resolveConfig: resolveA2AConfig,
-  },
   crypto: { transportEncryptionMiddleware },
-  matchPermission,
-  resolveOptions,
-  resolveText,
   resolveConfig: resolveKitConfig,
   resolveTransportConfig: resolveKitTransportConfig,
   /** 创建反馈的受控 catch-all HTTP handler，身份范围由宿主解析。 */
   createFeedbackHandler,
-  /** 原子限流工厂；共享store生命周期由应用管理。 */
+  /** 创建适配 SvelteKit 请求事件的限流中间件。 */
   middleware: {
     rateLimit: rateLimitMiddleware,
-    createCacheRateLimitStore,
-    createMemoryRateLimitStore,
   },
 
   // ─── Handle Hook ───
@@ -94,6 +79,8 @@ export const kit: KitFunctions = {
     require: requirePermission,
     /** 检查会话是否具有指定权限（布尔） */
     check: hasPermission,
+    /** 匹配显式给出的权限列表，支持通配符。 */
+    matchPermission,
   },
 
   // ─── API 响应 ───
@@ -167,6 +154,8 @@ export const kit: KitFunctions = {
     publicPaths: authApiPublicPaths,
     /** 标准配置/登录/注册/验证码/重置 handler 集合。 */
     createApi: createAuthApi,
+    /** 为已鉴别页面派生退出会话指纹。 */
+    sessionFingerprint: createSessionFingerprint,
     /** 服务端登录（密码）：内部调用 iam.auth.login + 自动写入 Token Cookie */
     login,
     /** 服务端登录（OTP 验证码）：内部调用 iam.auth.loginWithOtp + 自动写入 Token Cookie */
@@ -190,6 +179,8 @@ export const kit: KitFunctions = {
   crud: {
     /** 定义 CRUD 资源（声明式配置 → 操作对象） */
     define: defineCrud,
+    resolveOptions,
+    resolveText,
   },
 
   // ─── i18n ───

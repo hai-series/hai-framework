@@ -50,8 +50,9 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
       : result
   }
   return {
-    bindPageExit(options: { enabled?: boolean } = {}) {
-      if (!options.enabled || typeof window === 'undefined')
+    bindPageExit(options: { enabled?: boolean, sessionFingerprint?: string } = {}) {
+      const { enabled, sessionFingerprint } = options
+      if (!enabled || !sessionFingerprint || typeof window === 'undefined')
         return () => {}
       const target = window
       let sent = false
@@ -59,7 +60,7 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
         if (event.persisted || sent)
           return
         sent = true
-        void post('session/close', {}, { keepalive: true }).then((result) => {
+        void post('session/close', { sessionFingerprint }, { keepalive: true }).then((result) => {
           if (!result.success)
             core.logger.warn('Page exit session revocation failed', { errorCode: result.error.code })
         }).catch(() => core.logger.warn('Page exit session request did not complete'))

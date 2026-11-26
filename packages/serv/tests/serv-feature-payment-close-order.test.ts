@@ -1,4 +1,4 @@
-import type { PaymentExtensionProcedureDeps, ServContext } from '../src/index.js'
+import type { PaymentCloseOrderProcedureDeps, ServContext } from '../src/index.js'
 import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
@@ -8,8 +8,8 @@ import { serv } from '../src/index.js'
 const logger = core.logger.child({ module: 'serv-test', scope: 'feature-payment' })
 
 function setup(session?: ServContext['session']) {
-  const closeOrder = vi.fn<PaymentExtensionProcedureDeps['payment']['closeOrder']>(async () => core.ok(undefined))
-  const authorizeClose = vi.fn<PaymentExtensionProcedureDeps['authorizeClose']>((input, context) => {
+  const closeOrder = vi.fn<PaymentCloseOrderProcedureDeps['payment']['closeOrder']>(async () => core.ok(undefined))
+  const authorizeClose = vi.fn<PaymentCloseOrderProcedureDeps['authorizeClose']>((input, context) => {
     if (context.session.userId !== 'merchant-owner' || input.orderNo !== 'order-1')
       return core.err(HaiCommonError.NOT_FOUND, 'Order not found')
     return core.ok({ provider: 'stripe', orderNo: 'order-1' })
@@ -18,7 +18,7 @@ function setup(session?: ServContext['session']) {
   const app = serv.createApp({
     contract,
     procedures: {
-      payment: serv.createPaymentExtensionProcedures({
+      payment: serv.createPaymentCloseOrderProcedures({
         payment: { closeOrder },
         authorizeClose,
       }),
@@ -56,7 +56,7 @@ async function withClient<T>(fixture: ReturnType<typeof setup>, callback: (clien
   }
 }
 
-describe('payment HTTP extensions', () => {
+describe('payment order closing HTTP', () => {
   it('closes only an owned merchant order with a matching provider and preserves provider failures', async () => {
     const fixture = setup({ userId: 'merchant-owner', roles: [], permissions: [] })
     await withClient(fixture, async ({ payment }) => {

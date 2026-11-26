@@ -1,6 +1,7 @@
 /** 执行实际移动客户端模板，覆盖 transport 选择和客户端/crypto 的资源边界。 */
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
+import { crypto as actualCrypto } from '@h-ai/crypto'
 import Handlebars from 'handlebars'
 import ts from 'typescript'
 import { describe, expect, it, vi } from 'vitest'
@@ -36,6 +37,7 @@ function instantiate(options: { encrypted?: boolean, transport?: string, native?
     closeFailure: false,
   }
   const crypto = {
+    transport: actualCrypto.transport,
     get isInitialized() { return state.cryptoInitialized },
     init: vi.fn(async () => {
       calls.push('crypto.init')
@@ -86,6 +88,15 @@ function instantiate(options: { encrypted?: boolean, transport?: string, native?
         return { apiClient: client }
       if (name === '@h-ai/crypto')
         return { crypto }
+      if (name === '@h-ai/core') {
+        return {
+          core: {
+            i18n: {
+              coreM: () => 'Invalid configuration',
+            },
+          },
+        }
+      }
       if (name === '@h-ai/capacitor') {
         return {
           capacitor: {

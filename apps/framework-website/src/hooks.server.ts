@@ -79,11 +79,12 @@ const haiHandle: Handle = async (input) => {
       throw new Error(loaded.error.message)
     if (loaded.data.transport !== false)
       throw new Error('This example does not install transport encryption; use admin-console or a crypto-enabled CLI template for the complete server and browser assembly')
+    const { http } = loaded.data
+    if (http.rateLimit !== false)
+      throw new Error('Kit http.rateLimit requires an initialized cache; framework-website does not install one')
     configuredHandle = kit.createHandle({
-      trustedProxies: loaded.data.trustedProxies,
-      access: loaded.data.access,
-      // 未选择cache能力时不启用限流；启用前须接入共享原子store。
-      rateLimit: false,
+      cors: loaded.data.cors,
+      http: { ...http, rateLimit: false },
       logging: { logBody: false },
       onError: (error: unknown, _event) => {
         core.logger.error('Request error:', { error })

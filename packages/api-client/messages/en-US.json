@@ -12,6 +12,7 @@
   "apiClient_alreadyInitialized": "API client is already initialized; call apiClient.close() before init()",
   "apiClient_configError": "API client config error: {error}",
   "apiClient_invalidBaseUrl": "Provide an HTTP(S) API URL or a same-origin root path in the browser. Omit credentials, query parameters, and fragments.",
+  "apiClient_invalidKeyExchangePath": "The key exchange path must be a fixed origin-absolute path without dot segments, wildcards, encoding, queries, or fragments.",
   "apiClient_responseValidationFailed": "Response validation failed",
   "apiClient_unknown": "Unknown error"
 }

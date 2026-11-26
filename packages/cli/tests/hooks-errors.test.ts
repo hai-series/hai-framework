@@ -22,7 +22,10 @@ it('website 实际生成的请求错误处理器对外隐藏底层异常且保�
   const runtimeProcess = Object.assign(new EventEmitter(), { env: {} })
   let onError: ((error: unknown, event: unknown) => Response) | undefined
   const hookExports: { handle?: (input: unknown) => Promise<unknown> } = {}
-  const getKitConfig = vi.fn(() => ({ transport: false, access: false, trustedProxies: 'auto' }))
+  const getKitConfig = vi.fn(() => ({
+    transport: false,
+    http: { access: false, trustedProxies: 'auto', rateLimit: false },
+  }))
   const createHandle = vi.fn((options: { onError: typeof onError }) => {
     onError = options.onError
     return async () => new Response()

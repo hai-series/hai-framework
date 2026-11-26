@@ -7,7 +7,7 @@
 import type { Handle } from '@sveltejs/kit/hooks'
 import process from 'node:process'
 import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { kit, KitConfigSchema } from '@h-ai/kit'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
 import { initApp } from '#lib/server/init.js'
@@ -54,15 +54,15 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
 async function validateSession(token: string) {
   const session = await getPartnerAdminSessionByToken(token)
   if (!session) {
-    return null
+    return core.err(HaiCommonError.UNAUTHORIZED)
   }
 
-  return {
+  return core.ok({
     userId: session.userId,
     username: session.username,
     roles: [session.role],
     permissions: ['partner:records:read'],
-  }
+  })
 }
 
 // =============================================================================
@@ -77,20 +77,25 @@ const haiHandle: Handle = async (input) => {
       throw new Error(loaded.error.message)
     if (loaded.data.transport !== false)
       throw new Error('This example does not install transport encryption; use admin-console or a crypto-enabled CLI template for the complete server and browser assembly')
+    const { http } = loaded.data
     configuredHandle = kit.createHandle({
-      trustedProxies: loaded.data.trustedProxies,
-      access: loaded.data.access,
+      cors: loaded.data.cors,
+      http: {
+        ...http,
+        rateLimit: http.rateLimit && {
+          ...http.rateLimit,
+          store: core.access.createCacheRateLimitStore(cache, {
+            namespace: 'corporate-website',
+            allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1',
+          }),
+        },
+      },
       auth: {
         verifyToken: validateSession,
         cookieName: 'corp_partner_access_token',
         loginUrl: '/partners/admin/login',
         protectedPaths: ['/partners/admin', '/partners/admin/*', '/api/partners/admin/*'],
         publicPaths: ['/partners/admin/login', '/api/partners/admin/login'],
-      },
-      rateLimit: {
-        windowMs: 60000,
-        maxRequests: 120,
-        store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'corporate-website', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }),
       },
     })
   }

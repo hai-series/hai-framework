@@ -41,7 +41,7 @@ if (!info.success) throw new Error(info.error.message)
 
 ### API地址、认证与平台存储
 
-initializeManagementApi接受baseUrl、fetchFn、clientName、terminalType、tokenStorage、headers、requireApiBase和onSessionExpired。基址顺序为显式baseUrl→公开runtime-config→PUBLIC_API_BASE→当前origin；只给origin时补/api/v1，自定义http.apiPrefix必须明确包含。
+initializeManagementApi接受baseUrl、fetchFn、clientName、terminalType、tokenStorage、headers、requireApiBase和onSessionExpired。基址顺序为显式baseUrl→公开runtime-config→PUBLIC_API_BASE→当前origin；只给origin时补/api/v1，自定义http.apiPrefix必须明确包含。密钥交换默认 /api/v1/_hai/key-exchange；自定义时，公开 runtime-config 的 apiKeyExchangePath 或 PUBLIC_API_KEY_EXCHANGE_PATH 必须与服务端使用同一站点根绝对路径。
 
 - Web/浏览器预览使用内存access token和服务端HttpOnly刷新Cookie，刷新恢复会话；认证token不放localStorage。
 - Capacitor原生使用capacitor.createTokenStorage()及受信原生通道。编译/同步前在App的public/runtime-config.js设置公开API地址，不放服务端秘密。

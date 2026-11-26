@@ -1,8 +1,8 @@
-/** 从 typed client 调用 AI 扩展，并验证 Serv 上的身份、流及文件边界。 */
+/** 从 typed client 调用 AI 能力工厂，并验证 Serv 上的身份、流及文件边界。 */
 
 import type { ChatCompletionChunk } from '@h-ai/ai'
 import type { HaiResult } from '@h-ai/core'
-import type { AiExtensionProcedureDeps, ServContext } from '../src/index.js'
+import type { AiMediaProcedureDeps, AiMemoryWriteProcedureDeps, AiStreamingProcedureDeps, ServContext } from '../src/index.js'
 import { ai, HaiAIError } from '@h-ai/ai'
 import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
@@ -13,8 +13,8 @@ import { reldb } from '@h-ai/reldb'
 import { describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/index.js'
 
-const extension = apiContract.extensions.ai
-const contract = apiContract.create({ ai: extension })
+const capabilities = apiContract.extensions.ai
+const contract = apiContract.create({ ai: capabilities })
 const baseUrl = 'https://ai.test/api/v1'
 const requestInput = {
   messages: [
@@ -38,16 +38,22 @@ const audioBytes = new Uint8Array([
 ])
 const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
 
-function setup(deps: AiExtensionProcedureDeps, transportRoutes = [
-  { procedure: extension.chats.streamCompletion, maxRequestBytes: 64 * 1024 },
-  { procedure: extension.audio.transcribe, maxRequestBytes: MEDIA_BODY_LIMIT },
-  { procedure: extension.audio.synthesize, maxRequestBytes: 64 * 1024 },
-  { procedure: extension.images.generate, maxRequestBytes: MEDIA_BODY_LIMIT },
+type AiCapabilityDeps = AiStreamingProcedureDeps & AiMemoryWriteProcedureDeps & AiMediaProcedureDeps
+
+function setup(deps: AiCapabilityDeps, transportRoutes = [
+  { procedure: capabilities.chats.streamCompletion, maxRequestBytes: 64 * 1024 },
+  { procedure: capabilities.audio.transcribe, maxRequestBytes: MEDIA_BODY_LIMIT },
+  { procedure: capabilities.audio.synthesize, maxRequestBytes: 64 * 1024 },
+  { procedure: capabilities.images.generate, maxRequestBytes: MEDIA_BODY_LIMIT },
 ]) {
   const app = serv.createApp({
     contract,
     procedures: {
-      ai: serv.createAiExtensionProcedures(deps),
+      ai: {
+        ...serv.createAiStreamingProcedures(deps),
+        ...serv.createAiMemoryWriteProcedures(deps),
+        ...serv.createAiMediaProcedures(deps),
+      },
     },
     transportRoutes,
     http: { openapi: false, docs: false },
@@ -62,7 +68,7 @@ function setup(deps: AiExtensionProcedureDeps, transportRoutes = [
         request,
         logger: core.logger.child({ module: 'serv-test' }),
         locale: 'en-US',
-        requestId: 'ai-extension-test',
+        requestId: 'ai-capability-test',
         scopeId: 'test-tenant',
         session: userId
           ? { userId, permissions: [], roles: [] }
@@ -133,13 +139,13 @@ function partialToolChunk(): ChatCompletionChunk {
 
 function audioMock() {
   return {
-    transcribe: vi.fn<NonNullable<AiExtensionProcedureDeps['ai']['audio']>['transcribe']>(async () => core.ok({
+    transcribe: vi.fn<NonNullable<AiMediaProcedureDeps['ai']['audio']>['transcribe']>(async () => core.ok({
       text: 'Hello',
       language: 'en',
       durationMs: 125,
     })),
-    synthesize: vi.fn<NonNullable<AiExtensionProcedureDeps['ai']['audio']>['synthesize']>(async () => core.ok({ data: audioBytes, format: 'wav' })),
-    getCapabilities: vi.fn<NonNullable<AiExtensionProcedureDeps['ai']['audio']>['getCapabilities']>(() => core.ok({
+    synthesize: vi.fn<NonNullable<AiMediaProcedureDeps['ai']['audio']>['synthesize']>(async () => core.ok({ data: audioBytes, format: 'wav' })),
+    getCapabilities: vi.fn<NonNullable<AiMediaProcedureDeps['ai']['audio']>['getCapabilities']>(() => core.ok({
       synthesize: {
         supported: true,
         incrementalTextInput: false,
@@ -156,12 +162,12 @@ function audioMock() {
   }
 }
 
-describe('serv AI HTTP extensions', () => {
+describe('serv AI HTTP capability factories', () => {
   it('publishes SSE and multipart for the selected contract routes', async () => {
     const spec = await serv.generateSpec(contract)
-    const stream = spec.paths?.[apiContract.pathOf(extension.chats.streamCompletion)]?.post
-    const transcription = spec.paths?.[apiContract.pathOf(extension.audio.transcribe)]?.post
-    const image = spec.paths?.[apiContract.pathOf(extension.images.generate)]?.post
+    const stream = spec.paths?.[apiContract.pathOf(capabilities.chats.streamCompletion)]?.post
+    const transcription = spec.paths?.[apiContract.pathOf(capabilities.audio.transcribe)]?.post
+    const image = spec.paths?.[apiContract.pathOf(capabilities.images.generate)]?.post
     expect(stream?.responses?.[200]).toHaveProperty(['content', 'text/event-stream', 'schema'])
     expect(transcription?.requestBody).toHaveProperty(['content', 'multipart/form-data', 'schema'])
     expect(transcription?.requestBody).not.toHaveProperty(['content', 'application/json'])
@@ -229,7 +235,7 @@ describe('serv AI HTTP extensions', () => {
 
   it('streams tool deltas before completion with the authenticated object and session', async () => {
     const providerCanFinish = Promise.withResolvers<void>()
-    const chatStream = vi.fn<NonNullable<AiExtensionProcedureDeps['ai']['llm']>['chatStream']>(async function* () {
+    const chatStream = vi.fn<NonNullable<AiStreamingProcedureDeps['ai']['llm']>['chatStream']>(async function* () {
       yield partialToolChunk()
       await providerCanFinish.promise
     })
@@ -300,7 +306,7 @@ describe('serv AI HTTP extensions', () => {
 
   it('ends the provider iterator on caller cancellation and hides upstream exceptions', async () => {
     const settled = Promise.withResolvers<void>()
-    const chatStream = vi.fn<NonNullable<AiExtensionProcedureDeps['ai']['llm']>['chatStream']>(async function* (request) {
+    const chatStream = vi.fn<NonNullable<AiStreamingProcedureDeps['ai']['llm']>['chatStream']>(async function* (request) {
       try {
         yield partialToolChunk()
         if (request.sessionId === 'cancel') {
@@ -354,7 +360,7 @@ describe('serv AI HTTP extensions', () => {
 
   it('receives multipart files and returns named binary responses using the approved model', async () => {
     const audio = audioMock()
-    const generate = vi.fn<NonNullable<AiExtensionProcedureDeps['ai']['image']>['generate']>(async () => core.ok({
+    const generate = vi.fn<NonNullable<AiMediaProcedureDeps['ai']['image']>['generate']>(async () => core.ok({
       images: [
         { data: pngBytes, mimeType: 'image/png' },
       ],
@@ -417,7 +423,7 @@ describe('serv AI HTTP extensions', () => {
   it('requires a policy and rejects media over the explicit request budget', async () => {
     const audio = audioMock()
     const routes = [
-      { procedure: extension.audio.synthesize, maxRequestBytes: 64 },
+      { procedure: capabilities.audio.synthesize, maxRequestBytes: 64 },
     ]
     const denied = setup({
       ai: { audio },
@@ -472,7 +478,7 @@ describe('serv AI HTTP extensions', () => {
         body: JSON.stringify({ operation: 'transcribe', model: 'model-alias' }),
       })
       expect(issued.headers.get('cache-control')).toContain('no-store')
-      const parsed = extension.audio.issueTicket['~orpc'].outputSchema.parse(await issued.json())
+      const parsed = capabilities.audio.issueTicket['~orpc'].outputSchema.parse(await issued.json())
       const ticket = expectSuccess(parsed)
       expect(ticket.expiresAt).toBeGreaterThan(Date.now())
       expect(await iam.ticket.consume(ticket.ticket, { purpose: 'other' })).toMatchObject({

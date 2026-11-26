@@ -63,6 +63,8 @@ export interface AudioWsDeps {
 }
 
 const DEFAULT_MAX_MESSAGE_BYTES = 1_048_576
+// ws 将接收上限转换为有符号 32 位整数，超出范围会使限制失效。
+const MAX_WS_PAYLOAD_BYTES = 0x7FFF_FFFF
 const DEFAULT_MAX_BUFFERED_BYTES = 10 * 1024 * 1024
 const DEFAULT_MAX_TEXT_BYTES = 1 * 1024 * 1024
 const DEFAULT_MAX_SESSION_MS = 5 * 60 * 1000
@@ -141,9 +143,13 @@ export function registerAudioWsRoute(
   path: string,
   upgradeWebSocket: UpgradeWebSocket,
   deps: AudioWsDeps,
-): void {
+) {
+  const maxMessageBytes = deps.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES
+  if (!Number.isInteger(maxMessageBytes) || maxMessageBytes < 1 || maxMessageBytes > MAX_WS_PAYLOAD_BYTES)
+    throw new RangeError('Audio maxMessageBytes must be an integer between 1 and 2147483647')
+
   const limits: ConnectionLimits = {
-    maxMessageBytes: deps.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES,
+    maxMessageBytes,
     maxBufferedBytes: deps.maxBufferedBytes ?? DEFAULT_MAX_BUFFERED_BYTES,
     maxTextBytes: deps.maxTextBytes ?? DEFAULT_MAX_TEXT_BYTES,
     maxPendingMessages: deps.maxPendingMessages ?? DEFAULT_MAX_PENDING_MESSAGES,
@@ -151,10 +157,11 @@ export function registerAudioWsRoute(
   }
   const maxSessionMs = deps.maxSessionMs ?? DEFAULT_MAX_SESSION_MS
   const preAuthTimeoutMs = deps.preAuthTimeoutMs ?? DEFAULT_PRE_AUTH_TIMEOUT_MS
+  const pendingReleases = new Set<Promise<void>>()
 
   app.get(path, upgradeWebSocket((c) => {
     const ticket = c.req.query('ticket')
-    const conn = new AudioConnection(deps, ticket, limits)
+    const conn = new AudioConnection(deps, ticket, limits, pendingReleases)
     let sessionTimer: ReturnType<typeof setTimeout> | undefined
 
     return {
@@ -181,6 +188,13 @@ export function registerAudioWsRoute(
       },
     }
   }))
+
+  return {
+    maxMessageBytes,
+    async waitForSessionRelease(): Promise<void> {
+      await Promise.all(pendingReleases)
+    },
+  }
 }
 
 /** 背压友好的有界异步队列（桥接 WebSocket 事件 → ai.audio 的 AsyncIterable 输入）。 */
@@ -242,7 +256,7 @@ class AudioConnection {
   private start?: AudioWsStartMessage
   private session?: ServSession
   private grant?: AudioTicketGrant
-  private authorizedRequest?: AuthorizedAudioRequest
+  private authorization?: Promise<HaiResult<AuthorizedAudioRequest>>
   private doneReceived = false
   private readonly audioQueue: AsyncQueue<Uint8Array>
   private readonly textQueue: AsyncQueue<SynthesisTextSegment>
@@ -263,6 +277,7 @@ class AudioConnection {
     private readonly deps: AudioWsDeps,
     private readonly ticket: string | undefined,
     private readonly limits: ConnectionLimits,
+    private readonly pendingReleases: Set<Promise<void>>,
   ) {
     this.audioQueue = new AsyncQueue<Uint8Array>(MAX_QUEUE_ITEMS)
     this.textQueue = new AsyncQueue<SynthesisTextSegment>(MAX_QUEUE_ITEMS)
@@ -459,9 +474,10 @@ class AudioConnection {
       return
     }
 
-    const authorized = this.deps.authorize
-      ? await this.deps.authorize(session, message, this.grant)
-      : this.defaultAuthorize(message)
+    this.authorization = this.deps.authorize
+      ? this.deps.authorize(session, message, this.grant)
+      : Promise.resolve(this.defaultAuthorize(message))
+    const authorized = await this.authorization
     if (this.closed)
       return
     if (!authorized.success) {
@@ -480,7 +496,6 @@ class AudioConnection {
     }
 
     this.start = confirmed
-    this.authorizedRequest = authorized.data
     // 进入业务态并清除预鉴权超时
     this.state = confirmed.operation === 'synthesize'
       ? 'synthesizing'
@@ -663,15 +678,20 @@ class AudioConnection {
     this.textQueue.end()
     // 级联取消：中止上游 provider 流与所有等待
     this.controller.abort()
-    if (this.session && this.authorizedRequest && this.deps.onSessionEnd) {
-      void Promise.resolve(this.deps.onSessionEnd(this.session, this.authorizedRequest)).catch((error: unknown) => {
-        logger.warn('audio ws session end hook failed', {
-          error: error instanceof Error
-            ? error.message
-            : String(error),
-        })
-      })
-    }
+    const { session, authorization } = this
+    const { onSessionEnd } = this.deps
+    if (!session || !authorization || !onSessionEnd)
+      return
+
+    // 授权回调可能在断连之后才成功占用资源，清理必须等待这次授权结果。
+    const release = authorization.catch(() => undefined).then(async (result) => {
+      if (result?.success)
+        await onSessionEnd(session, result.data)
+    }).catch((error: unknown) => {
+      logger.warn('Audio WebSocket session end hook failed', { error })
+    })
+    this.pendingReleases.add(release)
+    void release.then(() => this.pendingReleases.delete(release))
   }
 }
 

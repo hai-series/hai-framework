@@ -15,9 +15,19 @@ import type {
 } from './kit-crud-types.js'
 
 /**
- * 解析 CrudText 为字符串
+ * 在渲染资源列或表单字段时获取文案。
+ * @param text - 已有字符串，或按当前语言提供字符串的回调
+ * @returns 用于界面显示的文案
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * // 表格渲染时读取库存列的当前文案。
+ * const stockHeading = kit.crud.resolveText(() => 'In stock')
+ * void stockHeading
+ * ```
  */
-function resolveText(text: CrudText): string {
+export function resolveText(text: CrudText): string {
   return typeof text === 'function'
     ? text()
     : text
@@ -31,9 +41,19 @@ function sortFields(fields: CrudFieldDef[]): CrudFieldDef[] {
 }
 
 /**
- * 解析选项列表
+ * 在渲染筛选器或表单时获取资源选项。
+ * @param options - 固定选项列表、返回选项的回调，或未配置
+ * @returns 可供选择的列表，未配置时返回空列表
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * // 商品筛选器以显示标签和发布状态组成选项。
+ * const publishedOptions = kit.crud.resolveOptions([{ label: 'Published', value: true }])
+ * void publishedOptions
+ * ```
  */
-function resolveOptions(options: CrudFieldOptions | undefined): Array<{ label: string, value: string | number | boolean }> {
+export function resolveOptions(options: CrudFieldOptions | undefined): Array<{ label: string, value: string | number | boolean }> {
   if (!options)
     return []
   return typeof options === 'function'
@@ -131,6 +151,3 @@ export function defineCrud<T = Record<string, unknown>>(
     api: resource.api,
   }
 }
-
-// re-export 解析工具，供 UI 层使用
-export { resolveOptions, resolveText }

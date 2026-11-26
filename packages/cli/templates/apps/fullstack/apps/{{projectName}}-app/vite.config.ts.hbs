@@ -1,9 +1,10 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.app}}
-import type { Plugin } from 'vite'
+import type { Plugin, ProxyOptions } from 'vite'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { core } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
@@ -33,8 +34,16 @@ export default defineConfig(({ mode, command }) => {
     },
   }
   const target = (env.PUBLIC_API_BASE || process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000').replace(/\/api\/v1\/?$/, '')
-  const proxy = {
+  const keyExchangePath = command === 'serve'
+    ? process.env.PUBLIC_API_KEY_EXCHANGE_PATH
+    : undefined
+  const proxy: Record<string, ProxyOptions> = {
     '/api': { target, changeOrigin: true },
+  }
+  if (keyExchangePath) {
+    if (!crypto.transport.isKeyExchangePath(keyExchangePath))
+      throw new Error('Invalid public API key exchange path')
+    proxy[`^${keyExchangePath.replaceAll('.', '\\.')}($|\\?)`] = { target, changeOrigin: true }
   }
   return {
     base: './',

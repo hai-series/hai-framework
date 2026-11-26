@@ -4,7 +4,7 @@
  * SvelteKit 集成模块，所有功能通过 kit 对象统一访问。
  *
  * 选择性导出原因：子模块（guards/hooks/middleware/modules/client）的运行时函数
- * 统一通过 kit 命名空间访问（如 kit.guard.auth），仅导出其类型供外部类型标注使用，
+ * 统一通过 kit 命名空间访问（如 kit.guard.check），仅导出其类型供外部类型标注使用，
  * 避免运行时函数泄漏为顶层导出，确保 tree-shaking 与 API 一致性。
  * @module index
  */
@@ -32,19 +32,10 @@ export { kit, KitConfigSchema } from './kit-main.js'
 export * from './kit-types.js'
 // 运行时导出 — 通用 Schema（支持 import { IdParamSchema } from '@h-ai/kit'）
 export { IdParamSchema, PaginationQuerySchema } from './kit-validation.js'
+export type { LoggingMiddlewareConfig } from './middleware/index.js'
 export type {
-  LoggingMiddlewareConfig,
-  MemoryRateLimitStore,
-  RateLimitCache,
-  RateLimitEntry,
-  RateLimitStore,
-} from './middleware/index.js'
-export type {
-  A2AApiKeyAuthConfig,
   EncryptedPayload,
-  KitA2AHandlerConfig,
-  ResolvedA2AConfig,
   TransportEncryptionConfig,
   TransportEncryptionManager,
   TransportKeyPair,
-} from './modules/index.js'
+} from './modules/crypto/kit-crypto-types.js'

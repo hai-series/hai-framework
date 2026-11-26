@@ -15,6 +15,7 @@ import ts from 'typescript'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 import { createProject } from '../src/commands/cli-create.js'
+import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 import { DeployTestCommandError, runDeployTestCommand, runPnpmTestCommand } from './helpers/deploy-test-command.js'
 import { installScenarios } from './helpers/scaffold-scenarios.js'
 import { runDefaultDev } from './helpers/startup-baseline.mjs'
@@ -156,11 +157,15 @@ beforeAll(async () => {
     return
   // 默认 dev 继承真实环境，不能携带 Vitest 自动设置的 NODE_ENV=test。
   delete process.env.NODE_ENV
-  await getFreePort(12580)
-  notificationUrl = 'http://127.0.0.1:12580'
+  const notificationPort = await getFreePort()
+  notificationUrl = `http://127.0.0.1:${notificationPort}`
   const fixture = spawn(process.execPath, [
     path.resolve(process.cwd(), '../../apps/admin-console/e2e/notification-fixture.mjs'),
   ], {
+    env: {
+      ...process.env,
+      IAM_NOTIFICATION_PORT: String(notificationPort),
+    },
     windowsHide: true,
     stdio: 'ignore',
   })
@@ -192,6 +197,26 @@ afterAll(async () => {
 }, 300_000)
 
 describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
+  it.each(['api', 'fullstack', 'h5'] as const)('%s optional AI and IAM template gates compile the host bindings', async (appType) => {
+    const root = await createTempRoot()
+    const name = `sample-${appType}-ai-bindings`
+    const projectPath = path.join(root, name)
+    await generateFromTemplates(projectPath, buildTemplateContext({
+      name,
+      appType,
+      features: ['ai', 'iam'],
+      frontends: ['web'],
+      packageManager: 'pnpm',
+      deploy: false,
+    }))
+    await replaceHaiPackageSpecifiers(projectPath)
+    await addLocalHaiOverrides(projectPath)
+    await removeReplacedHaiCatalogEntries(projectPath)
+    await runPnpm(projectPath, ['install', '--prefer-offline'])
+    await runPnpm(projectPath, ['typecheck'])
+    await runPnpm(projectPath, ['lint'])
+  })
+
   it('static website gates pass local package install, quality checks and Pages browser flow', async () => {
     expect(Object.keys(localPackageSpecifiers).length, 'Static acceptance must use the current local tarballs').toBeGreaterThan(0)
     const root = await createTempRoot()
@@ -513,16 +538,20 @@ test('static hosting artifacts: Pages deep links, assets and honest contact feed
           await mkdir(path.join(projectPath, 'config/security'), { recursive: true })
           await writeFile(path.join(projectPath, 'config/security/request-access.yml'), stringify(policies))
           const kitConfig = path.join(projectPath, 'config/_kit.yml')
+          const settings = parse(await readFile(kitConfig, 'utf8'))
           await writeFile(kitConfig, stringify({
-            ...parse(await readFile(kitConfig, 'utf8')),
-            access: { file: './config/security/request-access.yml' },
+            ...settings,
+            http: {
+              ...settings.http,
+              access: { file: './config/security/request-access.yml' },
+            },
             transport: {
               excludePaths: ['/api/public/request-open', '/api/public/request-denied', '/api/prefix-probe'],
             },
           }))
           // 场景显式启用策略和传输；公共 dotenv 的 false 同样必须按正常优先级同步，不能只改 YAML。
           await setPublicSceneConfig(projectPath, {
-            HAI_KIT_ACCESS: { file: './config/security/request-access.yml' },
+            HAI_KIT_HTTP_ACCESS: { file: './config/security/request-access.yml' },
             HAI_KIT_TRANSPORT: {
               excludePaths: ['/api/public/request-open', '/api/public/request-denied', '/api/prefix-probe'],
             },
@@ -575,6 +604,9 @@ test('generated SvelteKit applies file policies, trusted socket identity and pat
   })
   expect(modeMismatch.status()).toBe(400)
   let encrypted = false
+  const exchangePath = new URL('api/v1/_hai/key-exchange', baseURL).pathname
+  const handshake = page.waitForResponse(response => new URL(response.url()).pathname === exchangePath
+    && response.request().method() === 'POST' && response.status() === 200)
   page.on('response', (response) => {
     if (new URL(response.url()).pathname.endsWith('/api/public/request-required'))
       encrypted = response.headers()['x-encrypted'] === 'true'
@@ -586,6 +618,7 @@ test('generated SvelteKit applies file policies, trusted socket identity and pat
     const response = await fetch(endpoint)
     return { status: response.status, body: await response.json() }
   }, new URL('api/public/request-required', baseURL).href)
+  expect((await handshake).status()).toBe(200)
   expect(protectedReply.status).toBe(200)
   expect(protectedReply.body).toMatchObject({
     ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/),
@@ -1037,7 +1070,10 @@ export default defineConfig({
     ? `servers.map(server => {
       const readiness = new URL(server.url || ${JSON.stringify(rootUrl)})
       readiness.pathname = '/yyy/'
-      return testServer({ PUBLIC_BASE_PATH: '/yyy' }, { ...server, url: readiness.href })
+      return testServer({
+        PUBLIC_BASE_PATH: '/yyy',
+        HAI_KIT_TRANSPORT_KEYEXCHANGEPATH: '/yyy/api/v1/_hai/key-exchange',
+      }, { ...server, url: readiness.href })
     })`
     : `[...servers.map(server => {
       if (server.name?.endsWith('-web')) return {
@@ -1046,7 +1082,10 @@ export default defineConfig({
         url: ${JSON.stringify(rootUrl)},
       }
       if (server.name?.endsWith('-serv')) {
-        return testServer({ HAI_SERV_HTTP_APIPREFIX: '/yyy/api/v1' }, server)
+        return testServer({
+          HAI_SERV_HTTP_APIPREFIX: '/yyy/api/v1',
+          HAI_SERV_TRANSPORT_KEYEXCHANGEPATH: '/yyy/auth/key-exchange',
+        }, server)
       }
       return server
     }), {

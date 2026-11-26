@@ -22,6 +22,7 @@ import type { ServIam } from './serv-context.js'
 import process from 'node:process'
 import { apiContract } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
+import { crypto, TransportBodyTooLargeError } from '@h-ai/crypto'
 import { getCookie } from 'hono/cookie'
 import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
 import { servM } from './serv-i18n.js'
@@ -124,7 +125,7 @@ export interface RefreshCookieConfig {
    * 为受信原生客户端启用 JSON body 传输。
    *
    * 启用后，匹配请求的登录、注册与刷新响应保留 `refreshToken`，刷新请求从
-   * `{ refreshToken }` body 读取凭证，且不读写浏览器 Cookie。
+   * `{ refreshToken }` body 读取凭证，明文 JSON 限于 16 KiB，且不读写浏览器 Cookie。
    */
   readonly nativeTokenTransport?: NativeRefreshTokenTransportConfig
   /**
@@ -164,6 +165,7 @@ const IAM_AUTH_PATHS = {
   logout: apiContract.pathOf(apiContract.iam.auth.logout),
   refresh: apiContract.pathOf(apiContract.iam.auth.refresh),
 }
+const MAX_NATIVE_REFRESH_BODY_BYTES = 16 * 1024
 
 function resolveRefreshCookieConfig(
   apiPrefix: string,
@@ -367,25 +369,25 @@ export function mountRefreshCookieRoutes(
   app.post(`${apiPrefix}${IAM_AUTH_PATHS.refresh}`, async (c) => {
     // access token 认证不走这里；这里只有“用 refresh token 换新 access token”这一件事。
     const useNativeTokenTransport = nativeTokenTransport?.isRequest(c.req.raw) === true
+    const locale = resolveRequestLocale(c.req.raw.headers)
     const refreshToken = useNativeTokenTransport
-      ? await readRefreshTokenFromBody(c.req.raw)
+      ? await readRefreshTokenFromBody(c.req.raw, locale)
       : getCookie(c, cookieName)
-    if (!refreshToken) {
-      const locale = resolveRequestLocale(c.req.raw.headers)
+    if (refreshToken instanceof Response)
+      return refreshToken
+    if (!refreshToken)
       return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale })), 401)
-    }
 
     const fail = (internal: HaiError): Response => {
-      const safe = core.error.toPublic(internal, undefined, resolveRequestLocale(c.req.raw.headers))
-      core.logger.error('Refresh token request failed', { traceId: safe.traceId, error: internal })
-      const headers = new Headers({ 'Content-Type': 'application/json' })
-      // 仅认证失效才清理浏览器凭据；限流、后端故障与未知状态保留重试机会。
-      if (!useNativeTokenTransport && safe.httpStatus === 401)
-        headers.set('Set-Cookie', buildClearCookieHeader(cookieName, refreshCookiePath))
-      return new Response(JSON.stringify({ success: false, error: safe }), {
-        status: safe.httpStatus ?? 500,
-        headers,
-      })
+      const safe = core.error.toPublic(internal, undefined, locale)
+      const status = safe.httpStatus ?? 500
+      const logContext = { traceId: safe.traceId, errorCode: safe.code, status }
+      if (status >= 500)
+        core.logger.error('Refresh token request failed', { ...logContext, error: internal })
+      else
+        core.logger.debug('Refresh token request rejected', logContext)
+      // 失败响应可能晚于另一次刷新成功，不能覆盖浏览器已收到的新 Cookie。
+      return Response.json({ success: false, error: safe }, { status })
     }
     let result: HaiResult<RefreshTokenPair>
     try {
@@ -430,11 +432,31 @@ export function mountRefreshCookieRoutes(
 /**
  * 从受信原生客户端的 JSON body 读取 refresh token。
  *
- * 非 JSON、空 body 与空字符串统一视为未提供凭证，由调用方返回 401。
+ * 非 JSON、空 body 与空字符串视为未提供凭证。超限或取消时拒绝请求并停止读取。
  */
-async function readRefreshTokenFromBody(request: Request): Promise<string | undefined> {
-  const body = await request.json().catch(() => undefined) as { refreshToken?: unknown } | undefined
-  return typeof body?.refreshToken === 'string' && body.refreshToken.length > 0
-    ? body.refreshToken
-    : undefined
+async function readRefreshTokenFromBody(request: Request, locale: string): Promise<string | Response | undefined> {
+  try {
+    const body = JSON.parse(await crypto.transport.readBody(request.body, {
+      maxBytes: MAX_NATIVE_REFRESH_BODY_BYTES,
+      signal: request.signal,
+    })) as { refreshToken?: unknown } | null
+    return typeof body?.refreshToken === 'string' && body.refreshToken.length > 0
+      ? body.refreshToken
+      : undefined
+  }
+  catch (error) {
+    if (error instanceof TransportBodyTooLargeError) {
+      return Response.json(buildHaiErrorBody(
+        { ...HaiCommonError.VALIDATION_ERROR, httpStatus: 413 },
+        servM('serv_refreshBodyTooLarge', { locale }),
+      ), { status: 413 })
+    }
+    if (request.signal.aborted) {
+      return Response.json(buildHaiErrorBody(
+        { ...HaiCommonError.TIMEOUT, httpStatus: 408 },
+        core.i18n.coreM('core_errorTimeout', { locale }),
+      ), { status: 408 })
+    }
+    return undefined
+  }
 }

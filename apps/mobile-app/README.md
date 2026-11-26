@@ -67,7 +67,7 @@ import { apiServiceContract } from '@h-ai/api-service-contract'
 export const mobileApiClient = apiClient.create(apiServiceContract)
 ```
 
-默认 API 地址为 `http://localhost:3000/api/v1`；部署时应通过环境变量与服务端 `_serv.yml` 对齐。
+浏览器默认访问同源 `/api/v1`，由 Vite 或部署网关转发给 API Service。原生应用默认连接本机 `http://localhost:3000/api/v1`，部署到真机时应设置可达的服务地址。
 
 ### 配置
 
@@ -75,12 +75,13 @@ Capacitor `appName` 从本目录 `config/_core.yml` 的 `name` 读取，支持 `
 
 本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。统一优先级为进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同源父 JSON 为基础、细项覆盖；高来源整段替换清掉低来源细项。模式私有文件不提交 Git。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../docs/usage/configuration/runtime.md)。
 
-| 变量                           | 说明                                                       | 默认值                         |
-| ------------------------------ | ---------------------------------------------------------- | ------------------------------ |
-| `PUBLIC_API_BASE`              | `apps/api-service` API 基础 URL；覆盖时需包含共享 API 前缀 | `http://localhost:3000/api/v1` |
-| `PUBLIC_API_TRANSPORT`         | transport 加密开关；服务端关闭 transport 时才设为 `off`    | `on`                           |
-| `PUBLIC_API_KEY_EXCHANGE_PATH` | transport 密钥协商路径                                     | `/_hai/key-exchange`           |
-| `CAPACITOR_SERVER_URL`         | Capacitor live reload 前端地址；只用于调试前端页面         | 空                             |
+| 变量                           | 说明                                                       | 默认值                      |
+| ------------------------------ | ---------------------------------------------------------- | --------------------------- |
+| `PUBLIC_API_BASE`              | 直接连接 API Service 的公开基址，覆盖时需包含共享 API 前缀 | 空，浏览器走同源代理        |
+| `SERVICE_BASE_URL`             | Vite 开发和预览时的后端源站                                | `http://127.0.0.1:3000`     |
+| `PUBLIC_API_TRANSPORT`         | transport 加密开关；服务端关闭 transport 时才设为 `off`    | `on`                        |
+| `PUBLIC_API_KEY_EXCHANGE_PATH` | transport 密钥交换的站点根绝对路径                         | `/api/v1/_hai/key-exchange` |
+| `CAPACITOR_SERVER_URL`         | Capacitor live reload 前端地址；只用于调试前端页面         | 空                          |
 
 Android 模拟器访问宿主机后端时通常使用：
 

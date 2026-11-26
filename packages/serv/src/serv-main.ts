@@ -11,22 +11,27 @@
 import type { ServFunctions } from './serv-types.js'
 import { toFetch } from './adapters/serv-adapter-fetch.js'
 import { listen } from './adapters/serv-adapter-node.js'
-import { createAiExtensionProcedures } from './features/serv-feature-ai-extension.js'
+import { createAiMediaProcedures } from './features/serv-feature-ai-media.js'
+import { createAiMemoryWriteProcedures } from './features/serv-feature-ai-memory-write.js'
+import { createAiStreamingProcedures } from './features/serv-feature-ai-streaming.js'
 import { createAiProcedures } from './features/serv-feature-ai.js'
 import { createAuditProcedures } from './features/serv-feature-audit.js'
 import { createFeedbackProcedures } from './features/serv-feature-feedback.js'
-import { createIamExtensionProcedures } from './features/serv-feature-iam-extension.js'
+import { createIamAudio } from './features/serv-feature-iam-audio.js'
+import { createIamManagementProcedures } from './features/serv-feature-iam-management.js'
 import { createIamProcedures } from './features/serv-feature-iam.js'
-import { createPaymentExtensionProcedures } from './features/serv-feature-payment-extension.js'
-import { createStorageExtensionProcedures } from './features/serv-feature-storage-extension.js'
+import { createPaymentCloseOrderProcedures } from './features/serv-feature-payment-close-order.js'
+import { createStorageTransferProcedures } from './features/serv-feature-storage-transfer.js'
 import { createStorageProcedures } from './features/serv-feature-storage.js'
 import {
+  requireSensitiveOperation,
   WILDCARD_PERMISSION,
   WILDCARD_ROLE,
 } from './pipelines/serv-pipeline-guard.js'
 import { createApp } from './serv-app.js'
 import { ServConfigSchema } from './serv-config.js'
 import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
+import { createContractHandler } from './serv-contract-handler.js'
 import { cors } from './serv-cors.js'
 import { servM } from './serv-i18n.js'
 import { generateSpec } from './serv-openapi.js'
@@ -65,17 +70,21 @@ export type {
  * ```
  */
 export const serv: ServFunctions = {
-  createAiExtensionProcedures,
-  createAuditProcedures,
-  createIamExtensionProcedures,
-  createPaymentExtensionProcedures,
-  createStorageExtensionProcedures,
   createAiProcedures,
+  createAiStreamingProcedures,
+  createAiMemoryWriteProcedures,
+  createAiMediaProcedures,
+  createIamAudio,
+  createAuditProcedures,
   createFeedbackProcedures,
   createIamProcedures,
+  createIamManagementProcedures,
+  createPaymentCloseOrderProcedures,
   createStorageProcedures,
+  createStorageTransferProcedures,
   // 应用与上下文
   createApp,
+  createContractHandler,
   parseRequestContext,
   buildAuthContextFactory,
   resolveRequestLocale,
@@ -95,6 +104,7 @@ export const serv: ServFunctions = {
 
   // Procedure 工具；认证与授权统一由 route 链声明。
   validateInputOrFail,
+  guard: { requireSensitive: requireSensitiveOperation },
 
   // 通配符常量
   WILDCARD_PERMISSION,

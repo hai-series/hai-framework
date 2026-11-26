@@ -3,6 +3,9 @@ import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+{{#if features.ai}}
+import { ai } from '@h-ai/ai'
+{{/if}}
 import { apiContract } from '@h-ai/api-contract'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
@@ -69,6 +72,14 @@ beforeAll(async () => {
   const app = serv.createApp({
     contract: {{fullstack.contractExportName}},
     procedures: createServerProcedures({
+{{#if features.ai}}
+      audio: serv.createIamAudio({
+        ai,
+        iam,
+        config: false,
+        permission: 'ai:audio:use',
+      }),
+{{/if}}
       app: {
         name: 'Security fixture',
         version: 'test',
@@ -79,7 +90,7 @@ beforeAll(async () => {
         frontends: ['web'],
       },
     }),
-    iam,
+    auth: { iam },
     http: { openapi: false, docs: false },
   })
   server = serv.listen(app, { host: '127.0.0.1', port: 0 })

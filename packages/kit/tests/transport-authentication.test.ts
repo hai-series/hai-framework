@@ -2,6 +2,7 @@ import type { TransportServerKeyRing } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { Handle } from '@sveltejs/kit/hooks'
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { crypto, TransportTimeError } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
@@ -33,14 +34,69 @@ describe('kit authenticated transport boundary', () => {
   })
   afterAll(async () => crypto.close())
 
+  it('加密自定义契约前缀的报告，并按方法区分同一地址的 A2A 调用', async () => {
+    const apiPrefix = '/console/reports'
+    const rpcPath = `${apiPrefix}/pending` as const
+    const keyExchangePath = '/console/exchange'
+    const keyGenerator = vi.fn(() => 'orders-auditor')
+    const rpc = vi.fn(async () => Response.json({ backlog: 3 }))
+    const report = vi.fn(async (request: Request) => {
+      expect(request.method).toBe('GET')
+      return Response.json({ report: 'pending orders' })
+    })
+    const handle = kit.createHandle({
+      contract: {
+        apiPrefix,
+        fetch: report,
+        preflight: () => undefined,
+      },
+      a2a: { cardPath: '/console/.well-known/agent-card.json', rpcPath, handleRequest: rpc },
+      http: {
+        rateLimit: {
+          maxRequests: 5,
+          keyGenerator,
+          store: core.access.createMemoryRateLimitStore(),
+        },
+      },
+      transport: {
+        crypto,
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
+        basePath: '/console',
+        keyExchangePath,
+      },
+    })
+    const resolve = vi.fn(() => new Response(null, { status: 404 }))
+    const path = `http://localhost${rpcPath}`
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: `http://localhost${keyExchangePath}`,
+      fetch: async (input, init) => {
+        const request = new Request(input, init)
+        const response = await dispatch(handle, request, resolve)
+        if (request.method === 'GET')
+          expect(response.headers.get(crypto.transport.protocol.ENCRYPTED_HEADER)).toBe('true')
+        return response
+      },
+    })
+    try {
+      expect(await (await client.encryptedFetch(path)).json()).toEqual({ report: 'pending orders' })
+      const response = await dispatch(handle, new Request(path, { method: 'POST' }), resolve)
+      expect(await response.json()).toEqual({ backlog: 3 })
+      expect(rpc).toHaveBeenCalledOnce()
+      expect(report).toHaveBeenCalledOnce()
+      expect(keyGenerator).toHaveBeenCalledOnce()
+      expect(resolve).not.toHaveBeenCalled()
+    }
+    finally {
+      client.destroy()
+    }
+  })
+
   it.each(['handshake', 'request'])('共享 %s 配额满返回 503 并阻止业务调用', async (stage) => {
     const keyStore = crypto.transport.createKeyStore({ cache, maxRegistrationsPerMinute: 1, maxRequestsPerMinute: 1 })
     const resolve = vi.fn(() => Response.json({ accepted: true }))
     const handle = kit.createHandle({
-      crypto: {
-        crypto,
-        transport: { serverKeyRing, keyStore },
-      },
+      transport: { crypto, serverKeyRing, keyStore },
     })
     const responses: Response[] = []
     const fetchFn: typeof fetch = async (input, init) => {
@@ -58,8 +114,8 @@ describe('kit authenticated transport boundary', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientPublicKey: pair.data.publicKey }),
       }
-      expect((await fetchFn('http://localhost/api/_hai/key-exchange', options)).status).toBe(200)
-      const denied = await fetchFn('http://localhost/api/_hai/key-exchange', options)
+      expect((await fetchFn('http://localhost/api/v1/_hai/key-exchange', options)).status).toBe(200)
+      const denied = await fetchFn('http://localhost/api/v1/_hai/key-exchange', options)
       expect(denied.status).toBe(503)
       expect(await denied.json()).toMatchObject({
         error: expect.any(String),
@@ -67,7 +123,7 @@ describe('kit authenticated transport boundary', () => {
       expect(resolve).not.toHaveBeenCalled()
       return
     }
-    const client = crypto.transport.createClient({ keyExchangeUrl: 'http://localhost/api/_hai/key-exchange', fetch: fetchFn })
+    const client = crypto.transport.createClient({ keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange', fetch: fetchFn })
     try {
       expect((await client.encryptedFetch('http://localhost/api/order', { method: 'POST', body: '{}' })).status).toBe(200)
       await expect(client.encryptedFetch('http://localhost/api/order', { method: 'POST', body: '{}' })).rejects.toThrow()
@@ -85,20 +141,18 @@ describe('kit authenticated transport boundary', () => {
     { offset: -20_000, method: 'HEAD' },
   ])('时间偏差 $offset 经 $method 返回服务器时间，不执行 resolve', async ({ offset, method }) => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-          maxFutureSkewSeconds: 10,
-          maxRequestAgeSeconds: 90,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
+        maxFutureSkewSeconds: 10,
+        maxRequestAgeSeconds: 90,
       },
     })
     const resolve = vi.fn(() => Response.json({ accepted: true }))
     let serverTime: number | undefined
     const client = crypto.transport.createClient({
-      keyExchangeUrl: 'http://localhost/api/_hai/key-exchange',
+      keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange',
       fetch: async (input, init) => {
         const request = new Request(input, init)
         if (request.url.endsWith('/_hai/key-exchange'))
@@ -141,18 +195,16 @@ describe('kit authenticated transport boundary', () => {
     'marker',
   ])('真实 %s 篡改不进入 SvelteKit resolve', async (field) => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(() => Response.json({ amount: 10000 }))
     let status: number | undefined
     const client = crypto.transport.createClient({
-      keyExchangeUrl: 'http://localhost/api/_hai/key-exchange',
+      keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange',
       fetch: async (input, init) => {
         let request = new Request(input, init)
         if (!request.url.endsWith('/_hai/key-exchange')) {
@@ -198,15 +250,12 @@ describe('kit authenticated transport boundary', () => {
   it('两个 kit 节点共用 registry，并发重放仅一次 resolve', async () => {
     const keyStore = crypto.transport.createKeyStore({ cache })
     const nodes = [0, 1].map(() => kit.createHandle({
-      crypto: {
-        crypto,
-        transport: { keyStore, serverKeyRing },
-      },
+      transport: { crypto, keyStore, serverKeyRing },
     }))
     const resolve = vi.fn(() => Response.json({ ok: true }))
     let statuses: number[] = []
     const client = crypto.transport.createClient({
-      keyExchangeUrl: 'http://localhost/api/_hai/key-exchange',
+      keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange',
       fetch: async (input, init) => {
         const request = new Request(input, init)
         if (request.url.endsWith('/_hai/key-exchange'))
@@ -227,17 +276,15 @@ describe('kit authenticated transport boundary', () => {
 
   it.each(['GET', 'HEAD'])('空 %s 请求与 204 响应均认证', async (method) => {
     const handle = kit.createHandle({
-      crypto: {
+      transport: {
         crypto,
-        transport: {
-          keyStore: crypto.transport.createKeyStore({ cache }),
-          serverKeyRing,
-        },
+        keyStore: crypto.transport.createKeyStore({ cache }),
+        serverKeyRing,
       },
     })
     const resolve = vi.fn(() => new Response(null, { status: 204 }))
     const client = crypto.transport.createClient({
-      keyExchangeUrl: 'http://localhost/api/_hai/key-exchange',
+      keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange',
       fetch: (input, init) => dispatch(handle, new Request(input, init), resolve),
     })
     const response = await client.encryptedFetch('http://localhost/api/empty', { method })
