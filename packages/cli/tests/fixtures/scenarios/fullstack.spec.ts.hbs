@@ -912,7 +912,10 @@ test('feedback exchanges attachments and records the outcome through encrypted r
     { name: 'screen.png', mimeType: 'image/png', buffer: screenshot },
     { name: 'large-steps.txt', mimeType: 'text/plain', buffer: document },
   ])
+  const submitted = page.waitForResponse(response =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === `${apiPrefix}/feedback/reports`)
   await submission.getByRole('button', { name: /提交反馈|Submit Feedback|フィードバックを送信/i }).click()
+  expect((await submitted).ok()).toBe(true)
   const myFeedback = page.getByRole('dialog', { name: /我的反馈|My Feedback|自分のフィードバック/i })
   const mine = myFeedback.getByTestId('feedback-detail')
   await expect(mine.getByText(title, { exact: true })).toBeVisible()

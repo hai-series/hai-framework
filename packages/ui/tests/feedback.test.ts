@@ -1,10 +1,64 @@
 // @vitest-environment jsdom
 import type { FeedbackSubmitAction, FeedbackViewActions } from '../src/lib/components/scenes/app/feedback-types.js'
+import { FeedbackLimitsSchema } from '@h-ai/api-contract/feedback'
 import { core, HaiCommonError } from '@h-ai/core'
 import { flushSync, mount, unmount } from 'svelte'
 import { expect, it, vi } from 'vitest'
 import FeedbackForm from '../src/lib/components/scenes/app/FeedbackForm.svelte'
 import FeedbackList from '../src/lib/components/scenes/app/FeedbackList.svelte'
+
+it('读取生效限额期间仍能查看已保存的反馈', async () => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const id = core.id.uuid()
+  const unavailable = async () => core.err(HaiCommonError.NOT_FOUND, 'Missing')
+  const settings = FeedbackLimitsSchema.parse({
+    limits: { maxBodyLength: 42 },
+  })
+  let finish: (() => void) | undefined
+  const component = mount(FeedbackList, {
+    target,
+    props: {
+      initialId: id,
+      actions: {
+        list: unavailable,
+        get: async () => core.ok({
+          report: {
+            id,
+            appId: 'orders',
+            scopeId: 'scope-1',
+            userId: 'author',
+            body: 'Saved feedback',
+            status: 'pending',
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          attachments: [],
+        }),
+        listMessages: async () => core.ok({
+          items: [],
+          page: 1,
+          pageSize: 20,
+          total: 0,
+        }),
+        getLimits: () => new Promise((resolve) => {
+          finish = () => resolve(core.ok(settings))
+        }),
+        addMessage: unavailable,
+        getAttachment: unavailable,
+      },
+    },
+  })
+  try {
+    await vi.waitFor(() => expect(target.textContent).toContain('Saved feedback'))
+    expect(target.querySelector('textarea')).toBeNull()
+    finish?.()
+    await vi.waitFor(() => expect(target.querySelector('textarea')?.maxLength).toBe(42))
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})
 
 it('表单显示已配置的容量并拦住超大文件', async () => {
   const target = document.body.appendChild(document.createElement('div'))

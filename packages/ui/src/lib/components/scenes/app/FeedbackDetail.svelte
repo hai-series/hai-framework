@@ -29,6 +29,7 @@
   let loading = $state(true)
   let busy = $state(false)
   let error = $state('')
+  let limitsError = $state('')
   let activePreview = $state.raw<{ file: File, kind: FeedbackAttachmentKind }>()
   let gettingFile = $state('')
   let request = 0
@@ -38,17 +39,34 @@
     activePreview = undefined
   }
 
+  async function loadLimits(token: number) {
+    if (!canReply || limits || !actions.getLimits)
+      return
+    limitsError = ''
+    try {
+      const result = await actions.getLimits()
+      if (disposed || token !== request)
+        return
+      if (result.success)
+        limits = result.data.limits
+      else
+        limitsError = errorMessage(result.error, uiM('feedback_action_failed'))
+    }
+    catch (cause) {
+      if (!disposed && token === request)
+        limitsError = errorMessage(cause, uiM('feedback_action_failed'))
+    }
+  }
+
   async function load(nextPage = 1) {
     const token = ++request
     error = ''
     loading = true
+    void loadLimits(token)
     try {
-      const [summary, conversation, settings] = await Promise.all([
+      const [summary, conversation] = await Promise.all([
         actions.get({ id }),
         actions.listMessages({ id, page: nextPage }),
-        canReply && !limits
-          ? actions.getLimits?.()
-          : undefined,
       ])
       if (disposed || token !== request)
         return
@@ -65,10 +83,6 @@
       total = conversation.data.total
       page = conversation.data.page
       pageSize = conversation.data.pageSize
-      if (settings?.success)
-        limits = settings.data.limits
-      else if (settings)
-        error = errorMessage(settings.error, uiM('feedback_action_failed'))
     }
     catch (cause) {
       if (!disposed && token === request)
@@ -161,7 +175,7 @@
       closePreview()
     }
   })
-  useToastFeedback(() => error)
+  useToastFeedback(() => error || limitsError)
 </script>
 
 {#snippet files(items: FeedbackAttachment[])}
