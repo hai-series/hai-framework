@@ -19,6 +19,7 @@ export * from './ai/sessions/ai-session-schemas.js'
 export { apiContract } from './api-contract-main.js'
 export type { AuditContract } from './audit/audit-contract.js'
 export * from './audit/audit-schemas.js'
+export type { HttpContractContext, HttpContractHandler, HttpContractTransport } from './common/http-handler.js'
 export { PaginationQuerySchema } from './common/pagination-schemas.js'
 export * from './common/response-schemas.js'
 // result-schema：仅保留 HaiErrorSchema；工厂与 void 常量走 `apiContract.haiResultSchema` / `apiContract.voidResultSchema`。

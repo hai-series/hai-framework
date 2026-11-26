@@ -9,7 +9,7 @@ import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import type { createTransportBodyPolicy, readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS, TRANSPORT_PLAINTEXT_RANGE } from './transport/crypto-transport-body.js'
 import type { createTransportErrorResponse } from './transport/crypto-transport-error.js'
 import type { parseTransportServerKeyRing } from './transport/crypto-transport-keyring.js'
-import type { authenticateTransportRequest } from './transport/crypto-transport-request.js'
+import type { authenticateTransportRequest, isKeyExchangePath } from './transport/crypto-transport-request.js'
 import type {
   TRANSPORT_PROTOCOL as TRANSPORT_PROTOCOL_T,
   TRANSPORT_TIME_LIMITS,
@@ -1066,6 +1066,16 @@ export interface TransportOperations {
   createClient: (options: { keyExchangeUrl: string, fetch?: typeof fetch, maxPlaintextBytes?: number }) => TransportClient
   /** 协议常量（headers、密钥协商默认路径）。 */
   readonly protocol: typeof TRANSPORT_PROTOCOL_T
+  /**
+   * 校验密钥协商端点的站点绝对路径。路径段只允许 ASCII 字母、数字、下划线、连字符和点。
+   * 拒绝根路径、空段、点段、通配符、转义、查询和片段，无需初始化。
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * const valid = crypto.transport.isKeyExchangePath('/gateway/_hai/key-exchange')
+   * ```
+   */
+  isKeyExchangePath: typeof isKeyExchangePath
   /** 默认明文、密文、握手和认证头的只读字节预算；无需初始化。 */
   readonly bodyLimits: typeof TRANSPORT_BODY_LIMITS
   /** 明文容量允许的最小值和最大值（字节）；无需初始化。 */

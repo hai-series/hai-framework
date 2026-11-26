@@ -40,7 +40,8 @@
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",
-    "sm-crypto": "catalog:"
+    "sm-crypto": "catalog:",
+    "zod": "catalog:"
   },
   "optionalDependencies": {
     "@h-ai/cache": "workspace:*"

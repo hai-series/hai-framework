@@ -2,11 +2,43 @@ import type { TransportServerKeyRing } from '../../src/index.js'
 import { cache } from '@h-ai/cache'
 import { HaiCommonError } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { crypto as browserCrypto } from '../../src/browser.js'
 import { crypto } from '../../src/index.js'
 
 let serverKeyRing: TransportServerKeyRing
 
-const KEY_EXCHANGE_URL = 'https://api.test/_hai/key-exchange'
+const KEY_EXCHANGE_URL = `https://api.test${crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH}`
+
+describe.each([crypto, browserCrypto])('key exchange path configuration', (implementation) => {
+  it('公开固定的默认路径，并校验宿主绝对路径', () => {
+    const { protocol, isKeyExchangePath } = implementation.transport
+    expect(protocol.DEFAULT_KEY_EXCHANGE_PATH).toBe('/api/v1/_hai/key-exchange')
+    expect(isKeyExchangePath(protocol.DEFAULT_KEY_EXCHANGE_PATH)).toBe(true)
+    expect(isKeyExchangePath('/console.v2/_hai/key-exchange')).toBe(true)
+  })
+
+  it.each([
+    undefined,
+    null,
+    '',
+    '/',
+    'exchange',
+    '/exchange/',
+    '//example.test/exchange',
+    '/x//exchange',
+    'https://example.test/exchange',
+    '/./exchange',
+    '/edge/../exchange',
+    '/edge/%65xchange',
+    '/edge/exchange?mode=test',
+    '/edge/exchange#fragment',
+    '/edge/*',
+    '/edge\\exchange',
+    '/edge/exchange\n',
+  ])('拒绝无法作为固定请求路径的配置 %j', (value) => {
+    expect(implementation.transport.isKeyExchangePath(value)).toBe(false)
+  })
+})
 
 /**
  * 测试用：把客户端 `encryptedFetch` 直接对接服务端 `manager`，

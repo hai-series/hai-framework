@@ -1,6 +1,8 @@
 export * from './crypto-types.js'
 export { TransportBodyTooLargeError } from './transport/crypto-transport-body.js'
 export type { ReadTransportBodyOptions, TransportBodyLimits } from './transport/crypto-transport-body.js'
+export { TransportConfigSchema } from './transport/crypto-transport-config.js'
+export type { PublicTransportConfig, PublicTransportConfigInput } from './transport/crypto-transport-config.js'
 export { TransportTimeError } from './transport/crypto-transport-error.js'
 export type {
   EncryptedPayload,

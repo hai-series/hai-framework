@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod'
+import { DEFAULT_HTTP_CORS_HEADERS, DEFAULT_HTTP_CORS_MAX_AGE, DEFAULT_HTTP_CORS_METHODS, isHttpCorsOrigin, isHttpEndpointPath, isHttpToken, splitHttpCorsOrigins } from './functions/core-function-cors.js'
 
 // ─── 环境与基础配置 Schema ───
 
@@ -231,3 +232,131 @@ export const RequestAccessConfigSchema = z.union([
   }),
   RequestAccessPolicySchema,
 ]).describe('每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用')
+
+/**
+ * HTTP 固定窗口限流的可序列化设置。默认关闭；对象启用并补齐窗口和请求额度。
+ * @example
+ * ```ts
+ * import { HttpRateLimitConfigSchema } from '@h-ai/core'
+ * // 允许同一个限流主体在 10 秒内请求两次；宿主另行注入计数器。
+ * const policy = HttpRateLimitConfigSchema.parse({ windowMs: 10000, maxRequests: 2 })
+ * if (policy) void policy.maxRequests
+ * ```
+ */
+export const HttpRateLimitConfigSchema = z.union([
+  z.literal(false),
+  z.strictObject({
+    windowMs: z.number().int().min(1).max(2147483647).default(60000).describe('固定窗口时长，单位为毫秒，从首次成功提交计数起算'),
+    maxRequests: z.number().int().min(1).default(100).describe('同一主体在窗口内允许的请求数'),
+  }),
+]).default(false).describe('HTTP 固定窗口限流；false 关闭，启用时由应用注入原子存储')
+
+/**
+ * Serv 与 Kit 共用的可信代理、访问和限流配置。
+ * 省略代理时使用自动模式，省略访问或限流时关闭对应功能。
+ * @example
+ * ```ts
+ * import { HttpAccessConfigSchema } from '@h-ai/core'
+ * const config = HttpAccessConfigSchema.parse({
+ *   trustedProxies: ['192.0.2.10'],
+ *   rateLimit: { maxRequests: 60 },
+ * })
+ * // 同一可信来源每个默认的一分钟窗口内可以通过 60 次检查。
+ * void config.rateLimit
+ * ```
+ */
+export const HttpAccessConfigSchema = z.object({
+  trustedProxies: TrustedProxiesSchema.default('auto'),
+  access: RequestAccessConfigSchema.default(false),
+  rateLimit: HttpRateLimitConfigSchema,
+})
+
+/**
+ * 固定的完整站点路径；不接受参数、通配符、转义段或相对部分。
+ * 校验失败时用 `safeParse()` 读取错误，避免装配到错误的端点。
+ * @example
+ * ```ts
+ * import { HttpEndpointPathSchema } from '@h-ai/core'
+ * const path = HttpEndpointPathSchema.safeParse('/partners/orders/a2a')
+ * if (!path.success) throw new Error('Invalid orders agent endpoint')
+ * void path.data
+ * ```
+ */
+export const HttpEndpointPathSchema = z.custom<`/${string}`>(
+  isHttpEndpointPath,
+  'Expected a canonical absolute request path',
+)
+
+/**
+ * A2A 对外端点默认关闭；仅在启用后解析 Agent Card 和 RPC 路径。
+ * 自定义路径填写不同的完整站点路径。
+ * @example
+ * ```ts
+ * import { HttpHostA2AConfigSchema } from '@h-ai/core'
+ * const a2a = HttpHostA2AConfigSchema.parse({ rpcPath: '/partners/orders/a2a' })
+ * // 缺省 cardPath 仍发布在 /.well-known/agent-card.json。
+ * if (a2a) void a2a.cardPath
+ * ```
+ */
+export const HttpHostA2AConfigSchema = z.union([
+  z.literal(false),
+  z.strictObject({
+    cardPath: HttpEndpointPathSchema.default('/.well-known/agent-card.json').describe('公开 Agent Card 的完整站点路径'),
+    rpcPath: HttpEndpointPathSchema.default('/a2a').describe('JSON-RPC 调用的完整站点路径，应与 Agent Card 公布地址一致'),
+  }).refine(value => value.cardPath !== value.rpcPath, {
+    path: ['rpcPath'],
+    message: 'A2A RPC and Agent Card paths must be different',
+  }),
+]).default(false).describe('发布 A2A HTTP 发现及 JSON-RPC；默认关闭')
+
+const corsTokenSchema = z.string().refine(isHttpToken, 'Invalid CORS header name or HTTP method').describe('一个 HTTP 方法或响应、请求头名称')
+const corsOriginSchema = z.union([
+  z.string(),
+  z.array(z.string().describe('一个完整的浏览器来源')),
+]).default('*')
+const corsOptionsSchema = z.strictObject({
+  origin: corsOriginSchema.describe('允许访问的完整来源；使用凭据时仅允许明确来源'),
+  nativeOrigins: z.string().refine(value => splitHttpCorsOrigins(value).every(isHttpCorsOrigin), 'Expected complete native origins').optional().describe('显式允许的原生 WebView 来源，使用逗号分隔'),
+  paths: z.array(z.union([
+    z.literal('/'),
+    HttpEndpointPathSchema,
+  ]).describe('启用跨域策略的一条完整请求路径')).optional().describe('应用跨域策略的完整请求路径；省略匹配全部'),
+  methods: z.array(corsTokenSchema).default(() => [...DEFAULT_HTTP_CORS_METHODS]).describe('浏览器预检获准使用的 HTTP 方法'),
+  allowedHeaders: z.array(corsTokenSchema).default(() => [...DEFAULT_HTTP_CORS_HEADERS]).describe('浏览器预检获准发送的请求头'),
+  exposedHeaders: z.array(corsTokenSchema).default([]).describe('允许跨域页面通过 JavaScript 读取的响应头'),
+  credentials: z.boolean().default(false).describe('允许浏览器跨域携带 Cookie 等凭据，默认关闭'),
+  maxAge: z.number().int().nonnegative().default(DEFAULT_HTTP_CORS_MAX_AGE).describe('预检响应的浏览器缓存时间，单位为秒'),
+}).superRefine(({ origin, credentials }, context) => {
+  const origins = typeof origin === 'string'
+    ? splitHttpCorsOrigins(origin)
+    : origin
+  if (origins.includes('*')
+    ? credentials || origins.length !== 1
+    : !origins.every(isHttpCorsOrigin)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['origin'],
+      message: 'Use complete, explicit CORS origins when credentials are enabled',
+    })
+  }
+})
+
+/**
+ * 可序列化的共同 CORS 设置，默认关闭。原生来源和跨域凭据均需显式指定；
+ * 含凭据的配置使用明确来源，通配符会导致校验失败。
+ * @example
+ * ```ts
+ * import { HttpCorsConfigSchema } from '@h-ai/core'
+ * const cors = HttpCorsConfigSchema.safeParse({
+ *   origin: 'https://console.orders.example.com',
+ *   paths: ['/api/orders'],
+ *   credentials: true,
+ * })
+ * if (!cors.success) throw new Error('Invalid orders console CORS policy')
+ * void cors.data
+ * ```
+ */
+export const HttpCorsConfigSchema = z.union([
+  z.literal(false),
+  corsOptionsSchema,
+]).default(false).describe('浏览器跨域访问策略；默认关闭')

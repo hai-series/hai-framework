@@ -1,4 +1,5 @@
 import { aiContract } from './ai/ai-contract.js'
+import { resolveAudioWebSocketPath } from './ai/audio/ai-audio-ws-path.js'
 /**
  * @h-ai/api-contract — 统一命名空间入口
  *
@@ -43,6 +44,7 @@ import { storageContract } from './storage/storage-contract.js'
  */
 export const apiContract = {
   ...feedbackApiContract,
+  resolveAudioWebSocketPath,
   /** 组合任意领域 contract，过滤掉 `false` / `undefined`，输出可被 serv 挂载的 router。 */
   create: createApiContract,
 

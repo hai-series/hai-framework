@@ -25,7 +25,7 @@ import { createTransportBodyPolicy, readTransportBody, resolveTransportBodyLimit
 import { createTransportClient } from './transport/crypto-transport-client.js'
 import { createTransportErrorResponse } from './transport/crypto-transport-error.js'
 import { parseTransportServerKeyRing } from './transport/crypto-transport-keyring.js'
-import { authenticateTransportRequest } from './transport/crypto-transport-request.js'
+import { authenticateTransportRequest, isKeyExchangePath } from './transport/crypto-transport-request.js'
 import { createTransportEncryption } from './transport/crypto-transport-server.js'
 import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './transport/crypto-transport-types.js'
 import { createCacheTransportKeyStore } from './transport/store-provider/crypto-transport-store-cache.js'
@@ -125,6 +125,7 @@ export function createCrypto<Operations extends PasswordOperations>(runtime: {
       ...options,
     }),
     protocol: TRANSPORT_PROTOCOL,
+    isKeyExchangePath,
     bodyLimits: TRANSPORT_BODY_LIMITS,
     plaintextRange: TRANSPORT_PLAINTEXT_RANGE,
     timeLimits: TRANSPORT_TIME_LIMITS,

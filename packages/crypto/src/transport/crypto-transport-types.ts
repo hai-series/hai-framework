@@ -12,7 +12,7 @@ import type { HaiResult } from '@h-ai/core'
 // ─── 协议常量（kit / serv / api-client 必须严格一致） ───
 
 /**
- * 认证传输v2的头名、窗口与默认协商子路径；各HTTP适配器共用，不手写漂移常量。
+ * 认证传输 v2 的头名、窗口与默认协商路径，供各 HTTP 适配器共用。
  *
  * @example
  * ```ts
@@ -37,8 +37,8 @@ export const TRANSPORT_PROTOCOL = {
   ENCRYPTED_HEADER: 'X-Encrypted',
   /** `X-Encrypted` 响应头的开启值。 */
   ENCRYPTED_HEADER_VALUE: 'true',
-  /** 密钥协商端点的默认子路径（相对于挂载前缀）。 */
-  DEFAULT_KEY_EXCHANGE_PATH: '/_hai/key-exchange',
+  /** 默认的站点绝对路径，独立于业务 API 前缀。 */
+  DEFAULT_KEY_EXCHANGE_PATH: '/api/v1/_hai/key-exchange',
 } as const
 
 /**

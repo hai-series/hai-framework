@@ -5,10 +5,31 @@ import type { HaiResult } from '@h-ai/core'
  */
 import type { TransportBodyLimits } from './crypto-transport-body.js'
 import type { EncryptedRequestPayload, TransportEncryptionManager, TransportMessageContext } from './crypto-transport-types.js'
-import { core } from '@h-ai/core'
+import { core, HttpEndpointPathSchema } from '@h-ai/core'
 import { readTransportBody, TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
 import { isValidEncryptedPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
+
+/**
+ * 校验密钥协商端点使用固定、无编码的站点绝对路径。
+ * @param value - 服务端或客户端读到的交换路径。
+ * @returns 合法路径返回 true，并将类型缩窄为以斜杠开头的字符串。
+ * @example
+ * ```ts
+ * import { crypto } from '@h-ai/crypto'
+ *
+ * function resolveExchangePath(configured: unknown) {
+ *   const path = configured ?? crypto.transport.protocol.DEFAULT_KEY_EXCHANGE_PATH
+ *   // 允许默认或自定义完整路径。校验失败时停止客户端装配。
+ *   if (!crypto.transport.isKeyExchangePath(path))
+ *     throw new Error('Invalid key exchange path')
+ *   return path
+ * }
+ * ```
+ */
+export function isKeyExchangePath(value: unknown): value is `/${string}` {
+  return HttpEndpointPathSchema.safeParse(value).success
+}
 
 /**
  * 从实际HTTP请求提取可信方法/路径/查询/客户端ID并有界认证；成功后才执行业务。

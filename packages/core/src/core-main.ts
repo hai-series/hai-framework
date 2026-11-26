@@ -7,6 +7,7 @@
 
 import type { CoreFunctions, CoreLogger, LoggerFunctions } from './core-types.js'
 import { err, ok } from './core-types.js'
+import { auth } from './functions/core-function-auth.js'
 import { requestContext } from './functions/core-function-context.js'
 import { error } from './functions/core-function-error.js'
 import { id } from './functions/core-function-id.js'
@@ -62,6 +63,7 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
   return {
     ok,
     err,
+    auth,
     context: requestContext,
     // ─── Logger ───
 

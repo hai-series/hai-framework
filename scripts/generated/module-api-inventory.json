@@ -11746,6 +11746,24 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "HttpContractContext",
+              "kind": "type",
+              "declaration": "HttpContractContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpContractHandler",
+              "kind": "type",
+              "declaration": "HttpContractHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpContractTransport",
+              "kind": "type",
+              "declaration": "HttpContractTransport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "IamAdminCreateUserInput",
               "kind": "type",
               "declaration": "IamAdminCreateUserInput",
@@ -13022,6 +13040,24 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "HttpContractContext",
+              "kind": "type",
+              "declaration": "HttpContractContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpContractHandler",
+              "kind": "type",
+              "declaration": "HttpContractHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpContractTransport",
+              "kind": "type",
+              "declaration": "HttpContractTransport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "IamAdminCreateUserInput",
               "kind": "type",
               "declaration": "IamAdminCreateUserInput",
@@ -14296,6 +14332,24 @@
               "kind": "value",
               "declaration": "HaiErrorSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpContractContext",
+              "kind": "type",
+              "declaration": "HttpContractContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpContractHandler",
+              "kind": "type",
+              "declaration": "HttpContractHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpContractTransport",
+              "kind": "type",
+              "declaration": "HttpContractTransport",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "IamAdminCreateUserInput",
@@ -18762,6 +18816,108 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "HttpA2AHandler",
+              "kind": "type",
+              "declaration": "HttpA2AHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpAccessConfigSchema",
+              "kind": "value",
+              "declaration": "HttpAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsConfig",
+              "kind": "type",
+              "declaration": "HttpCorsConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigInput",
+              "kind": "type",
+              "declaration": "HttpCorsConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigSchema",
+              "kind": "value",
+              "declaration": "HttpCorsConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsOptions",
+              "kind": "type",
+              "declaration": "HttpCorsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpEndpointPathSchema",
+              "kind": "value",
+              "declaration": "HttpEndpointPathSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfig",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigInput",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigSchema",
+              "kind": "value",
+              "declaration": "HttpHostA2AConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfig",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigInput",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigSchema",
+              "kind": "value",
+              "declaration": "HttpRateLimitConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitContext",
+              "kind": "type",
+              "declaration": "HttpRateLimitContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpRateLimitOptions",
+              "kind": "type",
+              "declaration": "HttpRateLimitOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpSession",
+              "kind": "type",
+              "declaration": "HttpSession",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpVerifyToken",
+              "kind": "type",
+              "declaration": "HttpVerifyToken",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "I18nFn",
               "kind": "type",
               "declaration": "I18nFn",
@@ -18876,6 +19032,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MemoryRateLimitStore",
+              "kind": "type",
+              "declaration": "MemoryRateLimitStore",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MessageDictionary",
               "kind": "type",
               "declaration": "MessageDictionary",
@@ -18939,6 +19101,24 @@
               "name": "PaginationOptionsInput",
               "kind": "type",
               "declaration": "PaginationOptionsInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitCache",
+              "kind": "type",
+              "declaration": "RateLimitCache",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitEntry",
+              "kind": "type",
+              "declaration": "RateLimitEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitStore",
+              "kind": "type",
+              "declaration": "RateLimitStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -19271,6 +19451,108 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "HttpA2AHandler",
+              "kind": "type",
+              "declaration": "HttpA2AHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpAccessConfigSchema",
+              "kind": "value",
+              "declaration": "HttpAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsConfig",
+              "kind": "type",
+              "declaration": "HttpCorsConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigInput",
+              "kind": "type",
+              "declaration": "HttpCorsConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigSchema",
+              "kind": "value",
+              "declaration": "HttpCorsConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsOptions",
+              "kind": "type",
+              "declaration": "HttpCorsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpEndpointPathSchema",
+              "kind": "value",
+              "declaration": "HttpEndpointPathSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfig",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigInput",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigSchema",
+              "kind": "value",
+              "declaration": "HttpHostA2AConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfig",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigInput",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigSchema",
+              "kind": "value",
+              "declaration": "HttpRateLimitConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitContext",
+              "kind": "type",
+              "declaration": "HttpRateLimitContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpRateLimitOptions",
+              "kind": "type",
+              "declaration": "HttpRateLimitOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpSession",
+              "kind": "type",
+              "declaration": "HttpSession",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpVerifyToken",
+              "kind": "type",
+              "declaration": "HttpVerifyToken",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "I18nFn",
               "kind": "type",
               "declaration": "I18nFn",
@@ -19385,6 +19667,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MemoryRateLimitStore",
+              "kind": "type",
+              "declaration": "MemoryRateLimitStore",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MessageDictionary",
               "kind": "type",
               "declaration": "MessageDictionary",
@@ -19448,6 +19736,24 @@
               "name": "PaginationOptionsInput",
               "kind": "type",
               "declaration": "PaginationOptionsInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitCache",
+              "kind": "type",
+              "declaration": "RateLimitCache",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitEntry",
+              "kind": "type",
+              "declaration": "RateLimitEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitStore",
+              "kind": "type",
+              "declaration": "RateLimitStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -19779,6 +20085,108 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "HttpA2AHandler",
+              "kind": "type",
+              "declaration": "HttpA2AHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpAccessConfigSchema",
+              "kind": "value",
+              "declaration": "HttpAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsConfig",
+              "kind": "type",
+              "declaration": "HttpCorsConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigInput",
+              "kind": "type",
+              "declaration": "HttpCorsConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigSchema",
+              "kind": "value",
+              "declaration": "HttpCorsConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsOptions",
+              "kind": "type",
+              "declaration": "HttpCorsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpEndpointPathSchema",
+              "kind": "value",
+              "declaration": "HttpEndpointPathSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfig",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigInput",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigSchema",
+              "kind": "value",
+              "declaration": "HttpHostA2AConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfig",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigInput",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigSchema",
+              "kind": "value",
+              "declaration": "HttpRateLimitConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitContext",
+              "kind": "type",
+              "declaration": "HttpRateLimitContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpRateLimitOptions",
+              "kind": "type",
+              "declaration": "HttpRateLimitOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpSession",
+              "kind": "type",
+              "declaration": "HttpSession",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpVerifyToken",
+              "kind": "type",
+              "declaration": "HttpVerifyToken",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "I18nFn",
               "kind": "type",
               "declaration": "I18nFn",
@@ -19893,6 +20301,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MemoryRateLimitStore",
+              "kind": "type",
+              "declaration": "MemoryRateLimitStore",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MessageDictionary",
               "kind": "type",
               "declaration": "MessageDictionary",
@@ -19956,6 +20370,24 @@
               "name": "PaginationOptionsInput",
               "kind": "type",
               "declaration": "PaginationOptionsInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitCache",
+              "kind": "type",
+              "declaration": "RateLimitCache",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitEntry",
+              "kind": "type",
+              "declaration": "RateLimitEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitStore",
+              "kind": "type",
+              "declaration": "RateLimitStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -20287,6 +20719,108 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "HttpA2AHandler",
+              "kind": "type",
+              "declaration": "HttpA2AHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpAccessConfigSchema",
+              "kind": "value",
+              "declaration": "HttpAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsConfig",
+              "kind": "type",
+              "declaration": "HttpCorsConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigInput",
+              "kind": "type",
+              "declaration": "HttpCorsConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigSchema",
+              "kind": "value",
+              "declaration": "HttpCorsConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsOptions",
+              "kind": "type",
+              "declaration": "HttpCorsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpEndpointPathSchema",
+              "kind": "value",
+              "declaration": "HttpEndpointPathSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfig",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigInput",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigSchema",
+              "kind": "value",
+              "declaration": "HttpHostA2AConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfig",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigInput",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigSchema",
+              "kind": "value",
+              "declaration": "HttpRateLimitConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitContext",
+              "kind": "type",
+              "declaration": "HttpRateLimitContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpRateLimitOptions",
+              "kind": "type",
+              "declaration": "HttpRateLimitOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpSession",
+              "kind": "type",
+              "declaration": "HttpSession",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpVerifyToken",
+              "kind": "type",
+              "declaration": "HttpVerifyToken",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "I18nFn",
               "kind": "type",
               "declaration": "I18nFn",
@@ -20401,6 +20935,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MemoryRateLimitStore",
+              "kind": "type",
+              "declaration": "MemoryRateLimitStore",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MessageDictionary",
               "kind": "type",
               "declaration": "MessageDictionary",
@@ -20464,6 +21004,24 @@
               "name": "PaginationOptionsInput",
               "kind": "type",
               "declaration": "PaginationOptionsInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitCache",
+              "kind": "type",
+              "declaration": "RateLimitCache",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitEntry",
+              "kind": "type",
+              "declaration": "RateLimitEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitStore",
+              "kind": "type",
+              "declaration": "RateLimitStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -20795,6 +21353,108 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "HttpA2AHandler",
+              "kind": "type",
+              "declaration": "HttpA2AHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpAccessConfigSchema",
+              "kind": "value",
+              "declaration": "HttpAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsConfig",
+              "kind": "type",
+              "declaration": "HttpCorsConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigInput",
+              "kind": "type",
+              "declaration": "HttpCorsConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpCorsConfigSchema",
+              "kind": "value",
+              "declaration": "HttpCorsConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpCorsOptions",
+              "kind": "type",
+              "declaration": "HttpCorsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpEndpointPathSchema",
+              "kind": "value",
+              "declaration": "HttpEndpointPathSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfig",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigInput",
+              "kind": "type",
+              "declaration": "HttpHostA2AConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpHostA2AConfigSchema",
+              "kind": "value",
+              "declaration": "HttpHostA2AConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfig",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigInput",
+              "kind": "type",
+              "declaration": "HttpRateLimitConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "HttpRateLimitConfigSchema",
+              "kind": "value",
+              "declaration": "HttpRateLimitConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "HttpRateLimitContext",
+              "kind": "type",
+              "declaration": "HttpRateLimitContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpRateLimitOptions",
+              "kind": "type",
+              "declaration": "HttpRateLimitOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpSession",
+              "kind": "type",
+              "declaration": "HttpSession",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "HttpVerifyToken",
+              "kind": "type",
+              "declaration": "HttpVerifyToken",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "I18nFn",
               "kind": "type",
               "declaration": "I18nFn",
@@ -20909,6 +21569,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MemoryRateLimitStore",
+              "kind": "type",
+              "declaration": "MemoryRateLimitStore",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MessageDictionary",
               "kind": "type",
               "declaration": "MessageDictionary",
@@ -20972,6 +21638,24 @@
               "name": "PaginationOptionsInput",
               "kind": "type",
               "declaration": "PaginationOptionsInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitCache",
+              "kind": "type",
+              "declaration": "RateLimitCache",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitEntry",
+              "kind": "type",
+              "declaration": "RateLimitEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RateLimitStore",
+              "kind": "type",
+              "declaration": "RateLimitStore",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -21255,6 +21939,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "PublicTransportConfig",
+              "kind": "type",
+              "declaration": "PublicTransportConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PublicTransportConfigInput",
+              "kind": "type",
+              "declaration": "PublicTransportConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
@@ -21325,6 +22021,12 @@
               "kind": "type",
               "declaration": "TransportClient",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportConfigSchema",
+              "kind": "value",
+              "declaration": "TransportConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "TransportCreateServerOptions",
@@ -21506,6 +22208,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "PublicTransportConfig",
+              "kind": "type",
+              "declaration": "PublicTransportConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PublicTransportConfigInput",
+              "kind": "type",
+              "declaration": "PublicTransportConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
@@ -21576,6 +22290,12 @@
               "kind": "type",
               "declaration": "TransportClient",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportConfigSchema",
+              "kind": "value",
+              "declaration": "TransportConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "TransportCreateServerOptions",
@@ -21756,6 +22476,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "PublicTransportConfig",
+              "kind": "type",
+              "declaration": "PublicTransportConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PublicTransportConfigInput",
+              "kind": "type",
+              "declaration": "PublicTransportConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
@@ -21826,6 +22558,12 @@
               "kind": "type",
               "declaration": "TransportClient",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportConfigSchema",
+              "kind": "value",
+              "declaration": "TransportConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "TransportCreateServerOptions",
@@ -22006,6 +22744,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "PublicTransportConfig",
+              "kind": "type",
+              "declaration": "PublicTransportConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PublicTransportConfigInput",
+              "kind": "type",
+              "declaration": "PublicTransportConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
@@ -22076,6 +22826,12 @@
               "kind": "type",
               "declaration": "TransportClient",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportConfigSchema",
+              "kind": "value",
+              "declaration": "TransportConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "TransportCreateServerOptions",
@@ -22256,6 +23012,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "PublicTransportConfig",
+              "kind": "type",
+              "declaration": "PublicTransportConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PublicTransportConfigInput",
+              "kind": "type",
+              "declaration": "PublicTransportConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ReadTransportBodyOptions",
               "kind": "type",
               "declaration": "ReadTransportBodyOptions",
@@ -22326,6 +23094,12 @@
               "kind": "type",
               "declaration": "TransportClient",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportConfigSchema",
+              "kind": "value",
+              "declaration": "TransportConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "TransportCreateServerOptions",

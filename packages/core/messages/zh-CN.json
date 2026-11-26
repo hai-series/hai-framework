@@ -62,5 +62,8 @@
   "core_runtimeConfigInvalid": "{message}：配置校验未通过，涉及配置项 {fields}。请检查配置值是否符合要求，修正后重新启动应用。",
   "core_runtimeConfigProblem": "{message}：配置项缺失或无效，涉及配置项 {fields}。请检查配置文件或环境变量，补全或修正后重新启动应用。",
   "core_runtimeErrorCode": "错误码：{code}",
-  "core_requestAccessDenied": "当前请求未通过访问策略检查。请确认访问地址、网络或允许的时段；如需帮助，请联系管理员。"
+  "core_requestAccessDenied": "当前请求未通过访问策略检查。请确认访问地址、网络或允许的时段；如需帮助，请联系管理员。",
+  "core_rateLimitExceeded": "请求过于频繁，请稍后再试",
+  "core_rateLimitWindowInvalid": "限流窗口必须为 1 至 2147483647 的整数毫秒",
+  "core_rateLimitMemoryCapacity": "开发内存限流容量已满，请使用共享后端"
 }

@@ -10,6 +10,9 @@ import type {
   AccessConditionSchema,
   CoreConfigSchema,
   EnvSchema,
+  HttpCorsConfigSchema,
+  HttpHostA2AConfigSchema,
+  HttpRateLimitConfigSchema,
   LogFormatSchema,
   LoggingConfigSchema,
   LogLevelSchema,
@@ -685,6 +688,8 @@ export interface CoreFunctions {
   ok: typeof ok
   /** 构造失败结果；参数及诊断语义与领域 API 保持一致，无需初始化。 */
   err: typeof err
+  /** 使用已验证的会话快照或权限列表执行宿主级检查。 */
+  readonly auth: typeof import('./functions/core-function-auth.js').auth
   /**
    * Node 中跨 await 隔离请求关联，浏览器仅同步作用域；不向下游注入任何凭据。
    * @example
@@ -750,7 +755,81 @@ export interface AccessFunctions {
   createRequestCheck: (input?: RequestAccessConfigInput) => RequestAccessCheck
   /** 启动读取最大 1 MiB 的 YAML；相对路径按服务工作目录或显式目录解析，配置失败抛出安全错误。 */
   loadPolicy: (input?: RequestAccessConfigInput, baseDirectory?: string) => RequestAccessPolicy | false
+  /** 编译跨域规则，计算当前 Fetch 请求所需的响应头与预检状态。 */
+  createCors: (config: HttpCorsOptions) => (request: Request) => { preflight: boolean, headers: Headers } | undefined
+  /** 识别真实浏览器预检；普通 OPTIONS 继续走宿主处理。 */
+  isCorsPreflight: (request: Request) => boolean
+  /** 合并 CORS 响应头，保留其它 Vary 值及原响应正文。 */
+  applyCorsHeaders: (response: Response, additional: Headers) => Response
+  /** 检查可信主体的共享窗口。返回用于成功响应的附加头，或直接返回 429/503 响应。 */
+  createRateLimiter: <T>(config: HttpRateLimitOptions<T>) => (input: { requestId: string, clientAddress?: string, context: T }) => Promise<Headers | Response>
+  /** 从由应用初始化和关闭的 Cache 创建共享原子计数器。 */
+  createCacheRateLimitStore: (backend: RateLimitCache, options: { namespace: string, allowMemory?: boolean }) => RateLimitStore
+  /** 创建仅供开发或测试使用的进程内原子计数器。 */
+  createMemoryRateLimitStore: () => MemoryRateLimitStore
 }
+
+/**
+ * 共同 CORS 运行时配置；部署来源使用完整的 scheme://host[:port]。
+ * @example
+ * ```ts
+ * import type { HttpCorsOptions } from '@h-ai/core'
+ * const cors: HttpCorsOptions = { origin: 'https://orders.example.com', credentials: true, paths: ['/api'] }
+ * ```
+ */
+export interface HttpCorsOptions {
+  readonly origin?: string | readonly string[] | ((origin: string) => boolean)
+  readonly nativeOrigins?: string
+  readonly paths?: readonly string[]
+  readonly methods?: readonly string[]
+  readonly allowedHeaders?: readonly string[]
+  readonly exposedHeaders?: readonly string[]
+  readonly credentials?: boolean
+  readonly maxAge?: number
+}
+
+/**
+ * 已解析的 Serv 与 Kit 共用 CORS 配置。对象包含框架补齐的预检规则，false 表示关闭。
+ * @example
+ * ```ts
+ * import { type HttpCorsConfig, HttpCorsConfigSchema } from '@h-ai/core'
+ * const cors: HttpCorsConfig = HttpCorsConfigSchema.parse({ origin: 'https://console.orders.example.com' })
+ * // 读取默认的预检缓存时间，单位为秒。
+ * if (cors) void cors.maxAge
+ * ```
+ */
+export type HttpCorsConfig = z.output<typeof HttpCorsConfigSchema>
+/**
+ * 可序列化的跨域配置输入；默认关闭。凭据传输需要显式完整来源。
+ * @example
+ * ```ts
+ * import { type HttpCorsConfigInput, HttpCorsConfigSchema } from '@h-ai/core'
+ * const input: HttpCorsConfigInput = { origin: ['https://console.orders.example.com'], credentials: true }
+ * const cors = HttpCorsConfigSchema.parse(input)
+ * ```
+ */
+export type HttpCorsConfigInput = false | Omit<HttpCorsOptions, 'origin'> & { readonly origin?: string | readonly string[] }
+/**
+ * 已解析的 Serv 与 Kit 共用 A2A 端点配置。对象包含互不相同的发现与消息路径。
+ * @example
+ * ```ts
+ * import { type HttpHostA2AConfig, HttpHostA2AConfigSchema } from '@h-ai/core'
+ * const a2a: HttpHostA2AConfig = HttpHostA2AConfigSchema.parse({})
+ * // 开启 A2A 后，将解析后的实际路径交给宿主。
+ * if (a2a) void a2a.rpcPath
+ * ```
+ */
+export type HttpHostA2AConfig = z.output<typeof HttpHostA2AConfigSchema>
+/**
+ * A2A 端点配置输入；默认关闭。设置对象可启用，并分别覆盖两个默认路径。
+ * @example
+ * ```ts
+ * import { type HttpHostA2AConfigInput, HttpHostA2AConfigSchema } from '@h-ai/core'
+ * const input: HttpHostA2AConfigInput = { rpcPath: '/partners/orders/a2a' }
+ * const endpoints = HttpHostA2AConfigSchema.parse(input)
+ * ```
+ */
+export type HttpHostA2AConfigInput = z.input<typeof HttpHostA2AConfigSchema>
 
 /**
  * Node 入口的完整 Core 形态；访问检查和文件配置不属于浏览器运行时。
@@ -1181,4 +1260,181 @@ export interface ModuleRuntime {
   readonly isInitialized: boolean
   start: () => Promise<HaiResult<void>>
   close: () => Promise<HaiResult<void>>
+}
+
+/**
+ * 已解析的 HTTP 限流设置。启用时窗口为毫秒，默认 60000，默认额度为 100。
+ * @example
+ * ```ts
+ * import { type HttpRateLimitConfig, HttpRateLimitConfigSchema } from '@h-ai/core'
+ * const limit: HttpRateLimitConfig = HttpRateLimitConfigSchema.parse({ maxRequests: 60 })
+ * void limit
+ * ```
+ */
+export type HttpRateLimitConfig = z.output<typeof HttpRateLimitConfigSchema>
+
+/**
+ * HTTP 固定窗口限流的 YAML 输入，省略等同于关闭。
+ * @example
+ * ```ts
+ * import type { HttpRateLimitConfigInput } from '@h-ai/core'
+ * const limit: HttpRateLimitConfigInput = { windowMs: 10000, maxRequests: 2 }
+ * void limit
+ * ```
+ */
+export type HttpRateLimitConfigInput = z.input<typeof HttpRateLimitConfigSchema>
+
+/**
+ * 固定窗口的计数和重置时间估算。
+ * @example
+ * ```ts
+ * import type { RateLimitEntry } from '@h-ai/core'
+ * const entry: RateLimitEntry = { count: 1, resetAt: Date.now() + 60000 }
+ * void entry
+ * ```
+ */
+export interface RateLimitEntry {
+  /** 当前窗口内成功提交的计数，从 1 开始。 */
+  count: number
+  /** 预计窗口结束的 Unix 毫秒数。共享存储以服务端 TTL 为准。 */
+  resetAt: number
+}
+
+/**
+ * 原子固定窗口计数器。失败由宿主转换为 503。
+ * @example
+ * ```ts
+ * import { type RateLimitStore, core } from '@h-ai/core'
+ * // 开发时创建单进程存储；默认按调用方提供的主体计数。
+ * const store: RateLimitStore = core.access.createMemoryRateLimitStore()
+ * const entry = await store.increment('192.0.2.10', 60000)
+ * void entry.count
+ * ```
+ */
+export interface RateLimitStore {
+  /** 生产环境要求共享存储；内存仅限开发或测试。 */
+  readonly scope: 'shared' | 'memory'
+  /** 原子自增并保留窗口到期时间，返回提交后的计数和重置时间。 */
+  increment: (key: string, windowMs: number) => Promise<RateLimitEntry> | RateLimitEntry
+}
+
+/**
+ * 限流需要的 Cache 能力。使用单键 CAS 与服务端 TTL 协调跨实例增量。
+ * @example
+ * ```ts
+ * import type { RateLimitCache } from '@h-ai/core'
+ * import { cache } from '@h-ai/cache'
+ * // 启动流程先初始化 cache，再将后端交给限流存储。
+ * const backend: RateLimitCache = cache
+ * void backend
+ * ```
+ */
+export interface RateLimitCache {
+  readonly config: { type: string } | null
+  readonly kv: {
+    get: <T>(key: string) => Promise<HaiResult<T | null>>
+    compareAndSwap: (key: string, expected: RateLimitEntry | undefined, value: RateLimitEntry, options: { px?: number, keepTtl?: boolean }) => Promise<HaiResult<boolean>>
+  }
+}
+
+/**
+ * 开发和测试用的同步进程内限流计数器。
+ * @example
+ * ```ts
+ * import { type MemoryRateLimitStore, core } from '@h-ai/core'
+ * // 当前进程保留计数，释放引用即可回收。
+ * const store: MemoryRateLimitStore = core.access.createMemoryRateLimitStore()
+ * const current = store.increment('192.0.2.10', 60000)
+ * void current.count
+ * ```
+ */
+export interface MemoryRateLimitStore extends RateLimitStore {
+  readonly scope: 'memory'
+  increment: (key: string, windowMs: number) => RateLimitEntry
+}
+
+/**
+ * HTTP 宿主暴露给业务处理函数的已验证身份。
+ * @example
+ * ```ts
+ * import type { HttpSession } from '@h-ai/core'
+ * const session: HttpSession = { userId: 'auditor', roles: ['auditor'], permissions: ['orders:read'] }
+ * ```
+ */
+export interface HttpSession {
+  userId: string
+  username?: string
+  displayName?: string
+  avatarUrl?: string
+  roles: string[]
+  permissions: string[]
+  data?: Record<string, unknown>
+}
+
+/**
+ * 允许应用传入 IAM 验证器或返回相同结果结构的自定义实现。
+ * @example
+ * ```ts
+ * import { core, HaiCommonError, type HttpVerifyToken } from '@h-ai/core'
+ * const verifyToken: HttpVerifyToken = async () => core.err(HaiCommonError.UNAUTHORIZED)
+ * ```
+ */
+export type HttpVerifyToken = (accessToken: string) => Promise<HaiResult<HttpSession>>
+
+/**
+ * 自定义限流与超限响应可用的可信请求上下文。
+ * @example
+ * ```ts
+ * import type { HttpRateLimitContext } from '@h-ai/core'
+ * function scope(context: HttpRateLimitContext) {
+ *   return context.session?.userId ?? context.clientAddress ?? 'unresolved'
+ * }
+ * ```
+ */
+export interface HttpRateLimitContext {
+  readonly request: Request
+  readonly requestId: string
+  readonly clientAddress?: string
+  readonly session?: HttpSession
+}
+
+/**
+ * HTTP 宿主用于挂载 Agent Card 与 JSON-RPC 的最小处理器。
+ * @example
+ * ```ts
+ * import type { HttpA2AHandler } from '@h-ai/core'
+ * function agentEndpoint(handler: HttpA2AHandler) { return handler.rpcPath }
+ * ```
+ */
+export interface HttpA2AHandler {
+  readonly cardPath: `/${string}`
+  readonly rpcPath: `/${string}`
+  handleRequest: (request: Request, requestId?: string) => Promise<Response | null>
+}
+
+/**
+ * 已启用的 HTTP 固定窗口限流运行时选项，供 Serv 和 Kit 注入原子计数。
+ * @example
+ * ```ts
+ * import { type HttpRateLimitOptions, core } from '@h-ai/core'
+ * // 单进程开发用的 10 秒窗口，生产应用应注入共享 Cache 计数器。
+ * const options: HttpRateLimitOptions<Request> = {
+ *   store: core.access.createMemoryRateLimitStore(),
+ *   windowMs: 10000,
+ *   maxRequests: 2,
+ * }
+ * void options
+ * ```
+ */
+export interface HttpRateLimitOptions<T> {
+  /** 固定窗口的毫秒数，默认 60000。 */
+  windowMs?: number
+  /** 窗口内允许的请求数，默认 100。 */
+  maxRequests?: number
+  /** 由宿主初始化并负责关闭的原子计数器。 */
+  store: RateLimitStore
+  /** 自定义计数主体；省略时使用宿主解析的可信地址。 */
+  keyGenerator?: (context: T) => string
+  /** 自定义超限正文或附加头；框架保留 429、关联标识与计数头。 */
+  onLimitReached?: (context: T, defaultResponse: Response) => Response
 }

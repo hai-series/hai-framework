@@ -11,6 +11,8 @@ import path from 'node:path'
 import process from 'node:process'
 import { parse } from 'yaml'
 import { AccessConditionSchema, RequestAccessConfigSchema, RequestAccessPolicySchema } from '../core-config.js'
+import { applyCorsHeaders, createCors, isCorsPreflight } from './core-function-cors.js'
+import { createCacheRateLimitStore, createMemoryRateLimitStore, createRateLimiter } from './core-function-rate-limit.node.js'
 
 const allowed: AccessDecision = Object.freeze({ allowed: true })
 const invalidPath: AccessDecision = Object.freeze({ allowed: false, reason: 'path' })
@@ -512,4 +514,10 @@ export const access: AccessFunctions = {
   createConditionCheck,
   createRequestCheck,
   loadPolicy,
+  applyCorsHeaders,
+  createCors,
+  isCorsPreflight,
+  createCacheRateLimitStore,
+  createMemoryRateLimitStore,
+  createRateLimiter,
 }
