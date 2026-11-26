@@ -1,314 +1,241 @@
-<!--
-  @component FeedbackDetail
-  反馈详情与分页材料展示；操作由宿主执行并回填真实版本。
-  @example
-  ```ts
-  import type { ComponentProps } from 'svelte'
-  import { FeedbackDetail } from '@h-ai/ui'
-  const props: ComponentProps<typeof FeedbackDetail> = { permissions: { read: false } }
-  ```
--->
+<!-- @component FeedbackDetail 展示首帖、处理状态、双方消息和授权附件。 -->
 <script lang='ts'>
-  import type { DataAttributes } from '../../../types.js'
-  import type { FeedbackAttachmentView, FeedbackEvidenceQuery, FeedbackEvidenceView, FeedbackHistoryView, FeedbackPage, FeedbackPermissions, FeedbackReportView, FeedbackStatusChange } from './feedback-types.js'
+  import type { FeedbackDetail as Detail, FeedbackAttachment, FeedbackMessage, FeedbackSetStatusInput, FeedbackSubmitInput } from '@h-ai/api-contract/feedback'
+  import type { FeedbackViewActions } from './feedback-types.js'
+  import { onMount } from 'svelte'
   import { uiM } from '../../../messages.js'
-  import { errorMessage, toast, useToastFeedback } from '../../../toast.svelte.js'
-  import { getDataAttributes } from '../../../utils.js'
-  import FormField from '../../compounds/FormField.svelte'
-  import FormLayout from '../../compounds/FormLayout.svelte'
+  import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import Pagination from '../../compounds/Pagination.svelte'
-  import Tabs from '../../compounds/Tabs.svelte'
-  import Badge from '../../primitives/Badge.svelte'
   import Button from '../../primitives/Button.svelte'
-  import Input from '../../primitives/Input.svelte'
-  import Textarea from '../../primitives/Textarea.svelte'
-  import { collectionLabel, evidenceText, feedbackTime, imagePreviewUrl, notificationLabel } from './feedback-functions.js'
-  import FeedbackReplay from './FeedbackReplay.svelte'
+  import { createFeedbackFileUrl, isPreviewImage, statusLabel } from './feedback-functions.js'
+  import FeedbackForm from './FeedbackForm.svelte'
 
-  let {
-    report,
-    evidence = {
-      items: [],
-      total: 0,
-      page: 1,
-      pageSize: 20,
-    },
-    attachments = [],
-    history = [],
-    webhook,
-    permissions = {},
-    loading = false,
-    error = '',
-    evidenceQuery = $bindable({ page: 1, pageSize: 20 }),
-    onevidencequery,
-    onstatus,
-    onexport,
-    onretry,
-    onattachment,
-    onreplay,
-    onclose,
-    class: className = '',
-    ...restProps
-  }: {
-    report?: FeedbackReportView
-    evidence?: FeedbackPage<FeedbackEvidenceView>
-    attachments?: FeedbackAttachmentView[]
-    history?: FeedbackHistoryView[]
-    /** 持久 Webhook 任务的公开状态，由反馈详情 jobs 中的 webhook 项提供。 */
-    webhook?: { status: 'pending' | 'running' | 'succeeded' | 'failed', attempts: number, lastError?: string }
-    permissions?: FeedbackPermissions
-    loading?: boolean
-    error?: string
-    evidenceQuery?: FeedbackEvidenceQuery
-    onevidencequery?: (query: FeedbackEvidenceQuery) => void | Promise<void>
-    onstatus?: (input: FeedbackStatusChange) => void | Promise<void>
-    onexport?: (report: FeedbackReportView) => void | Promise<void>
-    onretry?: (report: FeedbackReportView) => void | Promise<void>
-    onattachment?: (attachment: FeedbackAttachmentView) => void | Promise<void>
-    /** 按需取得完整回放事件；普通材料分页不能代替完整快照。 */
-    onreplay?: () => Promise<FeedbackEvidenceView[]>
-    onclose?: () => void
-    class?: string
-  } & DataAttributes = $props()
+  interface Props {
+    id: string
+    actions: Omit<FeedbackViewActions, 'list'>
+    canProcess?: boolean
+    canReply?: boolean
+    onchange?: () => void
+  }
 
-  const dataAttributes = $derived(getDataAttributes(restProps))
-  let active = $state('overview')
+  const { id, actions, canProcess = false, canReply = true, onchange }: Props = $props()
+  let report = $state<Detail>()
+  let messages = $state<FeedbackMessage[]>([])
+  let total = $state(0)
+  let page = $state(1)
+  let pageSize = $state(20)
+  let loading = $state(true)
   let busy = $state(false)
-  let querying = $state(false)
-  let actionError = $state('')
-  let queryGeneration = 0
-  let failedPreviews = $state<string[]>([])
-  let note = $state('')
-  let requestId = $derived(evidenceQuery.requestId ?? '')
-  let errorId = $derived(evidenceQuery.errorId ?? '')
-  let kind = $derived(evidenceQuery.kind ?? '')
-  const tabs = $derived([
-    {
-      key: 'overview',
-      label: uiM('feedback_overview'),
-    },
-    {
-      key: 'scene',
-      label: uiM('feedback_scene'),
-    },
-    {
-      key: 'replay',
-      label: uiM('feedback_replay'),
-    },
-    {
-      key: 'logs',
-      label: uiM('feedback_logs'),
-    },
-    {
-      key: 'business',
-      label: uiM('feedback_business'),
-    },
-    {
-      key: 'environment',
-      label: uiM('feedback_environment'),
-    },
-    {
-      key: 'history',
-      label: uiM('feedback_history'),
-    },
-  ])
+  let error = $state('')
+  let activePreview = $state<{ name: string, url: string }>()
+  let gettingFile = $state('')
+  let request = 0
+  let disposed = false
 
-  async function run(action: (() => void | Promise<void>) | undefined) {
-    if (!action || busy)
-      return
-    busy = true
-    actionError = ''
+  function closePreview() {
+    if (activePreview) {
+      URL.revokeObjectURL(activePreview.url)
+      activePreview = undefined
+    }
+  }
+
+  async function load(nextPage = 1) {
+    const token = ++request
+    error = ''
+    loading = true
     try {
-      await action()
+      const [summary, conversation] = await Promise.all([
+        actions.get({ id }),
+        actions.listMessages({ id, page: nextPage }),
+      ])
+      if (disposed || token !== request)
+        return
+      if (!summary.success || !conversation.success) {
+        error = errorMessage(!summary.success
+          ? summary.error
+          : !conversation.success
+          ? conversation.error
+          : undefined, uiM('feedback_action_failed'))
+        return
+      }
+      report = summary.data
+      messages = [...conversation.data.items].reverse()
+      total = conversation.data.total
+      page = conversation.data.page
+      pageSize = conversation.data.pageSize
     }
     catch (cause) {
-      actionError = errorMessage(cause, uiM('feedback_action_failed'))
+      if (!disposed && token === request)
+        error = errorMessage(cause, uiM('feedback_action_failed'))
+    }
+    finally {
+      if (!disposed && token === request)
+        loading = false
+    }
+  }
+
+  async function changeStatus(status: FeedbackSetStatusInput['status']) {
+    if (!actions.setStatus || busy)
+      return
+    busy = true
+    error = ''
+    try {
+      const result = await actions.setStatus({ id, status })
+      if (!result.success) {
+        error = errorMessage(result.error, uiM('feedback_action_failed'))
+        return
+      }
+      if (report && !disposed) {
+        report = { ...report, report: result.data }
+        onchange?.()
+      }
+    }
+    catch (cause) {
+      if (!disposed)
+        error = errorMessage(cause, uiM('feedback_action_failed'))
     }
     finally {
       busy = false
     }
   }
-  async function query(next: Partial<FeedbackEvidenceQuery>) {
-    evidenceQuery = {
-      ...evidenceQuery,
-      ...next,
-    }
-    const generation = ++queryGeneration
-    querying = true
-    actionError = ''
+
+  function send(input: FeedbackSubmitInput, kind: FeedbackMessage['kind']) {
+    return actions.addMessage({
+      id,
+      messageId: input.id,
+      body: input.body,
+      attachments: input.attachments,
+      kind,
+    })
+  }
+
+  async function fileAction(file: FeedbackAttachment, preview: boolean) {
+    if (gettingFile)
+      return
+    gettingFile = file.id
+    error = ''
     try {
-      await onevidencequery?.(evidenceQuery)
+      const result = await actions.getAttachment({ id, attachmentId: file.id })
+      if (disposed)
+        return
+      if (!result.success) {
+        error = errorMessage(result.error, uiM('feedback_action_failed'))
+        return
+      }
+      if (preview && isPreviewImage(result.data.contentType)) {
+        closePreview()
+        activePreview = {
+          name: result.data.name,
+          url: createFeedbackFileUrl(result.data, true),
+        }
+      }
+      else {
+        const url = createFeedbackFileUrl(result.data, false)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = result.data.name
+        document.body.append(link)
+        link.click()
+        link.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
     }
     catch (cause) {
-      if (generation === queryGeneration)
-        actionError = errorMessage(cause, uiM('feedback_action_failed'))
+      if (!disposed)
+        error = errorMessage(cause, uiM('feedback_action_failed'))
     }
     finally {
-      if (generation === queryGeneration)
-        querying = false
+      gettingFile = ''
     }
   }
-  function changeTab(tab: string) {
-    if (tab === 'environment') {
-      void query({
-        page: 1,
-        kind: 'environment',
-        requestId: undefined,
-        errorId: undefined,
-      })
+
+  onMount(() => {
+    void load()
+    return () => {
+      disposed = true
+      closePreview()
     }
-    else if (tab === 'scene') {
-      void query({
-        page: 1,
-        kind: 'interaction',
-        requestId: undefined,
-        errorId: undefined,
-      })
-    }
-    else if (tab === 'logs') {
-      void query({ page: 1, kind: undefined })
-    }
-    else if (tab === 'business') {
-      void query({
-        page: 1,
-        kind: 'business',
-        requestId: undefined,
-        errorId: undefined,
-      })
-    }
-  }
-  useToastFeedback(() => error || actionError)
-  useToastFeedback(() => permissions.read === false
-    ? uiM('feedback_permission_denied')
-    : '', 'warning')
-  useToastFeedback(() => failedPreviews.length
-    ? uiM('feedback_preview_failed')
-    : '', 'warning')
+  })
+  useToastFeedback(() => error)
 </script>
 
-<section {...dataAttributes} class={`feedback-detail min-w-0 space-y-4 ${className}`} aria-label={uiM('feedback_details')}>
-  {#if permissions.read !== false && report}
-    <header class='flex flex-wrap items-center justify-between gap-3'>
-      <div class='min-w-0'><h2 class='text-xl font-semibold break-all'>{report.number}</h2><p class='text-sm text-base-content/65'>{report.appId} · {report.appVersion || '—'} · {feedbackTime(report.createdAt)}</p></div>
-      <div class='flex flex-wrap items-center gap-2'>
-        <Badge variant={report.status === 'handled'
-          ? 'success'
-          : 'ghost'}>{uiM(report.status === 'handled'
-          ? 'feedback_handled'
-          : 'feedback_pending')}</Badge>
-        {#if permissions.export && onexport}<Button size='sm' disabled={busy} onclick={() => run(() => onexport(report!))}>{uiM('feedback_export')}</Button>{/if}
-        {#if onclose}<Button size='sm' variant='ghost' onclick={onclose}>{uiM('feedback_close')}</Button>{/if}
-      </div>
-    </header>
-    {#if loading || querying}<p class='text-sm text-base-content/60' role='status'>{uiM('feedback_loading')}</p>{/if}
-    <Tabs items={tabs} bind:active onchange={changeTab}>
-      {#snippet children({ active: tab })}
-        {#if tab === 'overview'}
-          <div class='space-y-4 py-4'>
-            <p class='whitespace-pre-wrap break-words'>{report.description || uiM('feedback_no_description')}</p>
-            <dl class='grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3'>
-              <div><dt class='text-base-content/55'>{uiM('feedback_collection')}</dt><dd>{collectionLabel(report.collectionStatus)}</dd></div>
-              <div><dt class='text-base-content/55'>{uiM('feedback_notification')}</dt><dd>{notificationLabel(report.notificationStatus)}</dd></div>
-              {#if webhook}
-                <div><dt class='text-base-content/55'>{uiM('feedback_webhook')}</dt><dd>{notificationLabel(webhook.status === 'succeeded'
-                  ? 'sent'
-                  : webhook.status === 'running'
-                  ? 'sending'
-                  : webhook.status)} · {uiM('feedback_attempts')}: {webhook.attempts}</dd>{#if webhook.lastError}<dd><Button variant='ghost' size='sm' onclick={() => toast.error(webhook!.lastError!)}>{uiM('toast_diagnostics')}</Button></dd>{/if}</div>
-              {/if}
-              <div><dt class='text-base-content/55'>{uiM('feedback_submitter')}</dt><dd class='break-all'>{report.userId || '—'}</dd></div>
-              <div><dt class='text-base-content/55'>{uiM('feedback_revision')}</dt><dd>{report.evidenceRevision}</dd></div>
-              {#if report.buildId}<div><dt class='text-base-content/55'>{uiM('feedback_build_id')}</dt><dd class='break-all'>{report.buildId}</dd></div>{/if}
-              {#if report.commit}<div><dt class='text-base-content/55'>{uiM('feedback_commit')}</dt><dd class='break-all'>{report.commit}</dd></div>{/if}
-            </dl>
-            {#if webhook?.status === 'failed' && permissions.retry && onretry}<Button size='sm' disabled={busy} onclick={() => run(() => onretry(report!))}>{uiM('feedback_retry')}</Button>{/if}
-          </div>
-        {:else if tab === 'replay'}
-          <div class='py-4'>
-            {#if onreplay}<FeedbackReplay load={onreplay} />{:else}<p class='text-sm'>{uiM('feedback_replay_empty')}</p>{/if}
-          </div>
-        {:else if tab === 'scene' || tab === 'logs' || tab === 'environment' || tab === 'business'}
-          <div class='space-y-4 py-4'>
-            {#if tab === 'scene'}
-              <div class='grid grid-cols-1 gap-3 xl:grid-cols-2'>
-                {#each attachments as attachment (attachment.id)}
-                  <article class='rounded-lg border border-base-content/10 p-3 min-w-0 space-y-2'>
-                    <p class='font-medium text-sm break-all'>{attachment.name}</p>
-                    {#if attachment.mimeType?.startsWith('image/') && imagePreviewUrl(attachment.url)}<img src={imagePreviewUrl(attachment.url)} alt={attachment.name} class='max-w-full rounded' loading='lazy' referrerpolicy='no-referrer' onerror={() => failedPreviews = [...failedPreviews, attachment.id]} onload={() => failedPreviews = failedPreviews.filter(id => id !== attachment.id)} />{/if}
-                    {#if attachment.mimeType?.startsWith('video/') && imagePreviewUrl(attachment.url)}<!-- svelte-ignore a11y_media_has_caption (用户上传的无声录屏) -->
-                      <video src={imagePreviewUrl(attachment.url)} controls preload='metadata' class='max-w-full rounded' aria-label={attachment.name}></video>{/if}
-                    {#if attachment.missingReason}<Button size='sm' variant='ghost' onclick={() => toast.warning(`${uiM('feedback_missing')}: ${attachment.missingReason}`)}>{uiM('feedback_missing')}</Button>
-                    {:else if onattachment}<Button size='sm' variant='ghost' disabled={busy} onclick={() => run(() => onattachment(attachment))}>{uiM('feedback_download')}</Button>{/if}
-                  </article>
-                {/each}
-              </div>
-            {/if}
-            {#if tab === 'logs'}
-              <form onsubmit={(event) => {
-                event.preventDefault()
-                void query({
-                  page: 1,
-                  kind: kind || undefined,
-                  requestId: requestId || undefined,
-                  errorId: errorId || undefined,
-                })
-              }}>
-                <FormLayout columns={2}>
-                  <FormField label={uiM('feedback_kind')}><Input bind:value={kind} /></FormField>
-                  <FormField label={uiM('feedback_request_id')}><Input bind:value={requestId} /></FormField>
-                  <FormField label={uiM('feedback_error_id')}><Input bind:value={errorId} /></FormField>
-                  <Button type='submit' size='sm' loading={querying}>{uiM('feedback_apply_filters')}</Button>
-                </FormLayout>
-              </form>
-            {/if}
-            {#if !evidence.items.length && !loading}<p class='rounded-lg bg-base-200 p-4 text-sm text-base-content/65'>{uiM('feedback_evidence_empty')}</p>{/if}
-            {#each evidence.items as item (item.id)}
-              <article class='min-w-0 rounded-lg border border-base-content/10 p-3 space-y-2'>
-                <div class='flex flex-wrap gap-x-3 gap-y-1 text-xs text-base-content/65'><span>{feedbackTime(item.timestamp)}</span><span>{uiM('feedback_source')}: {item.source} #{item.sequence}</span><span>{item.kind}</span>{#if item.requestId}<span class='break-all'>{uiM('feedback_request_id')}: {item.requestId}</span>{/if}{#if item.errorId}<span class='text-error break-all'>{uiM('feedback_error_id')}: {item.errorId}</span>{/if}</div>
-                {#if item.missingReason}<Button size='sm' variant='ghost' onclick={() => toast.warning(`${uiM('feedback_missing')}: ${item.missingReason}`)}>{uiM('feedback_missing')}</Button>{/if}
-                <pre class='max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded bg-base-200 p-3 text-xs'>{evidenceText(item.data)}</pre>
-              </article>
-            {/each}
-            <div class='overflow-x-auto'><Pagination page={evidence.page} total={evidence.total} pageSize={evidence.pageSize} showSizeChanger onchange={page => query({ page })} onpagesizechange={pageSize => query({ page: 1, pageSize })} /></div>
-          </div>
-        {:else if tab === 'history'}
-          <div class='space-y-4 py-4'>
-            <p class='text-sm'>{uiM('feedback_notification')}: {notificationLabel(report.notificationStatus)}</p>
-            {#if onstatus && ((report.status === 'pending' && permissions.process) || (report.status === 'handled' && permissions.reopen))}
-              <form class='space-y-3' onsubmit={(event) => {
-                event.preventDefault()
-                void run(() => onstatus({
-                  id: report!.id,
-                  status: report!.status === 'pending'
-                    ? 'handled'
-                    : 'pending',
-                  expectedVersion: report!.version,
-                  note: note.trim() || undefined,
-                }))
-              }}>
-                <FormLayout><FormField label={uiM('feedback_note')}><Textarea bind:value={note} maxlength={4000} disabled={busy} /></FormField></FormLayout>
-                <Button type='submit' variant='primary' loading={busy}>{uiM(report.status === 'pending'
-                  ? 'feedback_handle'
-                  : 'feedback_reopen')}</Button>
-              </form>
-            {/if}
-            {#if permissions.retry && onretry && (report.notificationStatus === 'failed' || report.collectionStatus === 'partial' || report.collectionStatus === 'failed')}<Button size='sm' disabled={busy} onclick={() => run(() => onretry(report!))}>{uiM('feedback_retry')}</Button>{/if}
-            <ol class='space-y-3'>
-              {#each history as change (change.id)}
-                <li class='rounded-lg border border-base-content/10 p-3 text-sm'><p class='text-base-content/60'>{feedbackTime(change.createdAt)} · {change.actorId}</p><p>{uiM(change.fromStatus === 'handled'
-                  ? 'feedback_handled'
-                  : 'feedback_pending')} → {uiM(change.toStatus === 'handled'
-                  ? 'feedback_handled'
-                  : 'feedback_pending')}</p>{#if change.note}<p class='mt-1 whitespace-pre-wrap break-words'>{change.note}</p>{/if}</li>
-              {/each}
-            </ol>
-          </div>
+{#snippet files(items: FeedbackAttachment[])}
+  {#if items.length}
+    <ul class='space-y-1'>
+      {#each items as item (item.id)}
+        <li class='flex flex-wrap items-center gap-x-2'>
+          <span class='break-all text-sm'>{item.name}</span>
+          {#if isPreviewImage(item.contentType)}
+            <Button size='xs' variant='ghost' disabled={!!gettingFile && gettingFile !== item.id} onclick={() => void fileAction(item, true)}>{uiM('feedback_preview')}</Button>
+          {/if}
+          <Button size='xs' variant='ghost' disabled={!!gettingFile && gettingFile !== item.id} onclick={() => void fileAction(item, false)}>{uiM('feedback_download')}</Button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+{/snippet}
+
+<section class='min-w-0 space-y-5' data-testid='feedback-detail'>
+  {#if report}
+    <div class='flex flex-wrap items-center gap-2'>
+      <span class='badge badge-outline' data-testid='feedback-status'>{statusLabel(report.report.status)}</span>
+      {#if canProcess && actions.setStatus}
+        {#if report.report.status !== 'handled'}
+          <Button size='sm' variant='outline' disabled={busy} onclick={() => void changeStatus('handled')}>{uiM('feedback_handle')}</Button>
         {/if}
-      {/snippet}
-    </Tabs>
-  {:else if loading}
-    <p role='status'>{uiM('feedback_loading')}</p>
-  {:else}
-    <p class='text-sm text-base-content/60'>{uiM('feedback_empty')}</p>
+        {#if report.report.status !== 'pending'}
+          <Button size='sm' variant='ghost' disabled={busy} onclick={() => void changeStatus('pending')}>{uiM('feedback_reopen')}</Button>
+        {/if}
+      {/if}
+      <Button size='sm' variant='ghost' disabled={loading} onclick={() => void load(page)}>{uiM('feedback_refresh')}</Button>
+    </div>
+    <div class='space-y-2 rounded-xl border border-base-content/15 p-3'>
+      <p class='whitespace-pre-wrap break-words'>{report.report.body}</p>
+      {@render files(report.attachments)}
+    </div>
+    {#if activePreview}
+      <figure class='space-y-2 rounded-xl bg-base-200 p-3'>
+        <figcaption class='flex items-center justify-between gap-3 break-all'>
+          {activePreview.name}
+          <Button size='xs' variant='ghost' onclick={closePreview}>{uiM('feedback_close')}</Button>
+        </figcaption>
+        <img src={activePreview.url} alt={activePreview.name} class='max-h-96 max-w-full object-contain' />
+      </figure>
+    {/if}
+    <section aria-label={uiM('feedback_conversation')} class='space-y-3'>
+      {#if total > pageSize}
+        <Pagination {page} {pageSize} {total} size='sm' showTotal={false} onchange={value => void load(value)} />
+      {/if}
+      {#each messages as message (message.id)}
+        <article class='space-y-2 rounded-xl border border-base-content/15 p-3'>
+          <div class='flex flex-wrap gap-2 text-sm text-base-content/80'>
+            <strong>{uiM(message.authorRole === 'author'
+              ? 'feedback_author'
+              : 'feedback_staff')}</strong>
+            {#if message.kind === 'request_info'}
+              <span class='badge badge-info badge-outline badge-sm'>{uiM('feedback_request_info')}</span>
+            {/if}
+            <time datetime={new Date(message.createdAt).toISOString()}>{new Date(message.createdAt).toLocaleString()}</time>
+          </div>
+          <p class='whitespace-pre-wrap break-words'>{message.body}</p>
+          {@render files(message.attachments)}
+        </article>
+      {/each}
+    </section>
+    {#if canReply}
+      <FeedbackForm reply onsubmit={input => send(input, 'reply')} onrequestinfo={canProcess
+        ? input => send(input, 'request_info')
+        : undefined} oncomplete={() => {
+        if (!disposed) {
+          void load()
+          onchange?.()
+        }
+      }} />
+    {/if}
+  {:else if !loading}
+    <Button size='sm' variant='outline' onclick={() => void load()}>{uiM('feedback_refresh')}</Button>
+  {/if}
+  {#if loading}
+    <p role='status' class='text-sm text-base-content/70'>{uiM('feedback_loading')}</p>
   {/if}
 </section>

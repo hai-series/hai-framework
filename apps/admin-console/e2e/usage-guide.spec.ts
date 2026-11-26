@@ -1,8 +1,6 @@
-import type { FeedbackDetail, FeedbackReport, FeedbackSubmitInput } from '@h-ai/api-contract/feedback'
-import type { HaiResult } from '@h-ai/core'
 import type { Locator, Page, TestInfo } from '@playwright/test'
 import { expect, test } from '@playwright/test'
-import { dutyAccounts, loginOnPage, registerAndLogin, uniqueUser, waitForHydration } from './helpers'
+import { registerAndLogin, waitForHydration } from './helpers'
 
 async function capture(page: Page, testInfo: TestInfo, name: string, target?: Locator) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -123,53 +121,4 @@ test('组件演示切换中英日语言后保持可读，并实际操作英文�
   await dialog.getByRole('button', { name: 'OK', exact: true }).click()
   await expect(page.locator('.hai-toast-item')).toContainText('Confirmed')
   expect(failures).toEqual([])
-})
-
-test('反馈并发处理冲突保留恢复建议与追踪标识，刷新后可继续操作', async ({ page }, testInfo) => {
-  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
-  const input: FeedbackSubmitInput = { submissionId: uniqueUser('conflict').username, appId: 'admin-console', description: 'Example: concurrent review' }
-  const accepted = await page.request.post('/api/feedback/reports', { data: input })
-  const submission: HaiResult<FeedbackReport> = await accepted.json()
-  expect(submission.success).toBe(true)
-  if (!submission.success)
-    throw new Error(submission.error.message, { cause: submission.error })
-  const id: string = submission.data.id
-  await page.goto(`/admin/feedback?feedback=${encodeURIComponent(id)}`)
-  await waitForHydration(page)
-  const detail = page.locator('.feedback-detail')
-  await expect(detail).toContainText(submission.data.number)
-  await detail.getByRole('tab', { name: '处理与投递', exact: true }).click()
-  const before: HaiResult<FeedbackDetail> = await (await page.request.get(`/api/feedback/reports/${id}`)).json()
-  if (!before.success)
-    throw new Error(before.error.message, { cause: before.error })
-  const concurrent = await page.request.patch(`/api/feedback/reports/${id}/status`, {
-    data: {
-      id,
-      status: 'handled',
-      expectedVersion: before.data.report.version,
-      note: 'Reviewed in another session',
-    },
-  })
-  expect((await concurrent.json()).success).toBe(true)
-  await detail.getByRole('button', { name: '标记已处理', exact: true }).click()
-  const toast = page.locator('.hai-toast-item[data-variant=error]')
-  await expect(toast).toContainText('请刷新后重试')
-  await expect(toast).not.toContainText('traceId:')
-  await expect(toast.locator('code')).toHaveCount(0)
-  await capture(page, testInfo, 'feedback-conflict')
-  await toast.getByRole('button', { name: '查看排查信息', exact: true }).click()
-  await expect(toast).toContainText('问题追踪编号')
-  await expect(toast.locator('code')).toHaveText(/^[\w.:-]{1,128}$/)
-  await expect(toast).toContainText('联系客户支持或开发人员')
-  await capture(page, testInfo, 'feedback-conflict-diagnostics')
-  await toast.getByRole('button', { name: '复制编号', exact: true }).click()
-  await expect(toast).toContainText('编号已复制')
-  await page.setViewportSize({ width: 390, height: 844 })
-  await capture(page, testInfo, 'feedback-conflict-diagnostics-mobile')
-  await page.setViewportSize({ width: 1440, height: 1000 })
-  await page.reload()
-  await waitForHydration(page)
-  await detail.getByRole('tab', { name: '处理与投递', exact: true }).click()
-  await expect(detail.getByRole('button', { name: '撤销处理', exact: true })).toBeEnabled()
-  await capture(page, testInfo, 'feedback-conflict-recovered', detail)
 })

@@ -165,10 +165,9 @@ describe('admin-console storage startup', () => {
   })
 })
 
-it('反馈初始化失败保留必需业务模块，独立重试任务可完整关闭', async () => {
+it('反馈初始化失败保留必需业务模块，Feedback 可正常关闭', async () => {
   state.config.feedback = {
     appId: 'optional-feedback',
-    notification: { mode: 'disabled' },
   }
   state.feedbackInit.mockResolvedValue({
     success: false,
@@ -182,18 +181,14 @@ it('反馈初始化失败保留必需业务模块，独立重试任务可完整�
     expect(state.feedbackInit).toHaveBeenCalledTimes(1)
     expect(state.feedbackInit).toHaveBeenCalledWith({
       appId: 'optional-feedback',
-      notification: { mode: 'disabled' },
-      build: { appVersion: 'test', buildId: 'test', commit: 'test' },
     })
   }
   finally { await closeApp() }
 })
 
-it('反馈授权失败不启动反馈服务，权限恢复后独立就绪且不重启业务', async () => {
-  vi.useFakeTimers()
+it('反馈授权失败不启动反馈服务，业务仍可就绪', async () => {
   state.config.feedback = {
     appId: 'optional-feedback',
-    notification: { mode: 'disabled' },
   }
   state.seedFeedbackPermissions.mockResolvedValueOnce({
     success: false,
@@ -204,13 +199,10 @@ it('反馈授权失败不启动反馈服务，权限恢复后独立就绪且不�
     await initApp()
     expect(isAppInitialized()).toBe(true)
     expect(state.feedbackInit).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(state.seedFeedbackPermissions).toHaveBeenCalledTimes(2)
-    expect(state.feedbackInit).toHaveBeenCalledOnce()
+    expect(state.seedFeedbackPermissions).toHaveBeenCalledOnce()
     expect(state.iamInit).toHaveBeenCalledOnce()
   }
   finally {
     await closeApp()
-    vi.useRealTimers()
   }
 })

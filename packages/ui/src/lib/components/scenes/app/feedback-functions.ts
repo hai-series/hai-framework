@@ -1,122 +1,42 @@
-/** 反馈展示辅助；不执行网络、存储或图像修改。 */
-import type { UIMessageKey } from '../../../messages.js'
-import type { FeedbackReportView } from './feedback-types.js'
-import { getUILocale, uiM } from '../../../messages.js'
+import type { FeedbackAttachmentData, FeedbackAttachmentInput, FeedbackStatus } from '@h-ai/api-contract/feedback'
+import { uiM } from '../../../messages.js'
 
-const collectionKeys: Record<FeedbackReportView['collectionStatus'], UIMessageKey> = {
-  collecting: 'feedback_collecting',
-  complete: 'feedback_complete',
-  partial: 'feedback_partial',
-  failed: 'feedback_failed',
-}
-const notificationKeys: Record<FeedbackReportView['notificationStatus'], UIMessageKey> = {
-  disabled: 'feedback_notification_disabled',
-  pending: 'feedback_notification_pending',
-  sending: 'feedback_notification_sending',
-  sent: 'feedback_notification_sent',
-  deferred: 'feedback_notification_deferred',
-  failed: 'feedback_notification_failed',
+const statusLabels = {
+  pending: 'feedback_pending',
+  awaiting_user: 'feedback_awaiting_user',
+  handled: 'feedback_handled',
+} as const
+
+export function statusLabel(status: FeedbackStatus) {
+  return uiM(statusLabels[status])
 }
 
-/**
- * 解析材料状态，不把受理或邮件服务受理误作最终完成。
- * @example 模块内部上下文
- * ```ts
- * const label = collectionLabel('collecting')
- * ```
- */
-export function collectionLabel(status: FeedbackReportView['collectionStatus']): string {
-  return uiM(collectionKeys[status])
-}
-
-/**
- * 解析通知状态。
- * @example 模块内部上下文
- * ```ts
- * const label = notificationLabel('pending')
- * ```
- */
-export function notificationLabel(status: FeedbackReportView['notificationStatus']): string {
-  return uiM(notificationKeys[status])
-}
-
-/**
- * 按当前语言显示时间，不改变原始时间戳。
- * @example 模块内部上下文
- * ```ts
- * const time = feedbackTime(1_730_000_000_000)
- * ```
- */
-export function feedbackTime(timestamp: number): string {
-  return Number.isFinite(timestamp)
-    ? new Date(timestamp).toLocaleString(getUILocale())
-    : '—'
-}
-
-/**
- * 按本地日历回填日期输入，避免 UTC 转换改变用户选择的日期。
- * @example 模块内部上下文
- * ```ts
- * const value = feedbackDateValue(new Date(2026, 9, 27).getTime())
- * ```
- */
-export function feedbackDateValue(timestamp?: number): string {
-  if (timestamp === undefined || !Number.isFinite(timestamp))
-    return ''
-  const date = new Date(timestamp)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-/**
- * 次日零时按本地日历计算，夏令时切换日不假定固定为 24 小时。
- * @example 模块内部上下文
- * ```ts
- * const until = feedbackDayBoundary('2026-03-08', 'end')
- * ```
- */
-export function feedbackDayBoundary(value: unknown, boundary: 'start' | 'end'): number | undefined {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
-    return undefined
-  const [year, month, day] = value.split('-').map(Number)
-  const date = new Date(year!, month! - 1, day!)
-  if (feedbackDateValue(date.getTime()) !== value)
-    return undefined
-  if (boundary === 'end')
-    date.setDate(date.getDate() + 1)
-  return date.getTime() - (boundary === 'end'
-    ? 1
-    : 0)
-}
-
-/**
- * 以文本显示 JSON，不将诊断材料解释为 HTML。
- * @example 模块内部上下文
- * ```ts
- * const text = evidenceText({ kind: 'log', message: '<script>' })
- * ```
- */
-export function evidenceText(value: Record<string, unknown>): string {
-  try {
-    return JSON.stringify(value, null, 2)
-  }
-  catch {
-    return uiM('feedback_missing')
+export async function encodeFeedbackFile(file: File): Promise<FeedbackAttachmentInput> {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const chunks: string[] = []
+  for (let start = 0; start < bytes.length; start += 32768)
+    chunks.push(String.fromCharCode(...bytes.subarray(start, start + 32768)))
+  return {
+    name: file.name,
+    contentType: file.type || 'application/octet-stream',
+    dataBase64: btoa(chunks.join('')),
   }
 }
 
-/**
- * 预览只允许图片 URL 使用的安全协议；宿主仍负责取得授权。
- * @example 模块内部上下文
- * ```ts
- * const preview = imagePreviewUrl('/api/feedback/reports/f1/attachments/a1')
- * ```
- */
-export function imagePreviewUrl(url?: string): string | undefined {
-  if (!url)
-    return undefined
-  if (url.startsWith('/') && !url.startsWith('//'))
-    return url
-  if (/^(?:blob:|https?:\/\/)/i.test(url))
-    return url
-  return undefined
+export function isPreviewImage(contentType: string) {
+  return [
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+    'image/gif',
+  ].includes(contentType)
+}
+
+export function createFeedbackFileUrl(file: FeedbackAttachmentData, preview: boolean) {
+  const bytes = Uint8Array.from(atob(file.dataBase64), character => character.charCodeAt(0))
+  return URL.createObjectURL(new Blob([bytes], {
+    type: preview && isPreviewImage(file.contentType)
+      ? file.contentType
+      : 'application/octet-stream',
+  }))
 }

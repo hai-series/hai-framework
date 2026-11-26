@@ -10,15 +10,14 @@
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import { kit } from '@h-ai/kit/client'
-  import { FeedbackModal, GuideHost, ReauthenticationDialog, SessionRecoveryDialog, ui, WorkspaceLayout } from '@h-ai/ui'
+  import { FeedbackList, FeedbackModal, GuideHost, ReauthenticationDialog, SessionRecoveryDialog, ui, WorkspaceLayout } from '@h-ai/ui'
 
-  import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { createAdminGuide } from '#lib/guide/admin-guide.js'
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale } from '#lib/paraglide/runtime.js'
   import { authActions } from '#lib/services/auth.js'
-  import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, initFeedbackBrowser, pauseFeedback, prepareFeedback, submitFeedback } from '#lib/services/feedback.js'
+  import { myFeedbackActions, submitFeedback } from '#lib/services/feedback.js'
   import { sensitiveActions } from '#lib/services/sensitive-actions.svelte.js'
   import { sessionRecovery } from '#lib/services/session-recovery.svelte.js'
   import { setAdminTheme } from '#lib/theme-context.js'
@@ -77,37 +76,12 @@
   let mobileMenuOpen = $state(false)
   let userMenuOpen = $state(false)
   let feedbackOpen = $state(false)
-  $effect(() => {
-    if (!feedbackOpen)
-      pauseFeedback()
-  })
-  let feedbackPreparing = $state(false)
-  let feedbackError = $state('')
-  let feedbackMaterials = $state<Partial<Awaited<ReturnType<typeof prepareFeedback>>>>({ attachments: [], evidence: [], evidenceSummary: [] })
+  let myFeedbackOpen = $state(false)
+  let myFeedbackId = $state<string>()
 
-  onMount(() => {
-    if (data.feedbackEnabled)
-      void initFeedbackBrowser().catch(() => { feedbackError = m.feedback_request_failed() })
-    return () => {
-      void closeFeedbackBrowser()
-    }
-  })
-
-  async function openFeedback() {
-    if (feedbackPreparing)
-      return
-    feedbackPreparing = true
-    feedbackError = ''
-    try {
-      feedbackMaterials = await prepareFeedback()
-      feedbackOpen = true
-    }
-    catch (cause) {
-      feedbackError = ui.errorMessage(cause, m.feedback_request_failed())
-    }
-    finally {
-      feedbackPreparing = false
-    }
+  function openMyFeedback(id?: string) {
+    myFeedbackId = id
+    myFeedbackOpen = true
   }
 
   // 读取首屏脚本已恢复的主题，服务端预览沿用管理台默认值。
@@ -275,7 +249,6 @@
       userMenuOpen = false
     }
   }
-  ui.useToastFeedback(() => feedbackError)
 </script>
 
 <SessionRecoveryDialog recovery={sessionRecovery} actions={authActions} />
@@ -409,8 +382,13 @@
     {/snippet}
     {#snippet actions()}
       {#if data.feedbackEnabled && hasPerm('feedback:create')}
-        <Button variant='ghost' size='sm' loading={feedbackPreparing} ariaLabel={m.feedback_open()} onclick={openFeedback} data-feedback-ignore='true' data-testid='feedback-open'>
+        <Button variant='ghost' size='sm' ariaLabel={m.feedback_open()} onclick={() => { feedbackOpen = true }} data-testid='feedback-open'>
           <span class='icon-[tabler--message-report] size-4'></span><span class='hidden sm:inline'>{m.feedback_open()}</span>
+        </Button>
+      {/if}
+      {#if data.feedbackEnabled}
+        <Button variant='ghost' size='sm' ariaLabel={m.feedback_mine()} onclick={() => openMyFeedback()} data-testid='feedback-mine'>
+          <span aria-hidden='true' class='icon-[tabler--messages] size-4'></span><span class='hidden sm:inline'>{m.feedback_mine()}</span>
         </Button>
       {/if}
       {#if data.appConfig?.env === 'development'}
@@ -497,24 +475,11 @@
     {/snippet}
   </WorkspaceLayout>
 </div>
-<FeedbackModal
-  bind:open={feedbackOpen}
-  attachments={feedbackMaterials.attachments}
-  evidence={feedbackMaterials.evidence}
-  budget={feedbackMaterials.budget}
-  evidenceSummary={feedbackMaterials.evidenceSummary}
-  oncapture={async (id) => { feedbackMaterials = await captureFeedbackPage(id) }}
-  resetKey={feedbackMaterials.submissionId}
-  pendingReceipt={feedbackMaterials.pendingReceipt}
-  onstartnew={async () => { feedbackMaterials = await prepareFeedback({ startNew: true }) }}
-  onsubmit={submitFeedback}
-  onexport={exportLocalFeedback}
-  onannotate={async (input) => {
-    feedbackMaterials = await annotateFeedback(input)
-  }}
-  onfileschange={async (files, removedAttachmentIds) => {
-    feedbackMaterials = await addFeedbackFiles(files, removedAttachmentIds)
-  }}
-/>
+<FeedbackModal bind:open={feedbackOpen} onsubmit={submitFeedback} oncomplete={openMyFeedback} />
+<Modal bind:open={myFeedbackOpen} title={m.feedback_mine()} size='xl'>
+  {#if myFeedbackOpen}
+    <FeedbackList actions={myFeedbackActions} initialId={myFeedbackId} />
+  {/if}
+</Modal>
 
 <GuideHost {guide} locale={getLocale()} scope={data.user.id} autoStart='overview' />

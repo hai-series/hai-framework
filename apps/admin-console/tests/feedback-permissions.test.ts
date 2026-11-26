@@ -30,7 +30,7 @@ beforeEach(() => {
 })
 
 describe('admin feedback IAM integration', () => {
-  it('沿用 business_operator/user 角色，业务操作员获得五项业务权限，普通用户仅可提交', async () => {
+  it('沿用 business_operator/user 角色，业务操作员获得三项权限，普通用户可提交和操作本人反馈', async () => {
     expect((await seedFeedbackPermissions()).success).toBe(true)
     expect(state.getRoleByCode.mock.calls.map(([code]) => code)).toEqual(['business_operator', 'user'])
     expect([
@@ -39,8 +39,6 @@ describe('admin feedback IAM integration', () => {
       'feedback:create',
       'feedback:read',
       'feedback:process',
-      'feedback:reopen',
-      'feedback:export',
     ])
     expect(state.assignPermissionToRole.mock.calls.filter(([role]) => role === 'user-role')).toEqual([
       ['user-role', 'feedback:create'],
@@ -53,10 +51,10 @@ describe('admin feedback IAM integration', () => {
   it('重复启动复用已注册权限，不重新创建权限记录', async () => {
     expect((await seedFeedbackPermissions()).success).toBe(true)
     expect((await seedFeedbackPermissions()).success).toBe(true)
-    expect(state.createPermission).toHaveBeenCalledTimes(5)
+    expect(state.createPermission).toHaveBeenCalledTimes(3)
   })
 
-  it('反馈权限写入失败返回错误，由可选启动步骤独立重试', async () => {
+  it('反馈权限写入失败返回错误，由启动步骤报告', async () => {
     state.assignPermissionToRole.mockResolvedValueOnce({
       success: false,
       error: { code: 'test:permission-write', message: 'Permission assignment unavailable' },

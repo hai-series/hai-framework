@@ -53,8 +53,6 @@ export const ADMIN_DUTIES = {
     'feedback:create',
     'feedback:read',
     'feedback:process',
-    'feedback:reopen',
-    'feedback:export',
   ],
   user: [...common, 'feedback:create'],
 } as const

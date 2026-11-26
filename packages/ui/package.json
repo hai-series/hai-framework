@@ -150,9 +150,9 @@
     "svelte": "catalog:"
   },
   "dependencies": {
+    "@h-ai/api-contract": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@internationalized/date": "catalog:",
-    "@rrweb/replay": "catalog:",
     "@shikijs/langs": "catalog:",
     "altcha": "catalog:",
     "bits-ui": "catalog:",

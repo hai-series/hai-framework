@@ -1,20 +1,3 @@
-# 反馈使用共享数据库与私有存储；服务端构建信息由实际产物注入。
-# 说明：反馈所属应用标识；应与浏览器及 API 入口配置一致。
+# 说明：同一数据库中区分应用的稳定标识。
 # 取值：字符串；最小字符数 1；最大字符数 128
 appId: admin-console
-# 说明：受理通知；Webhook 独立配置。
-# 取值：配置块（填写下方缩进字段）
-notification:
-  # 说明：disabled 不通知，console 默认仅输出元数据，reach 使用已有通知通道。
-  # 取值：字符串；取值：disabled | console | reach
-  mode: ${HAI_FEEDBACK_NOTIFICATION_MODE:console}
-  # 说明：管理员通知中的反馈管理页面地址。
-  # 取值：字符串；格式 uri
-  adminUrl: ${HAI_FEEDBACK_NOTIFICATION_ADMINURL:http://localhost:5173/admin/feedback}
-  # Reach 模式在此配置 provider 和 recipients。接收方也可用 HAI_FEEDBACK_NOTIFICATION_RECIPIENTS 提供 JSON 数组。
-# 说明：现场收集期限与服务端环境白名单。
-# 取值：配置块（填写下方缩进字段）
-collection:
-  # 说明：允许采集的服务端环境变量名；凭据类名称仍按敏感信息策略排除。
-  # 取值：列表（每项以 - 开头）；最多项数 100
-  envAllowlist: [ NODE_ENV, TZ ]

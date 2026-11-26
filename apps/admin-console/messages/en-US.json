@@ -533,14 +533,9 @@
   "gallery_interaction_reset": "Clear filters",
   "feedback_title": "Feedback",
   "feedback_open": "Report a problem",
-  "feedback_request_failed": "Feedback could not be loaded. Please retry.",
   "feedback_config_failed": "Feedback configuration is invalid.",
   "feedback_forbidden": "You do not have permission to view this feedback.",
   "feedback_invalid_query": "Invalid feedback filters.",
-  "feedback_attachment_pending": "Attachment is still being collected or is unavailable.",
-  "feedback_export_pending": "The problem package is still being prepared. Retry from feedback details.",
-  "feedback_material_logs": "Diagnostic records",
-  "feedback_material_missing": "Missing materials",
   "security_role_system": "System administrator",
   "security_role_audit": "Audit administrator",
   "security_role_config": "Configuration administrator",
@@ -1230,5 +1225,6 @@
   "gallery_demo_portal": "Hover to preview",
   "gallery_code_workspace_review_tip": "Toggle review tip",
   "gallery_code_workspace_review_tip_body": "Redact each note before passing it to the logger.",
-  "gallery_code_workspace_git_hover": "This range includes uncommitted changes."
+  "gallery_code_workspace_git_hover": "This range includes uncommitted changes.",
+  "feedback_mine": "My feedback"
 }

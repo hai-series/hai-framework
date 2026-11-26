@@ -8,8 +8,6 @@ const FEEDBACK_PERMISSIONS = [
   'create',
   'read',
   'process',
-  'reopen',
-  'export',
 ] as const
 
 export function getFeedbackContext(event: Pick<RequestEvent, 'locals'>): FeedbackContext | null {

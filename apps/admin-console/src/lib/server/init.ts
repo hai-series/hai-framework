@@ -51,7 +51,6 @@ import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { scheduler, SchedulerConfigSchema } from '@h-ai/scheduler'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
-import { adminBuildMetadata } from '#lib/build-metadata.js'
 import * as m from '#lib/paraglide/messages.js'
 import { startAuditJobs } from '#lib/server/audit-jobs.js'
 import { initBusinessSettings } from '#lib/server/business-settings.js'
@@ -60,64 +59,16 @@ import { bootstrapDutyAccount, seedAdminDuties } from '#lib/server/security-role
 
 type DbConfigInput = Parameters<typeof reldb.init>[0]
 
-/** 依赖顺序由应用声明；并发、回滚和关闭重试由 core 统一处理。 */
-let feedbackRetry: ReturnType<typeof setTimeout> | undefined
-let feedbackStarting: Promise<void> | undefined
-let feedbackClosing = false
-let feedbackFailure: string | number | undefined
-
-/** 可选辅助能力独立重试；不能回滚已经就绪的 IAM 与业务模块。 */
-function startFeedback(): Promise<void> {
-  if (feedbackStarting)
-    return feedbackStarting
-  feedbackClosing = false
-  feedbackStarting = (async () => {
-    try {
-      const config = core.config.getOrThrow<FeedbackConfigInput>('feedback')
-      const permissions = await seedFeedbackPermissions()
-      const result = permissions.success
-        ? await feedback.init({
-            ...config,
-            build: adminBuildMetadata,
-          })
-        : permissions
-      if (!result.success) {
-        if (feedbackFailure !== result.error.code) {
-          core.logger.warn('Optional feedback unavailable; business runtime remains ready', {
-            module: 'feedback',
-            code: result.error.code,
-            traceId: result.error.traceId,
-          })
-        }
-        feedbackFailure = result.error.code
-      }
-      else {
-        feedbackFailure = undefined
-      }
-    }
-    catch {
-      if (feedbackFailure !== 'configuration')
-        core.logger.warn('Optional feedback configuration unavailable; business runtime remains ready', { module: 'feedback' })
-      feedbackFailure = 'configuration'
-    }
-    if (feedbackFailure && !feedbackClosing) {
-      feedbackRetry = setTimeout(() => {
-        feedbackRetry = undefined
-        void startFeedback()
-      }, 30000)
-      feedbackRetry.unref()
-    }
-  })().finally(() => { feedbackStarting = undefined })
-  return feedbackStarting
-}
-
-async function closeFeedback() {
-  feedbackClosing = true
-  if (feedbackRetry)
-    clearTimeout(feedbackRetry)
-  feedbackRetry = undefined
-  await feedbackStarting
-  return feedback.close()
+async function startFeedback() {
+  const config = core.config.get<FeedbackConfigInput>('feedback')
+  if (!config)
+    return
+  const permissions = await seedFeedbackPermissions()
+  const result = permissions.success
+    ? await feedback.init(config)
+    : permissions
+  if (!result.success)
+    core.logger.warn('Feedback unavailable', { module: 'feedback', errorCode: result.error.code, traceId: result.error.traceId })
 }
 
 const runtime = core.module.createRuntime([
@@ -228,7 +179,7 @@ const runtime = core.module.createRuntime([
     name: 'feedback',
     enabled: () => Boolean(core.config.get('feedback')),
     start: startFeedback,
-    close: closeFeedback,
+    close: () => feedback.close(),
   },
 ])
 

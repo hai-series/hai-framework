@@ -131,7 +131,7 @@
   const codeFeedbackSettings = `<Button onclick={() => feedbackOpen = true}>意见反馈</Button>
 <Button onclick={() => settingsOpen = true}>系统设置</Button>
 
-<FeedbackModal bind:open={feedbackOpen} onsubmit={async () => ui.toast.success('反馈已提交')} />
+<FeedbackModal bind:open={feedbackOpen} onsubmit={async () => ({ success: true, data: undefined })} />
 <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />`
 
   const codeTheme = `<ThemeToggle />
@@ -461,6 +461,7 @@ await ui.messageBox.alert('这是一条提示信息')
         bind:open={feedbackOpen}
         onsubmit={async () => {
           ui.toast.success(m.gallery_demo_feedback_submitted_thank_you_for_your_suggestion())
+          return { success: true, data: undefined }
         }}
       />
       <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />

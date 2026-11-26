@@ -5,7 +5,7 @@
  * @module index
  */
 
-export type { FeedbackAnnotation, FeedbackAttachmentView, FeedbackEvidenceQuery, FeedbackEvidenceSummary, FeedbackEvidenceView, FeedbackFormData, FeedbackHistoryView, FeedbackListQuery, FeedbackPage, FeedbackPermissions, FeedbackReceipt, FeedbackReportView, FeedbackStatus, FeedbackStatusChange } from './feedback-types.js'
+export type { FeedbackSubmitAction, FeedbackViewActions } from './feedback-types.js'
 export { default as FeedbackDetail } from './FeedbackDetail.svelte'
 export { default as FeedbackForm } from './FeedbackForm.svelte'
 export { default as FeedbackList } from './FeedbackList.svelte'
