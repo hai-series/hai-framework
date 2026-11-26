@@ -56,6 +56,7 @@
 | `id` | `VARCHAR(36)` | 否 | 服务端生成的附件 UUID。 |
 | `report_id` | `VARCHAR(36)` | 否 | 所属反馈 ID。 |
 | `message_id` | `VARCHAR(36)` | 是 | 所属消息 ID。为空表示附件随首帖提交。 |
+| `kind` | `VARCHAR(24)` | 否 | `file` 为手动附件。首帖现场使用 `screenshot`、`browser_logs`、`server_logs`、`replay` 或 `recording`。 |
 | `name` | `VARCHAR(255)` | 否 | 显示用文件名。 |
 | `content_type` | `VARCHAR(128)` | 否 | 响应中的媒体类型。 |
 | `size` | `INTEGER` | 否 | 原始文件字节数。 |

@@ -2,7 +2,7 @@
 
 [简体中文](README.md) · [日本語](README.ja.md)
 
-Submit feedback and discuss it with authorized staff in the same report. Both sides can attach images and files. Staff can request more information and update the handling status.
+Submit feedback and discuss it with authorized staff in the same report. The first post can save a screenshot, recent logs, operation replay, and a recording. Replies and requests take text, images, and files. Staff can update the handling status.
 
 ## Quick Start
 

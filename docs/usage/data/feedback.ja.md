@@ -56,6 +56,7 @@
 | `id` | `VARCHAR(36)` | 不可 | サーバーが生成した添付の UUID。 |
 | `report_id` | `VARCHAR(36)` | 不可 | 問題票の ID。 |
 | `message_id` | `VARCHAR(36)` | 可 | メッセージの ID。最初の投稿の添付は NULL。 |
+| `kind` | `VARCHAR(24)` | 不可 | 手動の添付は `file` です。最初の投稿の資料は `screenshot`、`browser_logs`、`server_logs`、`replay`、`recording` です。 |
 | `name` | `VARCHAR(255)` | 不可 | 表示用ファイル名。 |
 | `content_type` | `VARCHAR(128)` | 不可 | 取得時のメディアタイプ。 |
 | `size` | `INTEGER` | 不可 | 元のファイルサイズ（バイト）。 |

@@ -14,8 +14,8 @@ Signed-in users and authorized staff exchange messages on the same report. Users
 
 ## Step by step
 
-1. **Submit.** Enter a description or choose images and files, review them, then submit. The report and its files are saved together as Pending.
-2. **View.** Use My Feedback to open your reports and read the original material and conversation. Staff open them from the management list.
+1. **Review diagnostics and submit.** Open Feedback on a signed-in page to review the current screenshot and the preceding browser logs and operation replay. Retake the screenshot, remove material, or start a silent recording. Add a description and any files, choose the report diagnostics, and optionally include server logs. The report and its material are saved together as Pending.
+2. **View.** Open your report under My Feedback. The first post offers a screenshot preview, logs, replay, and video playback. Staff open the same report from the shared list.
 3. **Reply or request information.** Both sides can attach images and files to replies. Staff can also attach them to a request for more information. Sending the request moves the status to Awaiting user.
 4. **Provide information.** Reply to the same report. A screenshot or file is sufficient. A reply from the author moves a report that is Awaiting user back to Pending.
 5. **Record the outcome.** Staff can reply with the outcome and mark the report Handled. Ordinary replies preserve the current status. Authors can reply after handling, and staff can return a report to Pending.
@@ -26,9 +26,12 @@ Signed-in users and authorized staff exchange messages on the same report. Users
 
 | Topic | Behavior |
 | --- | --- |
-| Upload timing | The server receives selected files when a user or staff member submits or sends a message. Initialization prepares the feedback tables. Application logs stay in the application's logging system. Screenshots and files in feedback are selected by the people sending them. |
-| Per submission or message | Up to 5,000 characters and five files, with a maximum of 5 MiB per file and 10 MiB total. Supply text, a file, or both. |
-| File access | Report and message lists carry file metadata. Anyone authorized to view the report can preview supported raster images or download attached files. |
+| Collection and upload | After sign-in, the browser keeps recent logs and replay in memory for the current page. Opening Feedback freezes the preceding material and tries to capture the visible page. The browser sends the retained material with the first post. Replies and information requests send the text, images, and files selected for that message. |
+| Browser logs and replay | The lookback is up to 5 minutes. Browser logs include bounded Core logs and uncaught error summaries, up to 1,000 entries and 512 KiB. Replay is capped at 2 MiB. It masks page text and input values and excludes frames and marked private areas. Reloading the page starts a new browser buffer. |
+| Server logs | When opted in, the submit request reads up to 5 minutes of the same user's Core request logs in the current scope and service instance, up to 1,000 entries and 512 KiB. The host supplies trusted `scopeId`, `userId`, and `requestId` context. A restart or different instance can leave those logs unavailable. |
+| Screenshot and recording | A screenshot masks form values and `data-feedback-private` areas. To record, the user grants screen sharing and selects a surface. Video is recorded without audio for up to 60 seconds and 5 MiB. Review the visible content before submitting. |
+| Per submission | Up to 5,000 characters and five manually selected files. Each file is capped at 5 MiB. First-post diagnostics and manual files share 10 MiB. Reply and request attachments also share 10 MiB. Supply text, a file, or material that can be saved. |
+| File access | Lists carry metadata. Users authorized to view a report can retrieve its files, logs, and replay on demand. |
 | Permissions | Signed-in users with `feedback:create` can submit. Authors can view and reply to their own reports. `feedback:read` grants in-scope access to others' reports. Staff with read and `feedback:process` can act, reply, and request information. Resolve identity, scope, and permissions from a trusted server-side session. |
 | Writes and retries | Each transaction saves text, files, and the status change associated with the action. The caller supplies a UUID for a new report or message. Retry after a lost response with the same ID to retrieve that record. |
 
@@ -62,6 +65,22 @@ export async function submitIssue(author: FeedbackContext, id: string) {
 
 In SvelteKit, mount `kit.createFeedbackHandler({ feedback, resolveContext })` as GET, POST, and PATCH. In Serv, mount `apiContract.feedback` with `serv.createFeedbackProcedures({ feedback, resolveContext })`. Merge `apiContract.feedbackTransportRoutes(apiPrefix)` into the encrypted transport configuration to allow up to 16 MiB of plaintext on submission, message, and attachment paths. Call `await feedback.close()` before closing RelDB. [Kit integration](kit.en.md#protocol-integrations) · [Configuration](../configuration/feedback.en.md)
 
+<a id="feedback-capture"></a>
+
+### First-post diagnostics
+
+Mount `FeedbackModal` on the signed-in page. Pass a stable session or user identifier as `captureKey`, change it when the account changes, and unmount after sign-out. The component prepares diagnostics when the author opens the form and sends them through the host's existing `onsubmit` callback. Custom clients can pass these fields to `reports.submit` as `capture`.
+
+| Field | Purpose |
+| --- | --- |
+| `screenshot?` | Automatic or retaken screenshot of the current page. |
+| `browserLogs?` | Recent browser logs as JSON. |
+| `replay?` | Masked operation replay with a full snapshot, as JSON. |
+| `recording?` | WebM or MP4 video recorded with user permission. |
+| `includeServerLogs?` | Set to `true` to include available Core logs matching the authenticated submitter. |
+
+The first four fields use the normal `name`, `contentType`, and `dataBase64` file format. First-post attachment metadata distinguishes them by `kind`. The host supplies `scopeId` in its trusted business request context, using the same value for feedback authorization. For example, Kit can run `core.context.run({ scopeId: 'orders' }, next)`, and Serv can return the scope from `createContext`.
+
 <a id="api-reference"></a>
 
 ## Interface reference
@@ -77,7 +96,7 @@ In SvelteKit, mount `kit.createFeedbackHandler({ feedback, resolveContext })` as
 | --- | --- | --- | --- | --- |
 | `feedback.init(config)` | Prepare database tables | `{ appId }` | `HaiResult<void>` | `await feedback.init({ appId: 'orders' })` |
 | `feedback.close()` | Stop accepting calls and wait for in-flight requests | None | `HaiResult<void>` | `await feedback.close()` |
-| `feedback.submit(input, context)` | File a report | UUID `id`, `body`, optional `attachments` | Saved report | `await feedback.submit({ id, body }, author)` |
+| `feedback.submit(input, context)` | File a report | UUID `id`, `body`, optional `attachments` and `capture` | Saved report | `await feedback.submit({ id, body }, author)` |
 | `feedback.listMine(query, context)` | List the author's reports | `status?`, `page?`, `pageSize?` | Page of reports | `await feedback.listMine({}, author)` |
 | `feedback.list(query, context)` | List reports in the staff member's scope | Same as `listMine` | Page of reports | `await feedback.list({ status: 'pending' }, staff)` |
 | `feedback.get(id, context)` | Get a report and its original files | Report UUID | Report details | `await feedback.get(id, author)` |

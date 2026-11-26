@@ -14,8 +14,8 @@
 
 ## 按步骤操作
 
-1. **提交。** 在「反馈问题」中填写说明或选择图片、文件，确认后提交。成功时整份反馈和所有附件同时保存，初始状态为「待处理」。
-2. **查看。** 在「我的反馈」中按状态筛选，打开自己的反馈读正文、附件和对话。处理人员从管理列表打开同一份反馈。
+1. **检查现场并提交。** 在已登录页面打开「反馈问题」，查看当前页截图，以及打开前的浏览器日志和操作回放。可重截、移除材料，或手动开始无声录屏。填写说明、选择文件和要随首帖发送的材料，也可以勾选附上服务端日志。提交成功时正文和材料一起保存，状态为「待处理」。
+2. **查看。** 在「我的反馈」里打开自己的反馈。首帖可预览截图、查看日志、回放操作和播放录屏。处理人员从共享列表查看同一份反馈。
 3. **回复或请求补充。** 两边都可以发送带图片或文件的回复。处理人员发送「要求补充信息」时，可以一并附上图片或文件。发送成功后，状态变为「待用户补充」。
 4. **补充。** 用户在同一对话里回复，可以只提交截图或文件。反馈原为「待用户补充」时，回复成功会把状态改回「待处理」。
 5. **给出处理结果。** 处理人员在对话里回复结果，再按需要标记「已处理」。普通回复保留当前状态，用户在已处理后仍可继续回复。处理人员可把已处理的反馈改回「待处理」。
@@ -26,9 +26,12 @@
 
 | 事项 | 行为 |
 | --- | --- |
-| 上传时机 | 用户或处理人员按「提交」「回复」或「要求补充信息」后，服务端才接收本次明确选择的文件。初始化只准备关系库中的反馈表。应用日志留在应用自己的日志系统中，反馈中的截图和文件都由当事人主动选择。 |
-| 单次提交 | 正文最多 5000 字符。每次提交或发送消息最多 5 个文件，单个 5 MiB，合计 10 MiB。正文和文件至少提供一项。 |
-| 附件访问 | 正文和消息列表只返回附件元数据。有权查看该反馈的人才能预览可安全显示的栅格图片或下载文件。 |
+| 采集和上传 | 登录后浏览器在当前页面内存中保留近期日志和操作回放。打开反馈时冻结提交前的材料，并尝试截取当前可见页面。浏览器仅在用户发送首帖时上传用户保留的材料。回复和补充请求只发送本次填写的文字和手动选择的图片、文件。 |
+| 浏览器日志与操作轨迹 | 回看最多 5 分钟。浏览器日志保存有界的 Core 日志和未捕获异常摘要，最多 1000 条、512 KiB。操作回放最多 2 MiB，屏蔽页面文字和输入值，排除 iframe 和标记为私密的区域。证据仅来自当前页面会话，刷新后从头开始。 |
+| 服务端日志 | 勾选后在提交时读取同一用户、业务范围在当前服务实例最近 5 分钟的 Core 请求日志，最多 1000 条、512 KiB。只有宿主写入可信 `scopeId`、`userId`、`requestId` 的日志可关联。跨实例或重启可能使材料缺失，反馈仍可提交。 |
+| 截图和录屏 | 截图遮挡表单输入与 `data-feedback-private` 区域。录屏需用户主动授权选择画面，仅记录视频，最长 60 秒，单个最多 5 MiB。屏幕共享会录入所选画面可见的内容，发送前请检查。 |
+| 单次提交 | 正文最多 5000 字符，手动附件最多 5 个，单个文件最多 5 MiB。首帖材料和手动附件共享 10 MiB，回复和补充请求的附件也合计最多 10 MiB。至少发送正文、一份文件或一项实际可保存的材料。 |
+| 附件访问 | 列表只返回文件元数据。具备反馈查看权限的人可按需读取文件、日志或回放。 |
 | 权限 | 已登录且有 `feedback:create` 的用户可以提交，作者可以查询和回复自己的反馈。`feedback:read` 可查看同范围的反馈，`feedback:process` 在具备读取权限时允许处理、回复和请求补充。应用在服务端从可信会话解析身份、业务范围与权限。 |
 | 写入和重试 | 正文、附件和随本次操作改变的状态在一个数据库事务内写入。提交和消息的操作 ID 由调用方生成，网络中断后使用原 ID 重试会取回同一记录。 |
 
@@ -64,6 +67,22 @@ export async function submitIssue(author: FeedbackContext, id: string) {
 
 SvelteKit 用 `kit.createFeedbackHandler({ feedback, resolveContext })` 挂载 GET、POST、PATCH。独立服务用 `serv.createFeedbackProcedures({ feedback, resolveContext })` 装配 `apiContract.feedback`。在传输加密配置中合并 `apiContract.feedbackTransportRoutes(apiPrefix)` 返回的路由预算，提交、消息和附件路径允许最多 16 MiB 明文。应用关闭时先调用 `await feedback.close()`，再关闭 RelDB。 [Kit 接入](kit.md#protocol-integrations) · [配置说明](../configuration/feedback.md)
 
+<a id="feedback-capture"></a>
+
+### 首帖现场
+
+`FeedbackModal` 在已登录页面挂载，`captureKey` 使用当前会话或用户的稳定标识。换号时更换标识，退出时卸载组件。组件在用户打开首帖弹窗时准备现场，单次发送通过既有 `onsubmit` 回调提交。自行实现界面时，可在 `reports.submit` 传入以下 `capture` 字段。
+
+| 字段 | 用途 |
+| --- | --- |
+| `screenshot?` | 打开反馈或手动重截的页面截图。 |
+| `browserLogs?` | 浏览器近期日志 JSON。 |
+| `replay?` | 带完整快照的脱敏操作回放 JSON。 |
+| `recording?` | 用户授权录制的 WebM 或 MP4 视频。 |
+| `includeServerLogs?` | 设为 `true` 时，由服务端按可信身份附加可用的近期 Core 日志。 |
+
+前四项使用和普通附件相同的 `name`、`contentType`、`dataBase64` 文件结构。首帖详情的附件元数据用 `kind` 区分材料。`scopeId` 由应用在业务请求的可信上下文中提供。例如单范围 Kit 应用用 `core.context.run({ scopeId: 'orders' }, next)`，Serv 应用可从 `createContext` 返回该范围。这与反馈鉴权使用的范围一致。Core 初始化即可记录自己的业务日志，Feedback 初始化只为符合字段要求的近期日志建立内存缓冲。
+
 <a id="api-reference"></a>
 
 ## 接口参考
@@ -79,7 +98,7 @@ SvelteKit 用 `kit.createFeedbackHandler({ feedback, resolveContext })` 挂载 G
 | --- | --- | --- | --- | --- |
 | `feedback.init(config)` | 初始化反馈表 | `{ appId }` | `HaiResult<void>` | `await feedback.init({ appId: 'orders' })` |
 | `feedback.close()` | 停止接受新调用，等待正在执行的请求 | 无 | `HaiResult<void>` | `await feedback.close()` |
-| `feedback.submit(input, context)` | 提交新的反馈 | UUID `id`、`body`、可选 `attachments` | 已保存的反馈 | `await feedback.submit({ id, body }, author)` |
+| `feedback.submit(input, context)` | 提交新的反馈 | UUID `id`、`body`、可选 `attachments` 和 `capture` | 已保存的反馈 | `await feedback.submit({ id, body }, author)` |
 | `feedback.listMine(query, context)` | 列出自己的反馈 | `status?`、`page?`、`pageSize?` | 反馈分页 | `await feedback.listMine({}, author)` |
 | `feedback.list(query, context)` | 按权限列出同范围反馈 | 与 `listMine` 相同 | 反馈分页 | `await feedback.list({ status: 'pending' }, staff)` |
 | `feedback.get(id, context)` | 获取反馈正文及首帖附件 | 反馈 UUID | 反馈详情 | `await feedback.get(id, author)` |

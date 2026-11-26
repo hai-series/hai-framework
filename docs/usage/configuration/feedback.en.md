@@ -4,7 +4,7 @@
 
 ## Configuration entry
 
-The application reads its server-side `_feedback.yml`, initializes RelDB, and passes the result to `feedback.init(config)`. Restart the service to apply changes. Initialization prepares the feedback tables.
+The application reads its server-side `_feedback.yml`, initializes RelDB, and passes the result to `feedback.init(config)`. Initialization prepares the feedback tables and buffers recent Core logs with trusted user, scope, and request identifiers locally. See the [key limits](../function/feedback.en.md#feedback-limits) for capture and upload.
 
 <a id="configuration-fields"></a>
 
@@ -14,7 +14,7 @@ The application reads its server-side `_feedback.yml`, initializes RelDB, and pa
 | --- | --- | --- | --- | --- |
 | `appId` | String with 1–128 characters | Yes | None | Stable ID separating applications in a shared database. |
 
-The contract allows five files per operation, up to 5 MiB each and 10 MiB combined. With encrypted transport, merge `apiContract.feedbackTransportRoutes(apiPrefix)` into the host’s `routePlaintextBytes` to allow 16 MiB of plaintext on those feedback paths. The host sets capacity for its other routes. [API reference](../function/feedback.en.md)
+Each send allows up to five manual attachments and 5 MiB per file. Manual attachments and first-post diagnostics share 10 MiB. With encrypted transport, merge `apiContract.feedbackTransportRoutes(apiPrefix)` into the host’s `routePlaintextBytes` to allow 16 MiB of plaintext on those feedback paths. The host sets capacity for its other routes. [API reference](../function/feedback.en.md)
 
 ## Example
 

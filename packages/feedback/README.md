@@ -2,7 +2,7 @@
 
 [English](README.en.md) · [日本語](README.ja.md)
 
-用户提交反馈并在同一份反馈下与处理人员交流。首帖、双方回复和补充请求均可附上图片和文件。处理人员可要求补充信息或更新状态。
+用户提交反馈并在同一份反馈下与处理人员交流。首帖可以保存截图、近期日志、操作回放和录屏。双方可在回复和补充请求中发送文字、图片和文件，处理人员可更新状态。
 
 ## 快速开始
 
@@ -18,7 +18,7 @@ pnpm add @h-ai/feedback @h-ai/reldb
 
 ## 功能说明
 
-查看提交、读取本人反馈、回复、要求补充信息、标记状态和下载附件的接口与场景。 [功能说明](../../docs/usage/function/feedback.md#api-reference)
+查看采集现场、提交、读取本人反馈、回复、要求补充信息和标记状态的操作与接口。 [完整流程](../../docs/usage/function/feedback.md#feedback-workflow) · [功能说明](../../docs/usage/function/feedback.md#api-reference)
 
 ## 数据结构
 

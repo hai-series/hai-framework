@@ -56,6 +56,7 @@ The primary key is `id`. List pages use app, scope, and activity time. My Feedba
 | `id` | `VARCHAR(36)` | No | Server-generated attachment UUID. |
 | `report_id` | `VARCHAR(36)` | No | ID of the enclosing report. |
 | `message_id` | `VARCHAR(36)` | Yes | ID of the message. Null for a file submitted with the original report. |
+| `kind` | `VARCHAR(24)` | No | `file` for manual files. First-post diagnostics use `screenshot`, `browser_logs`, `server_logs`, `replay`, or `recording`. |
 | `name` | `VARCHAR(255)` | No | File name shown to the reader. |
 | `content_type` | `VARCHAR(128)` | No | Media type returned to the reader. |
 | `size` | `INTEGER` | No | Original size in bytes. |

@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="520" height="466" viewBox="0 0 520 466" role="img" aria-labelledby="title desc">
   <title id="title">フィードバックの提出、追加情報の依頼、処理結果の記録</title>
-  <desc id="desc">フィードバックを提出。同じ問題票を開く。担当者が追加情報を依頼。提出者が資料を追加して返信。担当者が結果を返信</desc>
+  <desc id="desc">資料を確認して提出。同じ問題票を開く。担当者が追加情報を依頼。提出者が資料を追加して返信。担当者が結果を返信</desc>
   <metadata id="diagram-source">flowchart TB
-  A["フィードバックを提出&lt;br/&gt;本文またはファイルを送信"]
+  A["資料を確認して提出&lt;br/&gt;画面、ログ、操作リプレイ、録画を選択"]
   B["同じ問題票を開く&lt;br/&gt;未処理"]
   C["担当者が追加情報を依頼&lt;br/&gt;利用者の補足待ち"]
   D["提出者が資料を追加して返信&lt;br/&gt;未処理に戻る"]
@@ -31,8 +31,8 @@
   </g>
   <g>
     <g><rect x="38" y="20" width="444" height="66" rx="9"/>
-      <text x="57" y="49" class="title">フィードバックを提出</text>
-      <text x="57" y="72" class="note">本文またはファイルを送信</text></g>
+      <text x="57" y="49" class="title">資料を確認して提出</text>
+      <text x="57" y="72" class="note">画面、ログ、操作リプレイ、録画を選択</text></g>
     <g><rect x="38" y="110" width="444" height="66" rx="9"/>
       <text x="57" y="139" class="title">同じ問題票を開く</text>
       <text x="57" y="162" class="note">未処理</text></g>
