@@ -78,7 +78,7 @@ function startFeedback(): Promise<void> {
       const result = permissions.success
         ? await feedback.init({
             ...config,
-            ...adminBuildMetadata,
+            build: adminBuildMetadata,
           })
         : permissions
       if (!result.success) {

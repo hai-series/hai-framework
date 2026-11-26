@@ -35,7 +35,7 @@ describe('feedback 增量添加', () => {
       expect(manifest.dependencies['@h-ai/reach']).toBeUndefined()
       await expect(readFile(path.join(directory, 'config/_reach.yml'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
       const feedback = await readFile(path.join(directory, 'config/_feedback.yml'), 'utf8')
-      expect(feedback).toContain('HAI_FEEDBACK_NOTIFICATIONMODE:console')
+      expect(feedback).toContain('HAI_FEEDBACK_NOTIFICATION_MODE:console')
       expect(await readFile(path.join(directory, '.env.prod'), 'utf8')).toContain('HAI_CACHE_')
       expect(await readFile(path.join(directory, '.agents/skills/hai-feedback/SKILL.md'), 'utf8')).toContain('name: hai-feedback')
       expect(await readFile(path.join(directory, '.agents/skills/hai-iam/SKILL.md'), 'utf8')).toContain('name: hai-iam')
@@ -55,7 +55,7 @@ describe('feedback 增量添加', () => {
       }))
       await mkdir(path.join(directory, 'config'))
       const reach = '# Private provider mapping\nproviders:\n  - name: existing-email\n    type: console\n'
-      const feedback = 'appId: private-app\nnotificationProvider: existing-email\n'
+      const feedback = 'appId: private-app\nnotification:\n  mode: reach\n  provider: existing-email\n  recipients: [ops@example.test]\n'
       await writeFile(path.join(directory, 'config/_reach.yml'), reach)
       await writeFile(path.join(directory, 'config/_feedback.yml'), feedback)
       await writeFile(path.join(directory, '.env.prod'), 'HAI_CACHE_HOST=private-cache.example.test\n')

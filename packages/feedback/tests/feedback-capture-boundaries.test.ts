@@ -17,9 +17,11 @@ const actor = {
 }
 const config = {
   appId: 'capture-boundaries',
-  recipients: ['admin@example.test'],
-  adminUrl: 'http://localhost/admin/feedback',
-  workerIntervalMs: 0,
+  notification: {
+    recipients: ['admin@example.test'],
+    adminUrl: 'http://localhost/admin/feedback',
+  },
+  worker: { intervalMs: 0 },
 }
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()

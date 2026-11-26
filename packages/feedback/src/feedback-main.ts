@@ -30,7 +30,10 @@ const inFlight = new Set<Promise<unknown>>()
  *
  * // 宿主先初始化 reldb、storage、reach，并在反馈关闭后释放依赖。
  * async function collectFeedback() {
- *   const initialized = await feedback.init({ appId: 'orders', recipients: ['admin@example.test'], adminUrl: 'https://app.example.test/admin/feedback' })
+ *   const initialized = await feedback.init({
+ *     appId: 'orders',
+ *     notification: { recipients: ['admin@example.test'], adminUrl: 'https://app.example.test/admin/feedback' },
+ *   })
  *   if (!initialized.success) return initialized
  *   try {
  *     return await feedback.submit({ appId: 'orders', submissionId: 'stable-submission' }, { scopeId: 'tenant-1', userId: 'user-1' })
@@ -69,15 +72,15 @@ export const feedback: FeedbackFunctions = {
             : 'storage',
         ])
       }
-      if (parsed.data.notificationMode === 'reach') {
+      if (parsed.data.notification.mode === 'reach') {
         const provider = await import('@h-ai/reach').catch(() => undefined)
         if (!provider)
           return configFailure(['reach'])
         const { reach } = provider
         if (!reach.isInitialized)
           return configFailure(['reach'])
-        if (!reach.config?.providers.some(provider => provider.name === parsed.data.notificationProvider))
-          return configFailure(['notificationProvider'])
+        if (!reach.config?.providers.some(provider => provider.name === parsed.data.notification.provider))
+          return configFailure(['notification.provider'])
       }
       if (epoch !== generation)
         return notInitialized.result()
@@ -97,7 +100,7 @@ export const feedback: FeedbackFunctions = {
         return ready
       if (epoch !== generation)
         return notInitialized.result()
-      candidateCapture = createFeedbackCapture(parsed.data.appId, parsed.data.envAllowlist, { appVersion: parsed.data.appVersion, buildId: parsed.data.buildId, commit: parsed.data.commit })
+      candidateCapture = createFeedbackCapture(parsed.data.appId, parsed.data.collection.envAllowlist, parsed.data.build)
       const operations = createFeedbackOperations(repository, parsed.data, candidateCapture, options)
       if (epoch !== generation) {
         await operations.close()
@@ -145,15 +148,11 @@ export const feedback: FeedbackFunctions = {
   },
   get config() {
     return current
-      ? {
-          ...current.config,
-          recipients: [...current.config.recipients],
-          envAllowlist: [...current.config.envAllowlist],
-        }
+      ? structuredClone(current.config)
       : null
   },
   get budget() {
-    return apiContract.resolveFeedbackBudget(current?.config)
+    return apiContract.resolveFeedbackBudget(current?.config.limits)
   },
   submit: (input, actor) => guarded(() => (current?.operations ?? unavailable).submit(input, actor)),
   list: (input, actor) => guarded(() => (current?.operations ?? unavailable).list(input, actor)),

@@ -54,7 +54,7 @@ function startFeedback(): Promise<void> {
     try {
       const result = await feedback.init({
         ...core.config.getOrThrow<import('@h-ai/feedback').FeedbackConfigInput>('feedback'),
-        ...buildMetadata,
+        build: buildMetadata,
       })
       if (!result.success) {
         if (feedbackFailure !== result.error.code)

@@ -124,11 +124,15 @@ describe('真实双Node反馈任务协调', { concurrent: false }, () => {
         }
         const feedbackConfig = {
           appId: `process-coordination-${label}`,
-          recipients: ['admin@example.test'],
-          notificationProvider: 'email',
-          adminUrl: 'http://localhost/admin/feedback',
-          workerIntervalMs: 0,
-          leaseMs: 5000,
+          notification: {
+            recipients: ['admin@example.test'],
+            provider: 'email',
+            adminUrl: 'http://localhost/admin/feedback',
+          },
+          worker: {
+            intervalMs: 0,
+            leaseMs: 5000,
+          },
         }
         expect((await reldb.init(environment.config)).success).toBe(true)
         expect((await storage.init(storageConfig)).success).toBe(true)

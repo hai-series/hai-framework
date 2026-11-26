@@ -5,9 +5,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { core, HaiCommonError } from '@h-ai/core'
+import { FeedbackConfigSchema } from '@h-ai/feedback'
 import { ESLint } from 'eslint'
 import ts from 'typescript'
 import { describe, expect, it, vi } from 'vitest'
+import { parse } from 'yaml'
 import { buildAuthContextFactory } from '../../serv/src/serv-context.js'
 import { generateConfigFile } from '../src/commands/cli-config-templates.js'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
@@ -28,14 +30,25 @@ describe('feedback 生成工程', () => {
   })
 
   it('反馈配置具有管理员通知入口且不包含真实凭据', () => {
-    const yaml = generateConfigFile('feedback')
-    expect(yaml).toContain('recipients:')
-    expect(yaml).toContain('notificationProvider:')
-    expect(yaml).toContain('adminUrl:')
-    expect(yaml).toContain('businessCollectionTimeoutMs:')
-    expect(yaml).toContain('webhookUrl:')
-    expect(yaml).toContain('webhookSecret:')
-    expect(yaml).toContain('webhookTimeoutMs:')
+    const generated = parse(generateConfigFile('feedback'))
+    const resolved = core.config.resolve({
+      name: 'feedback',
+      value: generated,
+      environment: {},
+      schema: FeedbackConfigSchema,
+    })
+    if (!resolved.success)
+      throw new Error(resolved.error.message)
+    const config = FeedbackConfigSchema.parse(resolved.data)
+    expect(config.notification).toMatchObject({
+      mode: 'console',
+      recipients: [],
+      provider: 'email',
+      adminUrl: 'http://localhost:5173/#/feedback',
+    })
+    expect(config.collection.businessTimeoutMs).toBe(30_000)
+    expect(config.webhook).toEqual({ url: '', secret: '', timeoutMs: 10_000 })
+    expect(generated).not.toHaveProperty('webhook')
   })
 
   it.each([false, true])('原生反馈保存按功能开关隔离依赖和权限，启用=%s', async (enabled) => {

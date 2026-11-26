@@ -1106,31 +1106,17 @@ function generatePaymentConfig(): string {
 }
 
 function generateFeedbackConfig(): string {
-  return `# 问题反馈：生产使用共享数据库与私有存储；通知独立选择 disabled / console / reach。
+  return `# 问题反馈使用共享数据库与私有存储。
 appId: my-app
-appVersion: 0.1.0
-notificationMode: console
-consoleContent: metadata
-maxTotalBytes: 33554432
-recipients: []
-# Reach 模式设置真实 Provider 和接收方，不影响其它通知的免打扰策略。
-# recipients:
-#   - \${HAI_FEEDBACK_RECIPIENTS_0:}
-notificationProvider: email
-adminUrl: http://localhost:5173/#/feedback
-collectionTimeoutMs: 60000
-businessCollectionTimeoutMs: 30000
-# 采集结束后回调；地址空值禁用，密钥只放服务端私有环境，不进入 PUBLIC_ 配置。
-webhookUrl: ''
-webhookSecret: ''
-webhookTimeoutMs: 10000
-workerIntervalMs: 1000
-leaseMs: 30000
-maxAttempts: 5
-retentionDays: 30
-maxAttachmentBytes: 5242880
-envAllowlist:
-  - NODE_ENV
-  - TZ
+build:
+  appVersion: 0.1.0
+notification:
+  mode: console
+  adminUrl: http://localhost:5173/#/feedback
+  # Reach 模式在此配置 provider 和 recipients。接收方也可用 HAI_FEEDBACK_NOTIFICATION_RECIPIENTS 提供 JSON 数组。
+collection:
+  envAllowlist:
+    - NODE_ENV
+    - TZ
 `
 }

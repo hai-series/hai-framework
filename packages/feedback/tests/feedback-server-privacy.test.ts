@@ -17,9 +17,11 @@ const actor = {
 }
 const config = {
   appId: 'server-privacy',
-  recipients: ['admin@example.test'],
-  adminUrl: 'http://localhost/admin/feedback',
-  workerIntervalMs: 0,
+  notification: {
+    recipients: ['admin@example.test'],
+    adminUrl: 'http://localhost/admin/feedback',
+  },
+  worker: { intervalMs: 0 },
 }
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()
@@ -54,19 +56,24 @@ afterEach(async () => {
 })
 
 describe('服务端自由文本隐私边界', () => {
-  it('服务环境只包含允许的实际值，缺失值明确为null，凭据和非白名单值不收集', async () => {
+  it('报告保留服务构建标识，环境只包含允许的实际值并明确标记缺失', async () => {
     vi.stubEnv('FEEDBACK_REGION', 'region-fixture')
     vi.stubEnv('FEEDBACK_SECRET', 'secret-sentinel')
     vi.stubEnv('FEEDBACK_OTHER', 'other-sentinel')
     await feedback.close()
+    const build = { appVersion: '2.1.0', buildId: 'server-build', commit: 'fixture-commit' }
     expect((await feedback.init({
       ...config,
-      envAllowlist: ['FEEDBACK_REGION', 'FEEDBACK_ABSENT', 'FEEDBACK_SECRET'],
+      build,
+      collection: {
+        envAllowlist: ['FEEDBACK_REGION', 'FEEDBACK_ABSENT', 'FEEDBACK_SECRET'],
+      },
     })).success).toBe(true)
     const report = await feedback.submit({ appId: config.appId, submissionId: 'env-allowlist' }, actor)
     expect(report.success).toBe(true)
     if (!report.success)
       return
+    expect(report.data).toMatchObject(build)
     await feedback.completeCollection({ id: report.data.id }, actor)
     await feedback.runJobs()
     const result = await feedback.getEvidence({ id: report.data.id, kind: 'environment' }, actor)
@@ -74,6 +81,7 @@ describe('服务端自由文本隐私边界', () => {
     if (!result.success)
       return
     const environment = result.data.items.find(item => item.source.startsWith('server:'))!
+    expect(environment.data.service).toEqual(build)
     expect(environment.data.environment).toEqual({ FEEDBACK_REGION: 'region-fixture', FEEDBACK_ABSENT: null })
     expect(JSON.stringify(environment.data)).not.toContain('secret-sentinel')
     expect(JSON.stringify(environment.data)).not.toContain('other-sentinel')

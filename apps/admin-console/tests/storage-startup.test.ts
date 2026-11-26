@@ -166,7 +166,10 @@ describe('admin-console storage startup', () => {
 })
 
 it('反馈初始化失败保留必需业务模块，独立重试任务可完整关闭', async () => {
-  state.config.feedback = { appId: 'optional-feedback' }
+  state.config.feedback = {
+    appId: 'optional-feedback',
+    notification: { mode: 'disabled' },
+  }
   state.feedbackInit.mockResolvedValue({
     success: false,
     error: { code: 'test:feedback', message: 'Auxiliary fixture unavailable' },
@@ -177,13 +180,21 @@ it('反馈初始化失败保留必需业务模块，独立重试任务可完整�
     expect(isAppInitialized()).toBe(true)
     expect(state.iamInit).toHaveBeenCalledTimes(1)
     expect(state.feedbackInit).toHaveBeenCalledTimes(1)
+    expect(state.feedbackInit).toHaveBeenCalledWith({
+      appId: 'optional-feedback',
+      notification: { mode: 'disabled' },
+      build: { appVersion: 'test', buildId: 'test', commit: 'test' },
+    })
   }
   finally { await closeApp() }
 })
 
 it('反馈授权失败不启动反馈服务，权限恢复后独立就绪且不重启业务', async () => {
   vi.useFakeTimers()
-  state.config.feedback = { appId: 'optional-feedback' }
+  state.config.feedback = {
+    appId: 'optional-feedback',
+    notification: { mode: 'disabled' },
+  }
   state.seedFeedbackPermissions.mockResolvedValueOnce({
     success: false,
     error: { code: 'test:feedback-permission', message: 'Feedback permission write unavailable' },

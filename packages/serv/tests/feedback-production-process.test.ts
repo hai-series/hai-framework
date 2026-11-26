@@ -172,12 +172,16 @@ it('生产PG+Redis+S3：采集进程崩溃后接管，HTTP超时及重启后Webh
       throw new Error('Receiver did not start')
     const config = {
       appId: 'production-process-feedback',
-      notificationMode: 'disabled' as const,
-      workerIntervalMs: 0,
-      leaseMs: 1000,
-      webhookTimeoutMs: 250,
-      webhookUrl: `http://127.0.0.1:${receiverAddress.port}/feedback`,
-      webhookSecret: secret,
+      notification: { mode: 'disabled' as const },
+      worker: {
+        intervalMs: 0,
+        leaseMs: 1000,
+      },
+      webhook: {
+        timeoutMs: 250,
+        url: `http://127.0.0.1:${receiverAddress.port}/feedback`,
+        secret,
+      },
     }
     expect((await feedback.init(config, {
       collectEvidence: async () => ({ text: 'Host declares collection capability' }),

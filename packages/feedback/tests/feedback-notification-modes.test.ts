@@ -34,9 +34,11 @@ describe('反馈独立通知策略', () => {
     const output = vi.spyOn(core.logger, 'info')
     expect((await feedback.init({
       appId: 'privacy',
-      notificationMode: 'console',
-      consoleContent,
-      workerIntervalMs: 0,
+      notification: {
+        mode: 'console',
+        consoleContent,
+      },
+      worker: { intervalMs: 0 },
     })).success).toBe(true)
     const accepted = await feedback.submit({
       appId: 'privacy',
@@ -60,7 +62,11 @@ describe('反馈独立通知策略', () => {
     const send = vi.spyOn(reach, 'send')
     // 只验证反馈通知策略；本机后端在测试环境中已初始化，不声称生产共享后端验收。
     vi.stubEnv('NODE_ENV', 'production')
-    const initialized = await feedback.init({ appId: 'mode-test', notificationMode, workerIntervalMs: 0 })
+    const initialized = await feedback.init({
+      appId: 'mode-test',
+      notification: { mode: notificationMode },
+      worker: { intervalMs: 0 },
+    })
     expect(initialized.success).toBe(true)
     expect(reach.isInitialized).toBe(false)
     const accepted = await feedback.submit({ appId: 'mode-test', submissionId: notificationMode, description: 'A diagnostic summary' }, actor)
@@ -88,16 +94,18 @@ describe('反馈独立通知策略', () => {
   it('配置错误只报告模块和字段路径，不携带错误配置的私密值', async () => {
     const initialized = await feedback.init({
       appId: '',
-      notificationMode: 'reach',
-      recipients: [],
-      notificationProvider: 'PRIVATE_CONFIG_SENTINEL',
+      notification: {
+        mode: 'reach',
+        recipients: [],
+        provider: 'PRIVATE_CONFIG_SENTINEL',
+      },
     })
     expect(initialized).toMatchObject({
       success: false,
       error: {
         ext: {
           module: 'feedback',
-          fields: ['appId', 'recipients'],
+          fields: ['appId', 'notification.recipients'],
         },
       },
     })
@@ -107,10 +115,17 @@ describe('反馈独立通知策略', () => {
   it('总预算在受理前拒绝超量附件，空附件反馈仍可完整导出', async () => {
     expect((await feedback.init({
       appId: 'budget',
-      notificationMode: 'disabled',
-      maxTotalBytes: 4 * 1048576,
-      workerIntervalMs: 0,
+      notification: { mode: 'disabled' },
+      limits: { maxTotalBytes: 4 * 1048576 },
+      worker: { intervalMs: 0 },
     })).success).toBe(true)
+    expect(feedback.budget).toMatchObject({
+      maxTotalBytes: 4 * 1048576,
+      maxEvidenceBytes: 524288,
+      maxAttachmentBytes: 1048576,
+      maxAttachmentsBytes: 1048576,
+      maxTransportBytes: 5_657_944,
+    })
     const input = {
       appId: 'budget',
       submissionId: 'too-many-bytes',
@@ -158,10 +173,12 @@ it('reach 免打扰保留反馈自己的等待任务，不创建第二个延迟�
   })).success).toBe(true)
   expect((await feedback.init({
     appId: 'dnd',
-    notificationMode: 'reach',
-    recipients: ['ops-channel'],
-    notificationProvider: 'channel',
-    workerIntervalMs: 0,
+    notification: {
+      mode: 'reach',
+      recipients: ['ops-channel'],
+      provider: 'channel',
+    },
+    worker: { intervalMs: 0 },
   })).success).toBe(true)
   const submitted = await feedback.submit({ appId: 'dnd', submissionId: 'wait-own-outbox' }, actor)
   expect(submitted.success).toBe(true)

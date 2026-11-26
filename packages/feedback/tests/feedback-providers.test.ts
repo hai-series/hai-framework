@@ -165,10 +165,14 @@ describe('真实数据库 / S3 / SMTP 反馈闭环', { concurrent: false }, () =
       const appId = `mail-content-${locale}-${status}`
       expect((await feedback.init({
         appId,
-        recipients: ['administrator@example.test'],
-        adminUrl: 'http://localhost/admin/feedback',
-        workerIntervalMs: 0,
-        maxAttempts: 1,
+        notification: {
+          recipients: ['administrator@example.test'],
+          adminUrl: 'http://localhost/admin/feedback',
+        },
+        worker: {
+          intervalMs: 0,
+          maxAttempts: 1,
+        },
       }, status === 'failed'
         ? {
             collectEvidence: () => {
@@ -257,9 +261,11 @@ describe('真实数据库 / S3 / SMTP 反馈闭环', { concurrent: false }, () =
         })).success).toBe(true)
         const config = {
           appId: `providers-${label}`,
-          recipients: ['administrator@example.test'],
-          adminUrl: 'http://localhost/admin/feedback',
-          workerIntervalMs: 0,
+          notification: {
+            recipients: ['administrator@example.test'],
+            adminUrl: 'http://localhost/admin/feedback',
+          },
+          worker: { intervalMs: 0 },
         }
         const initialized = await feedback.init(config)
         expect(initialized.success, JSON.stringify(initialized)).toBe(true)

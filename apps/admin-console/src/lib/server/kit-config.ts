@@ -21,8 +21,8 @@ export function getAdminKitConfig(): KitConfig {
   // 容量来自配置，不依赖可选反馈的初始化/重试结果。
   const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
   const material = apiContract.resolveFeedbackBudget(feedbackSettings.success
-    ? feedbackSettings.data
-    : {}).maxTransportBytes
+    ? feedbackSettings.data.limits
+    : undefined).maxTransportBytes
   current = {
     ...result.data,
     transport: result.data.transport === false

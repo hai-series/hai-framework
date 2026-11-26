@@ -4296,169 +4296,218 @@
         "minLength": 1,
         "maxLength": 128
       },
-      "appVersion": {
-        "type": "string",
-        "maxLength": 128
+      "build": {
+        "default": {},
+        "type": "object",
+        "properties": {
+          "appVersion": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "buildId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "commit": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "additionalProperties": false
       },
-      "buildId": {
-        "type": "string",
-        "maxLength": 128
+      "notification": {
+        "default": {},
+        "type": "object",
+        "properties": {
+          "mode": {
+            "default": "reach",
+            "type": "string",
+            "enum": [
+              "disabled",
+              "console",
+              "reach"
+            ]
+          },
+          "consoleContent": {
+            "default": "metadata",
+            "type": "string",
+            "enum": [
+              "metadata",
+              "summary"
+            ]
+          },
+          "recipients": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 320
+            }
+          },
+          "provider": {
+            "default": "email",
+            "type": "string",
+            "minLength": 1
+          },
+          "adminUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "additionalProperties": false
       },
-      "commit": {
-        "type": "string",
-        "maxLength": 128
+      "webhook": {
+        "default": {},
+        "type": "object",
+        "properties": {
+          "url": {
+            "default": "",
+            "type": "string",
+            "maxLength": 2048
+          },
+          "secret": {
+            "default": "",
+            "type": "string",
+            "maxLength": 4096
+          },
+          "timeoutMs": {
+            "default": 10000,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60000
+          }
+        },
+        "additionalProperties": false
       },
-      "notificationMode": {
-        "default": "reach",
-        "type": "string",
-        "enum": [
-          "disabled",
-          "console",
-          "reach"
-        ]
+      "collection": {
+        "default": {},
+        "type": "object",
+        "properties": {
+          "timeoutMs": {
+            "default": 60000,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 300000
+          },
+          "businessTimeoutMs": {
+            "default": 30000,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300000
+          },
+          "envAllowlist": {
+            "default": [],
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        "additionalProperties": false
       },
-      "consoleContent": {
-        "default": "metadata",
-        "type": "string",
-        "enum": [
-          "metadata",
-          "summary"
-        ]
+      "retention": {
+        "default": {},
+        "type": "object",
+        "properties": {
+          "days": {
+            "default": 30,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650
+          },
+          "exportHours": {
+            "default": 24,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 720
+          }
+        },
+        "additionalProperties": false
       },
-      "recipients": {
-        "default": [],
-        "maxItems": 20,
-        "type": "array",
-        "items": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 320
-        }
+      "limits": {
+        "default": {},
+        "type": "object",
+        "properties": {
+          "maxReportsPerUserDay": {
+            "default": 20,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "maxBytesPerUserDay": {
+            "default": 2147483648,
+            "type": "integer",
+            "minimum": 4194304,
+            "maximum": 1099511627776
+          },
+          "maxStoredBytesPerScope": {
+            "default": 10737418240,
+            "type": "integer",
+            "minimum": 4194304,
+            "maximum": 1099511627776
+          },
+          "maxExportsPerReport": {
+            "default": 5,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "maxTotalBytes": {
+            "default": 33554432,
+            "type": "integer",
+            "minimum": 4194304,
+            "maximum": 41943040
+          },
+          "maxAttachmentBytes": {
+            "default": 5242880,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5242880
+          },
+          "maxEvidenceBytes": {
+            "default": 4194304,
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 4194304
+          },
+          "maxEvidenceCount": {
+            "default": 2000,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "additionalProperties": false
       },
-      "notificationProvider": {
-        "default": "email",
-        "type": "string",
-        "minLength": 1
-      },
-      "adminUrl": {
-        "type": "string",
-        "format": "uri"
-      },
-      "collectionTimeoutMs": {
-        "default": 60000,
-        "type": "integer",
-        "minimum": 0,
-        "maximum": 300000
-      },
-      "businessCollectionTimeoutMs": {
-        "default": 30000,
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 300000
-      },
-      "webhookUrl": {
-        "default": "",
-        "type": "string",
-        "maxLength": 2048
-      },
-      "webhookSecret": {
-        "default": "",
-        "type": "string",
-        "maxLength": 4096
-      },
-      "webhookTimeoutMs": {
-        "default": 10000,
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 60000
-      },
-      "workerIntervalMs": {
-        "default": 1000,
-        "type": "integer",
-        "minimum": 0,
-        "maximum": 60000
-      },
-      "leaseMs": {
-        "default": 30000,
-        "type": "integer",
-        "minimum": 1000,
-        "maximum": 300000
-      },
-      "maxAttempts": {
-        "default": 5,
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 20
-      },
-      "retentionDays": {
-        "default": 30,
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 3650
-      },
-      "maxReportsPerUserDay": {
-        "default": 20,
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 10000
-      },
-      "maxBytesPerUserDay": {
-        "default": 2147483648,
-        "type": "integer",
-        "minimum": 4194304,
-        "maximum": 1099511627776
-      },
-      "maxStoredBytesPerScope": {
-        "default": 10737418240,
-        "type": "integer",
-        "minimum": 4194304,
-        "maximum": 1099511627776
-      },
-      "maxExportsPerReport": {
-        "default": 5,
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 20
-      },
-      "exportRetentionHours": {
-        "default": 24,
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 720
-      },
-      "envAllowlist": {
-        "default": [],
-        "maxItems": 100,
-        "type": "array",
-        "items": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        }
-      },
-      "maxTotalBytes": {
-        "default": 33554432,
-        "type": "integer",
-        "minimum": 4194304,
-        "maximum": 41943040
-      },
-      "maxAttachmentBytes": {
-        "default": 5242880,
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 5242880
-      },
-      "maxEvidenceBytes": {
-        "default": 4194304,
-        "type": "integer",
-        "minimum": 1024,
-        "maximum": 4194304
-      },
-      "maxEvidenceCount": {
-        "default": 2000,
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 10000
+      "worker": {
+        "default": {},
+        "type": "object",
+        "properties": {
+          "intervalMs": {
+            "default": 1000,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60000
+          },
+          "leaseMs": {
+            "default": 30000,
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 300000
+          },
+          "maxAttempts": {
+            "default": 5,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "additionalProperties": false
       }
     },
     "required": [

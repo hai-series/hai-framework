@@ -17,10 +17,14 @@ const actor = {
 }
 const config = {
   appId: 'export-status',
-  recipients: ['admin@example.test'],
-  adminUrl: 'http://localhost/admin/feedback',
-  workerIntervalMs: 0,
-  maxAttempts: 1,
+  notification: {
+    recipients: ['admin@example.test'],
+    adminUrl: 'http://localhost/admin/feedback',
+  },
+  worker: {
+    intervalMs: 0,
+    maxAttempts: 1,
+  },
 }
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()
@@ -66,10 +70,16 @@ async function startExport(submissionId: string) {
 describe('导出下载的状态与受权边界', { concurrent: false }, () => {
   it('调高运行期导出数量不能突破报告受理时已预留的数量', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, maxExportsPerReport: 1 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      limits: { maxExportsPerReport: 1 },
+    })).success).toBe(true)
     const { report } = await startExport('fixed-export-reservation')
     await feedback.close()
-    expect((await feedback.init({ ...config, maxExportsPerReport: 20 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      limits: { maxExportsPerReport: 20 },
+    })).success).toBe(true)
     expect((await feedback.setStatus({ id: report.id, status: 'handled', expectedVersion: 1 }, actor)).success).toBe(true)
     expect(await feedback.export({ id: report.id }, actor)).toMatchObject({
       success: false,
@@ -79,7 +89,11 @@ describe('导出下载的状态与受权边界', { concurrent: false }, () => {
 
   it('已完成导出到期禁止下载并删除 ZIP；到期仍计入报告历史导出上限', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, maxExportsPerReport: 1, exportRetentionHours: 1 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      limits: { maxExportsPerReport: 1 },
+      retention: { exportHours: 1 },
+    })).success).toBe(true)
     const { report, job } = await startExport('bounded-expired-export')
     expect((await feedback.runJobs()).success).toBe(true)
     expect((await feedback.getExport({ id: report.id, jobId: job.id }, actor)).success).toBe(true)

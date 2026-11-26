@@ -41,12 +41,16 @@ for (const [label, setup] of [
     }
     const config = {
       appId: `lock-wait-${label}`,
-      recipients: ['admin@example.test'],
-      notificationProvider: 'email',
-      adminUrl: 'http://localhost/admin/feedback',
-      workerIntervalMs: 0,
-      collectionTimeoutMs: 60000,
-      leaseMs: 1000,
+      notification: {
+        recipients: ['admin@example.test'],
+        provider: 'email',
+        adminUrl: 'http://localhost/admin/feedback',
+      },
+      worker: {
+        intervalMs: 0,
+        leaseMs: 1000,
+      },
+      collection: { timeoutMs: 60000 },
     }
     let previousLevel = core.logger.getLevel()
 

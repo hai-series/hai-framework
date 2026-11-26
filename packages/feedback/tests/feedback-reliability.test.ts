@@ -18,13 +18,17 @@ const admin: FeedbackContext = {
 }
 const config = {
   appId: 'reliability-test',
-  recipients: ['admin@example.test'],
-  notificationProvider: 'email',
-  adminUrl: 'http://localhost/admin/feedback',
-  workerIntervalMs: 0,
-  collectionTimeoutMs: 60000,
-  leaseMs: 1000,
-  maxAttempts: 1,
+  notification: {
+    recipients: ['admin@example.test'],
+    provider: 'email',
+    adminUrl: 'http://localhost/admin/feedback',
+  },
+  worker: {
+    intervalMs: 0,
+    leaseMs: 1000,
+    maxAttempts: 1,
+  },
+  collection: { timeoutMs: 60000 },
 }
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()
@@ -58,7 +62,10 @@ afterEach(async () => {
 describe('反馈可靠性边界', { concurrent: false }, () => {
   it('每日提交配额在事务中原子预留，重复提交不重复计数，拒绝不留下报告', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, maxReportsPerUserDay: 1 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      limits: { maxReportsPerUserDay: 1 },
+    })).success).toBe(true)
     const first = await feedback.submit({ appId: config.appId, submissionId: 'quota-once' }, actor)
     expect(first.success).toBe(true)
     expect((await feedback.submit({ appId: config.appId, submissionId: 'quota-once' }, actor)).success).toBe(true)
@@ -79,7 +86,10 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
 
   it('scope 存储预留包含历史 ZIP，超限在上传之前拒绝且隔离其它 scope', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, maxExportsPerReport: 1, maxStoredBytesPerScope: 64 * 1024 * 1024 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      limits: { maxExportsPerReport: 1, maxStoredBytesPerScope: 64 * 1024 * 1024 },
+    })).success).toBe(true)
     expect((await feedback.submit({ appId: config.appId, submissionId: 'storage-first' }, actor)).success).toBe(true)
     expect(await feedback.submit({ appId: config.appId, submissionId: 'storage-second' }, { ...actor, userId: 'other' })).toMatchObject({
       success: false,
@@ -261,7 +271,10 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
     await feedback.close()
     expect((await feedback.init({
       ...config,
-      recipients: ['a@example.test', 'b@example.test'],
+      notification: {
+        ...config.notification,
+        recipients: ['a@example.test', 'b@example.test'],
+      },
     })).success).toBe(true)
     let calls = 0
     const send = vi.spyOn(reach, 'send').mockImplementation(async () => {
@@ -306,7 +319,11 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
 
   it('补采耗尽尝试后进入failed终态，人工重试时才重新进入collecting', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, maxEvidenceCount: 1, maxAttempts: 1 }, {
+    expect((await feedback.init({
+      ...config,
+      limits: { maxEvidenceCount: 1 },
+      worker: { ...config.worker, maxAttempts: 1 },
+    }, {
       collectEvidence: () => ({ text: '业务证据超过当前报告预算' }),
     })).success).toBe(true)
     const report = await feedback.submit({ submissionId: 'collection-terminal-failure', appId: config.appId }, actor)
@@ -331,7 +348,10 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
     const collectEvidence = vi.fn(() => {
       throw new Error('Fixture collection failure')
     })
-    expect((await feedback.init({ ...config, notificationMode: 'disabled' }, { collectEvidence })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      notification: { ...config.notification, mode: 'disabled' },
+    }, { collectEvidence })).success).toBe(true)
     const report = await feedback.submit({ submissionId: 'terminal-report-rollback', appId: config.appId }, actor)
     expect(report.success).toBe(true)
     if (!report.success)
@@ -363,7 +383,10 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
     expect(attempt.success && attempt.data.jobs.find(job => job.type === 'collect')).toMatchObject({ status: 'running', attempts: 1 })
 
     expect((await feedback.close()).success).toBe(true)
-    expect((await feedback.init({ ...config, notificationMode: 'disabled' }, { collectEvidence })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      notification: { ...config.notification, mode: 'disabled' },
+    }, { collectEvidence })).success).toBe(true)
     expect((await reldb.sql.execute('UPDATE hai_feedback_jobs SET lease_until = 0 WHERE report_id = ? AND kind = \'collect\'', [report.data.id])).success).toBe(true)
     expect((await feedback.runJobs()).success).toBe(true)
     const recovered = await feedback.get(report.data.id, admin)
@@ -379,7 +402,11 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
 
   it('重复完成采集复用缺失证据和调度回执，且小预算仍能标记材料不完整', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, notificationMode: 'disabled', maxEvidenceCount: 2 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      notification: { ...config.notification, mode: 'disabled' },
+      limits: { maxEvidenceCount: 2 },
+    })).success).toBe(true)
     const report = await feedback.submit({ submissionId: 'collection-finish-idempotent', appId: config.appId }, actor)
     expect(report.success).toBe(true)
     if (!report.success)
@@ -414,9 +441,14 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
     await feedback.close()
     expect((await feedback.init({
       ...config,
-      notificationMode: 'disabled',
-      maxEvidenceCount: 4,
-      maxEvidenceBytes: 1024,
+      notification: {
+        ...config.notification,
+        mode: 'disabled',
+      },
+      limits: {
+        maxEvidenceCount: 4,
+        maxEvidenceBytes: 1024,
+      },
     })).success).toBe(true)
     const clientEvent = {
       id: 'client-1',
@@ -476,9 +508,14 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
     expect((await feedback.close()).success).toBe(true)
     expect((await feedback.init({
       ...config,
-      notificationMode: 'disabled',
-      maxEvidenceCount: 1,
-      maxEvidenceBytes: 1024,
+      notification: {
+        ...config.notification,
+        mode: 'disabled',
+      },
+      limits: {
+        maxEvidenceCount: 1,
+        maxEvidenceBytes: 1024,
+      },
     })).success).toBe(true)
     const minimal = await feedback.submit({ submissionId: 'minimum-evidence', appId: config.appId }, actor)
     expect(minimal.success).toBe(true)
@@ -511,9 +548,14 @@ describe('反馈可靠性边界', { concurrent: false }, () => {
     expect((await feedback.init({
       ...config,
       appId,
-      notificationMode: 'disabled',
-      maxEvidenceCount: 4,
-      maxEvidenceBytes: 1024,
+      notification: {
+        ...config.notification,
+        mode: 'disabled',
+      },
+      limits: {
+        maxEvidenceCount: 4,
+        maxEvidenceBytes: 1024,
+      },
     })).success).toBe(true)
     const accepted = await feedback.submit({
       submissionId: 'minimal-byte-budget',

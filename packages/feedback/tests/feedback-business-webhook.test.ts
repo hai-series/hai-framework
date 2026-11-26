@@ -31,7 +31,11 @@ const actor = {
   userId: 'user',
   permissions: ['feedback:*'],
 }
-const config = { appId: 'business-test', notificationMode: 'disabled' as const, workerIntervalMs: 0 }
+const config = {
+  appId: 'business-test',
+  notification: { mode: 'disabled' as const },
+  worker: { intervalMs: 0 },
+}
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'hai-feedback-business-'))
@@ -76,7 +80,10 @@ async function drain() {
 describe('业务补采与反馈 Webhook', () => {
   it('极小预算为业务补采留位，浏览器缺失原因仍反映在材料状态', async () => {
     const collectEvidence = vi.fn(() => ({ text: 'Business evidence' }))
-    expect((await feedback.init({ ...config, maxEvidenceCount: 2 }, { collectEvidence })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      limits: { maxEvidenceCount: 2 },
+    }, { collectEvidence })).success).toBe(true)
     const accepted = await feedback.submit({ appId: config.appId, submissionId: 'small-budget' }, actor)
     expect(accepted.success).toBe(true)
     if (!accepted.success)
@@ -191,7 +198,11 @@ describe('业务补采与反馈 Webhook', () => {
 
   it('采集超时会取消并持久重试，缺少同一采集器的重启不能静默成功', async () => {
     let signal: AbortSignal | undefined
-    expect((await feedback.init({ ...config, businessCollectionTimeoutMs: 15, maxAttempts: 2 }, {
+    expect((await feedback.init({
+      ...config,
+      collection: { businessTimeoutMs: 15 },
+      worker: { ...config.worker, maxAttempts: 2 },
+    }, {
       collectEvidence: (context) => {
         signal = context.signal
         return new Promise(() => {})
@@ -201,7 +212,10 @@ describe('业务补采与反馈 Webhook', () => {
     expect((await feedback.runJobs()).success).toBe(true)
     expect(signal?.aborted).toBe(true)
     await feedback.close()
-    expect((await feedback.init({ ...config, maxAttempts: 2 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      worker: { ...config.worker, maxAttempts: 2 },
+    })).success).toBe(true)
     await drain()
     const detail = await feedback.get(report.id, actor)
     expect(detail).toMatchObject({
@@ -242,7 +256,10 @@ describe('业务补采与反馈 Webhook', () => {
         },
       ],
     }))
-    expect((await feedback.init({ ...config, maxAttempts: 1 }, { collectEvidence })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      worker: { ...config.worker, maxAttempts: 1 },
+    }, { collectEvidence })).success).toBe(true)
     const report = await submit()
     await drain()
     expect(await feedback.get(report.id, actor)).toMatchObject({
@@ -281,7 +298,11 @@ describe('业务补采与反馈 Webhook', () => {
   })
 
   it('业务附件与用户附件共享总预算，超限时不发布业务证据', async () => {
-    expect((await feedback.init({ ...config, maxTotalBytes: 4 * 1048576, maxAttempts: 1 }, {
+    expect((await feedback.init({
+      ...config,
+      limits: { maxTotalBytes: 4 * 1048576 },
+      worker: { ...config.worker, maxAttempts: 1 },
+    }, {
       collectEvidence: () => ({
         attachments: [
           {
@@ -381,7 +402,10 @@ describe('业务补采与反馈 Webhook', () => {
 
   it('独立 Webhook 在补采后发送固定载荷、签名和稳定幂等键，故障/重启后重试', async () => {
     responseStatus = 503
-    const initialized = await feedback.init({ ...config, webhookUrl, webhookSecret: 'test-signing-key' }, {
+    const initialized = await feedback.init({
+      ...config,
+      webhook: { url: webhookUrl, secret: 'test-signing-key' },
+    }, {
       collectEvidence: async () => ({ text: 'Collected business evidence' }),
     })
     expect(initialized.success).toBe(true)
@@ -401,7 +425,10 @@ describe('业务补采与反馈 Webhook', () => {
     expect(idempotencyKey).toBeTruthy()
     await feedback.close()
     responseStatus = 204
-    expect((await feedback.init({ ...config, webhookUrl, webhookSecret: 'test-signing-key' })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      webhook: { url: webhookUrl, secret: 'test-signing-key' },
+    })).success).toBe(true)
     await drain()
     const last = requests.at(-1)!
     expect(last.body).toBe(first.body)
@@ -422,7 +449,11 @@ describe('业务补采与反馈 Webhook', () => {
 
   it('webhook 不跟随重定向，终态失败可由管理员重试', async () => {
     responseStatus = 302
-    expect((await feedback.init({ ...config, webhookUrl, maxAttempts: 1 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      webhook: { url: webhookUrl },
+      worker: { ...config.worker, maxAttempts: 1 },
+    })).success).toBe(true)
     const report = await submit()
     await drain()
     expect(requests).toHaveLength(1)
@@ -448,10 +479,15 @@ describe('业务补采与反馈 Webhook', () => {
     holdResponse = true
     expect((await feedback.init({
       ...config,
-      webhookUrl: `${webhookUrl}?token=private-url-sentinel`,
-      webhookSecret: 'private-secret-sentinel',
-      webhookTimeoutMs: 15,
-      maxAttempts: 1,
+      webhook: {
+        url: `${webhookUrl}?token=private-url-sentinel`,
+        secret: 'private-secret-sentinel',
+        timeoutMs: 15,
+      },
+      worker: {
+        ...config.worker,
+        maxAttempts: 1,
+      },
     })).success).toBe(true)
     const report = await submit()
     await drain()
@@ -469,8 +505,12 @@ describe('业务补采与反馈 Webhook', () => {
   })
 
   it('未配置时不创建 Webhook 任务，拒绝非法协议和携带用户凭据的地址', async () => {
-    for (const url of ['file:///tmp/a', 'https://user:private@example.test/hook', 'https://example.test/#secret'])
-      expect(FeedbackConfigSchema.safeParse({ ...config, webhookUrl: url }).success).toBe(false)
+    for (const url of ['file:///tmp/a', 'https://user:private@example.test/hook', 'https://example.test/#secret']) {
+      expect(FeedbackConfigSchema.safeParse({
+        ...config,
+        webhook: { url },
+      }).success).toBe(false)
+    }
     expect((await feedback.init(config)).success).toBe(true)
     const report = await submit()
     await drain()

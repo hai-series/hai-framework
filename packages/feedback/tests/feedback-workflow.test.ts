@@ -24,14 +24,18 @@ const other: FeedbackContext = {
 }
 const config = {
   appId: 'test-app',
-  recipients: ['admin@example.test'],
-  notificationProvider: 'email',
-  adminUrl: 'http://localhost/admin/feedback',
-  workerIntervalMs: 0,
-  collectionTimeoutMs: 60000,
-  maxReportsPerUserDay: 1000,
-  maxBytesPerUserDay: 1024 ** 4,
-  maxStoredBytesPerScope: 1024 ** 4,
+  notification: {
+    recipients: ['admin@example.test'],
+    provider: 'email',
+    adminUrl: 'http://localhost/admin/feedback',
+  },
+  worker: { intervalMs: 0 },
+  collection: { timeoutMs: 60000 },
+  limits: {
+    maxReportsPerUserDay: 1000,
+    maxBytesPerUserDay: 1024 ** 4,
+    maxStoredBytesPerScope: 1024 ** 4,
+  },
 }
 let root: string
 beforeAll(async () => {

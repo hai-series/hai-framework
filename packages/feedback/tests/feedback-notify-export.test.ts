@@ -18,10 +18,14 @@ const actor = {
 }
 const config = {
   appId: 'notification-export',
-  recipients: ['admin@example.test'],
-  adminUrl: 'http://localhost/admin/feedback',
-  workerIntervalMs: 0,
-  maxAttempts: 2,
+  notification: {
+    recipients: ['admin@example.test'],
+    adminUrl: 'http://localhost/admin/feedback',
+  },
+  worker: {
+    intervalMs: 0,
+    maxAttempts: 2,
+  },
 }
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()
@@ -55,7 +59,11 @@ afterEach(async () => {
 describe('通知与材料任务边界', { concurrent: false }, () => {
   it('通知先执行时，业务证据配额耗尽仅让collect失败，受理邮件仍发送一次', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, maxEvidenceCount: 1, maxAttempts: 1 }, {
+    expect((await feedback.init({
+      ...config,
+      limits: { maxEvidenceCount: 1 },
+      worker: { ...config.worker, maxAttempts: 1 },
+    }, {
       collectEvidence: () => ({ text: '未能写入的业务证据' }),
     })).success).toBe(true)
     const send = vi.spyOn(reach, 'send')

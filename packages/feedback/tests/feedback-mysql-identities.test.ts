@@ -22,10 +22,12 @@ const owner: FeedbackContext = {
   permissions: ['feedback:*'],
 }
 const settings = {
-  recipients: ['admin@example.test'],
-  adminUrl: 'http://localhost/admin/feedback',
-  workerIntervalMs: 0,
-  collectionTimeoutMs: 60000,
+  notification: {
+    recipients: ['admin@example.test'],
+    adminUrl: 'http://localhost/admin/feedback',
+  },
+  worker: { intervalMs: 0 },
+  collection: { timeoutMs: 60000 },
 }
 
 describe('mysql反馈身份字节精确隔离', { concurrent: false }, () => {

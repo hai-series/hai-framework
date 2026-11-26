@@ -31,8 +31,8 @@ export function createServerApp(): ServHttpApp {
   // 可选反馈故障重试期间仍使用配置预算，避免缓存默认容量。
   const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
   const feedbackBudget = apiContract.resolveFeedbackBudget(feedbackSettings.success
-    ? feedbackSettings.data
-    : {})
+    ? feedbackSettings.data.limits
+    : undefined)
 {{/if}}
   const security = serv.createRuntimeSecurityPolicy({
     environment: coreConfig.env,

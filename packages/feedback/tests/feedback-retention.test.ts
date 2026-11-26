@@ -17,9 +17,11 @@ const actor = {
 }
 const config = {
   appId: 'retention-app',
-  recipients: ['admin@example.test'],
-  adminUrl: 'http://localhost/admin/feedback',
-  workerIntervalMs: 0,
+  notification: {
+    recipients: ['admin@example.test'],
+    adminUrl: 'http://localhost/admin/feedback',
+  },
+  worker: { intervalMs: 0 },
 }
 let directory: string | undefined
 let previousLevel = core.logger.getLevel()
@@ -224,7 +226,10 @@ describe('反馈数据保留与顺序', { concurrent: false }, () => {
 
   it('导出排队快照过期后，同一当前修订可重新申请有效离线包', async () => {
     await feedback.close()
-    expect((await feedback.init({ ...config, maxAttempts: 1 })).success).toBe(true)
+    expect((await feedback.init({
+      ...config,
+      worker: { ...config.worker, maxAttempts: 1 },
+    })).success).toBe(true)
     const report = await feedback.submit({ submissionId: 'expired-export-snapshot', appId: config.appId }, actor)
     expect(report.success).toBe(true)
     if (!report.success)

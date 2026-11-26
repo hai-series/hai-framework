@@ -32,10 +32,12 @@ afterAll(async () => {
 it('前置服务已就绪时建立反馈存储，关闭后恢复未初始化状态', async () => {
   const result = await feedback.init({
     appId: 'feedback-test',
-    recipients: ['admin@example.test'],
-    notificationProvider: 'email',
-    adminUrl: 'http://localhost/admin/feedback',
-    workerIntervalMs: 0,
+    notification: {
+      recipients: ['admin@example.test'],
+      provider: 'email',
+      adminUrl: 'http://localhost/admin/feedback',
+    },
+    worker: { intervalMs: 0 },
   })
   expect(result.success).toBe(true)
   expect(feedback.isInitialized).toBe(true)
@@ -56,7 +58,11 @@ it('并发关闭等待同一个 worker 排空，关闭完成前不能重启', as
     }
     return original<T>(sql, params)
   })
-  const config = { appId: 'feedback-close-drain', notificationMode: 'disabled' as const, workerIntervalMs: 1 }
+  const config = {
+    appId: 'feedback-close-drain',
+    notification: { mode: 'disabled' as const },
+    worker: { intervalMs: 1 },
+  }
   try {
     expect((await feedback.init(config)).success).toBe(true)
     await entered.promise

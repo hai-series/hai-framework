@@ -40,6 +40,7 @@ import { createHttpsAssets, renderHttpsProxy } from '../container/deploy-https.j
 import { deploymentRuntimeFunctions } from '../container/deploy-runtime-selection.js'
 import { shellArgument } from '../container/deploy-scripts.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
+import configurationShapes from '../deploy-config-shapes.json' with { type: 'json' }
 import { deploymentOrigin } from '../deploy-config.js'
 import { describeDeploymentVariableSources, loadDeploymentConfig, loadDeploymentEnvironment, mergeEnvironmentLayers, saveDeploymentEnvironment } from '../deploy-environment.js'
 import { resolveProjectDirectory } from '../deploy-functions.js'
@@ -48,6 +49,11 @@ import { getDeployCommandState } from '../deploy-recovery.js'
 import { HaiDeployError } from '../deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'provider-docker-ssh' })
+
+// 构建时从 Feedback 的输入 Schema 生成；部署无需加载反馈或初始化存储。
+const feedbackLimitsSchema = z.fromJSONSchema(configurationShapes.feedback.properties.limits as Parameters<typeof z.fromJSONSchema>[0])
+  .pipe(z.record(z.string(), z.number()))
+  .optional()
 
 /** 健康检查轮询间隔（毫秒） */
 const HEALTH_POLL_INTERVAL = 3000
@@ -412,7 +418,8 @@ export function createDockerSshProvider(
       if (!policy.success)
         return policy
       try {
-        feedbackTransportBytes = apiContract.resolveFeedbackBudget(policy.data).maxTransportBytes
+        const limits = feedbackLimitsSchema.parse(policy.data.limits)
+        feedbackTransportBytes = apiContract.resolveFeedbackBudget(limits).maxTransportBytes
       }
       catch {
         return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))

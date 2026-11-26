@@ -79,7 +79,7 @@ function escapeHtml(value: string) {
  * ```
  */
 export function createFeedbackOperations(repo: FeedbackReportRepository, config: FeedbackConfig, capture: FeedbackCapture, options: FeedbackInitOptions = {}): FeedbackRuntime {
-  const budget = apiContract.resolveFeedbackBudget(config)
+  const budget = apiContract.resolveFeedbackBudget(config.limits)
   const clientEvidence = feedbackClientEvidenceLimits(budget)
   const table = repo.tables
   const clock = feedbackClockSql()
@@ -93,7 +93,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
   const shutdown = new AbortController()
 
   function schedule(delay: number) {
-    if (stopped || !config.workerIntervalMs)
+    if (stopped || !config.worker.intervalMs)
       return
     if (timer)
       clearTimeout(timer)
@@ -108,7 +108,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     if (running)
       wakePending = true
     else
-      schedule(config.workerIntervalMs)
+      schedule(config.worker.intervalMs)
   }
   async function tick() {
     if (stopped)
@@ -118,7 +118,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       ? 0
       : Math.min(idleRounds + 1, 10)
     wakePending = false
-    schedule(Math.min(30000, config.workerIntervalMs * 2 ** idleRounds))
+    schedule(Math.min(30000, config.worker.intervalMs * 2 ** idleRounds))
   }
   const collectEvidence = options.collectEvidence
 
@@ -138,13 +138,13 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     if (!Number.isFinite(now))
       return failed()
     const day = Math.floor(now / 86400000) * 86400000
-    const bytes = budget.maxTotalBytes * (config.maxExportsPerReport + 1)
+    const bytes = budget.maxTotalBytes * (config.limits.maxExportsPerReport + 1)
     const buckets = [
       {
         id: scopeQuotaId(actor.scopeId),
         period: 0,
         maxReports: Number.MAX_SAFE_INTEGER,
-        maxBytes: config.maxStoredBytesPerScope,
+        maxBytes: config.limits.maxStoredBytesPerScope,
       },
       {
         id: hash(JSON.stringify([
@@ -154,8 +154,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           day,
         ])),
         period: day,
-        maxReports: config.maxReportsPerUserDay,
-        maxBytes: config.maxBytesPerUserDay,
+        maxReports: config.limits.maxReportsPerUserDay,
+        maxBytes: config.limits.maxBytesPerUserDay,
       },
     ]
     for (const bucket of buckets) {
@@ -193,7 +193,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       actor.userId,
       bytes,
       budget.maxTotalBytes,
-      config.maxExportsPerReport,
+      config.limits.maxExportsPerReport,
       now,
     ])
   }
@@ -413,7 +413,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
   }
 
   async function notificationSummary(sql: DmlOperations, id: string) {
-    if (config.notificationMode === 'disabled')
+    if (config.notification.mode === 'disabled')
       return sql.execute(`UPDATE ${table.reports} SET notification_status = 'disabled' WHERE id = ?`, [id])
     return sql.execute(`UPDATE ${table.reports} SET notification_status = CASE
       WHEN EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'notify' AND (status = 'failed' OR last_error IS NOT NULL)) THEN 'failed'
@@ -531,9 +531,9 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
 
   const operations: FeedbackRuntime = {
     start() {
-      if (!config.workerIntervalMs || stopped)
+      if (!config.worker.intervalMs || stopped)
         return
-      schedule(config.workerIntervalMs)
+      schedule(config.worker.intervalMs)
     },
     async close() {
       stopped = true
@@ -592,12 +592,12 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         contact: sanitized.contact,
         url: sanitized.url,
         summary: (sanitized.description?.trim() || sanitized.url || feedbackM('feedback_defaultSummary')).slice(0, 200),
-        appVersion: sanitized.appVersion ?? config.appVersion,
-        buildId: sanitized.buildId ?? config.buildId,
-        commit: sanitized.commit ?? config.commit,
+        appVersion: sanitized.appVersion ?? config.build.appVersion,
+        buildId: sanitized.buildId ?? config.build.buildId,
+        commit: sanitized.commit ?? config.build.commit,
         status: 'pending',
         collectionStatus: 'collecting',
-        notificationStatus: config.notificationMode === 'disabled'
+        notificationStatus: config.notification.mode === 'disabled'
           ? 'disabled'
           : 'pending',
         createdAt: now,
@@ -624,8 +624,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         revision: 1,
         evidence_count: 0,
         evidence_bytes: 0,
-        collect_deadline: now + config.collectionTimeoutMs,
-        expires_at: now + config.retentionDays * 86400000,
+        collect_deadline: now + config.collection.timeoutMs,
+        expires_at: now + config.retention.days * 86400000,
         payload: report,
         deleting: 0,
       }
@@ -677,17 +677,17 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           if (!saved.success)
             return saved
         }
-        for (const recipient of config.notificationMode === 'disabled'
+        for (const recipient of config.notification.mode === 'disabled'
           ? []
-          : config.notificationMode === 'console'
+          : config.notification.mode === 'console'
             ? ['console']
-            : config.recipients) {
+            : config.notification.recipients) {
           const saved = await insertJob(tx, report, 'notify', recipient, { recipient }, row.collect_deadline)
           if (!saved.success)
             return saved
         }
-        if (config.webhookUrl) {
-          const webhook = await insertJob(tx, report, 'webhook', 'created', { url: config.webhookUrl }, row.collect_deadline)
+        if (config.webhook.url) {
+          const webhook = await insertJob(tx, report, 'webhook', 'created', { url: config.webhook.url }, row.collect_deadline)
           if (!webhook.success)
             return webhook
         }
@@ -1079,7 +1079,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (previous.data) {
           const snapshot = readFeedbackJson(previous.data.payload)
           const live = snapshot && typeof snapshot === 'object' && 'snapshotExpiresAt' in snapshot && typeof snapshot.snapshotExpiresAt === 'number' && snapshot.snapshotExpiresAt > now
-          if ((previous.data.status === 'succeeded' && Number(previous.data.created_at) + config.exportRetentionHours * 3600000 > now) || (previous.data.status !== 'succeeded' && live))
+          if ((previous.data.status === 'succeeded' && Number(previous.data.created_at) + config.retention.exportHours * 3600000 > now) || (previous.data.status !== 'succeeded' && live))
             return core.ok(jobData(previous.data))
         }
         if (revision < Number(row.data.revision)) {
@@ -1091,7 +1091,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const reservation = await tx.get<{ report_bytes: number, export_limit: number }>(`SELECT report_bytes, export_limit FROM ${table.quotas} WHERE id = ?`, [input.id])
         if (!reservation.success)
           return reservation
-        if (!reservation.data || Number(exports.data?.count ?? 0) >= Math.min(config.maxExportsPerReport, Number(reservation.data.export_limit)))
+        if (!reservation.data || Number(exports.data?.count ?? 0) >= Math.min(config.limits.maxExportsPerReport, Number(reservation.data.export_limit)))
           return quotaExceeded()
         const events = await evidence(input.id, revision, tx)
         if (!events.success)
@@ -1145,7 +1145,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           return missing()
         return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_exportPending'))
       }
-      if (Number(job.data.created_at) + config.exportRetentionHours * 3600000 <= now)
+      if (Number(job.data.created_at) + config.retention.exportHours * 3600000 <= now)
         return missing()
       if (job.data.status === 'failed')
         return failed()
@@ -1247,7 +1247,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
     const controller = new AbortController()
     const signal = AbortSignal.any([controller.signal, shutdown.signal])
-    const timeout = setTimeout(() => controller.abort(), config.businessCollectionTimeoutMs)
+    const timeout = setTimeout(() => controller.abort(), config.collection.businessTimeoutMs)
     timeout.unref()
     let collected: FeedbackCollectedEvidence
     let onAbort: (() => void) | undefined
@@ -1430,9 +1430,9 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           return locked
       }
       const token = randomUUID()
-      const params: unknown[] = [token, config.leaseMs, candidate.id]
+      const params: unknown[] = [token, config.worker.leaseMs, candidate.id]
       const app = feedbackTextEquals('app_id', config.appId, params)
-      const claimed = await tx.execute(`UPDATE ${table.jobs} SET status = 'running', token = ?, lease_until = ${clock} + ?, attempts = attempts + 1, updated_at = ${clock} WHERE id = ? AND ${app} AND ${due} AND (kind = 'cleanup' OR attempts < ?)`, [...params, config.maxAttempts])
+      const claimed = await tx.execute(`UPDATE ${table.jobs} SET status = 'running', token = ?, lease_until = ${clock} + ?, attempts = attempts + 1, updated_at = ${clock} WHERE id = ? AND ${app} AND ${due} AND (kind = 'cleanup' OR attempts < ?)`, [...params, config.worker.maxAttempts])
       if (!claimed.success)
         return claimed
       if (claimed.data.changes) {
@@ -1447,7 +1447,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       // 已领取的尝试可能产生过外部效果。耗尽次数后保留终态供人工确认。
       const expiredParams: unknown[] = [HaiFeedbackError.OPERATION_FAILED.code, candidate.id]
       const expiredApp = feedbackTextEquals('app_id', config.appId, expiredParams)
-      const exhausted = await tx.execute(`UPDATE ${table.jobs} SET status = 'failed', token = NULL, lease_until = 0, last_error = ?, updated_at = ${clock} WHERE id = ? AND ${expiredApp} AND ${due} AND kind <> 'cleanup' AND attempts >= ?`, [...expiredParams, config.maxAttempts])
+      const exhausted = await tx.execute(`UPDATE ${table.jobs} SET status = 'failed', token = NULL, lease_until = 0, last_error = ?, updated_at = ${clock} WHERE id = ? AND ${expiredApp} AND ${due} AND kind <> 'cleanup' AND attempts >= ?`, [...expiredParams, config.worker.maxAttempts])
       if (!exhausted.success)
         return exhausted
       if (exhausted.data.changes) {
@@ -1490,7 +1490,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     const purged = result.success && !!result.data && typeof result.data === 'object' && 'purged' in result.data && result.data.purged === true
     const status = result.success
       ? receipt ? 'pending' : 'succeeded'
-      : job.kind !== 'cleanup' && Number(job.attempts) >= config.maxAttempts
+      : job.kind !== 'cleanup' && Number(job.attempts) >= config.worker.maxAttempts
         ? 'failed'
         : 'pending'
     return repo.transaction(async (tx) => {
@@ -1536,8 +1536,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!job)
         continue
       const renewal = setInterval(() => {
-        void reldb.sql.execute(`UPDATE ${table.jobs} SET lease_until = ${clock} + ? WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [config.leaseMs, job.id, job.token])
-      }, Math.max(250, Math.floor(config.leaseMs / 3)))
+        void reldb.sql.execute(`UPDATE ${table.jobs} SET lease_until = ${clock} + ? WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [config.worker.leaseMs, job.id, job.token])
+      }, Math.max(250, Math.floor(config.worker.leaseMs / 3)))
       renewal.unref()
       try {
         const result = await executeJob(job).catch(failed)
@@ -1551,7 +1551,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       }
     }
     if (Date.now() >= cleanupAfter) {
-      const expiredExports = await reldb.sql.query<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE ${app} AND kind = 'export' AND status = 'succeeded' AND created_at <= ${clock} - ? ORDER BY created_at, id LIMIT 20`, [...params, config.exportRetentionHours * 3600000])
+      const expiredExports = await reldb.sql.query<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE ${app} AND kind = 'export' AND status = 'succeeded' AND created_at <= ${clock} - ? ORDER BY created_at, id LIMIT 20`, [...params, config.retention.exportHours * 3600000])
       if (!expiredExports.success)
         return expiredExports
       for (const job of expiredExports.data) {
@@ -1686,7 +1686,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       return core.ok({ collected: count })
     }
     if (job.kind === 'webhook') {
-      if (!('url' in payload) || payload.url !== config.webhookUrl || !config.webhookUrl)
+      if (!('url' in payload) || payload.url !== config.webhook.url || !config.webhook.url)
         return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
       // 材料仍在采集中时等待，不消耗发送尝试次数；终态失败也应通知接收方。
       if (report.collectionStatus === 'collecting')
@@ -1708,8 +1708,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         ])
         if (!business.success)
           return business
-        const detailUrl = config.adminUrl
-          ? new URL(config.adminUrl)
+        const detailUrl = config.notification.adminUrl
+          ? new URL(config.notification.adminUrl)
           : undefined
         detailUrl?.searchParams.set('feedback', report.id)
         const event: FeedbackWebhookEvent = {
@@ -1728,7 +1728,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         }
         const body = JSON.stringify(event)
         const saved = await tx.execute(`UPDATE ${table.jobs} SET payload = ? WHERE id = ? AND token = ?`, [
-          JSON.stringify({ url: config.webhookUrl, body }),
+          JSON.stringify({ url: config.webhook.url, body }),
           job.id,
           job.token,
         ])
@@ -1745,17 +1745,17 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         'x-hai-feedback-event': 'feedback.created',
         'x-hai-feedback-timestamp': timestamp,
       }
-      if (config.webhookSecret)
-        headers['x-hai-feedback-signature'] = `sha256=${createHmac('sha256', config.webhookSecret).update(`${timestamp}.${frozen.data}`).digest('hex')}`
+      if (config.webhook.secret)
+        headers['x-hai-feedback-signature'] = `sha256=${createHmac('sha256', config.webhook.secret).update(`${timestamp}.${frozen.data}`).digest('hex')}`
       try {
-        const response = await fetch(config.webhookUrl, {
+        const response = await fetch(config.webhook.url, {
           method: 'POST',
           headers,
           body: frozen.data,
           redirect: 'manual',
           signal: AbortSignal.any([
             shutdown.signal,
-            AbortSignal.timeout(config.webhookTimeoutMs),
+            AbortSignal.timeout(config.webhook.timeoutMs),
           ]),
         })
         await response.body?.cancel()
@@ -1768,19 +1768,19 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       }
     }
     if (job.kind === 'notify') {
-      if (config.notificationMode === 'disabled')
+      if (config.notification.mode === 'disabled')
         return core.ok({ disabled: true })
       const recipient = 'recipient' in payload && typeof payload.recipient === 'string'
         ? payload.recipient
         : ''
-      if (config.notificationMode === 'reach' && !config.recipients.includes(recipient))
+      if (config.notification.mode === 'reach' && !config.notification.recipients.includes(recipient))
         return invalid()
       // 受理通知与补采独立；发送前以数据库租约和存活报告再次确认副作用资格。
       const live = await withLease(job, async (_tx, live) => core.ok(live))
       if (!live.success)
         return live
       const current = repo.report(live.data)
-      if (config.notificationMode === 'console') {
+      if (config.notification.mode === 'console') {
         core.logger.info('Feedback notification', {
           module: 'feedback',
           number: current.number,
@@ -1789,7 +1789,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           buildId: current.buildId,
           commit: current.commit,
           collectionStatus: current.collectionStatus,
-          ...(config.consoleContent === 'summary'
+          ...(config.notification.consoleContent === 'summary'
             ? { summary: current.summary }
             : {}),
         })
@@ -1802,8 +1802,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         partial: feedbackM('feedback_materialPartial'),
         failed: feedbackM('feedback_materialFailed'),
       }[current.collectionStatus]
-      const detailUrl = config.adminUrl
-        ? new URL(config.adminUrl)
+      const detailUrl = config.notification.adminUrl
+        ? new URL(config.notification.adminUrl)
         : undefined
       detailUrl?.searchParams.set('feedback', report.id)
       const facts = [
@@ -1816,12 +1816,12 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           ? [detailUrl.href]
           : []),
       ]
-      const isEmail = reach.config?.providers.find(provider => provider.name === config.notificationProvider)?.type === 'smtp'
+      const isEmail = reach.config?.providers.find(provider => provider.name === config.notification.provider)?.type === 'smtp'
       const body = isEmail
         ? facts.map(value => `<p>${escapeHtml(value)}</p>`).join('')
         : facts.join('\n')
       const sent = await reach.send({
-        provider: config.notificationProvider,
+        provider: config.notification.provider,
         to: recipient,
         subject: `${feedbackM('feedback_received')} ${current.number}`,
         body,

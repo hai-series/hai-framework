@@ -24,16 +24,20 @@ for (const [name, factory] of [
         expect((await reldb.ddl.createTable('hai_feedback_reports_scope_time', {
           collision: { type: 'TEXT' },
         })).success).toBe(true)
-        expect((await feedback.init({ appId: 'quota-database', notificationMode: 'disabled', workerIntervalMs: 0 })).success).toBe(false)
+        expect((await feedback.init({
+          appId: 'quota-database',
+          notification: { mode: 'disabled' },
+          worker: { intervalMs: 0 },
+        })).success).toBe(false)
         const columns = await reldb.schemaColumns('hai_feedback_reports')
         expect(columns.success && columns.data).toEqual([])
         expect((await reldb.ddl.dropTable('hai_feedback_reports_scope_time')).success).toBe(true)
       }
       expect((await feedback.init({
         appId: 'quota-database',
-        notificationMode: 'disabled',
-        workerIntervalMs: 0,
-        maxReportsPerUserDay: 1,
+        notification: { mode: 'disabled' },
+        worker: { intervalMs: 0 },
+        limits: { maxReportsPerUserDay: 1 },
       })).success).toBe(true)
     }, 180000)
     afterAll(async () => {
