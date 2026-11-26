@@ -51,16 +51,12 @@
   },
   "peerDependencies": {
     "@h-ai/ai": "workspace:*",
-    "@h-ai/feedback": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/payment": "workspace:*",
     "@h-ai/storage": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@h-ai/ai": {
-      "optional": true
-    },
-    "@h-ai/feedback": {
       "optional": true
     },
     "@h-ai/iam": {
@@ -92,7 +88,6 @@
     "@h-ai/ai": "workspace:*",
     "@h-ai/api-client": "workspace:*",
     "@h-ai/cache": "workspace:*",
-    "@h-ai/feedback": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/payment": "workspace:*",
     "@h-ai/reldb": "workspace:*",

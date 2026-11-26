@@ -1,1634 +1,283 @@
-import type { FeedbackAttachment, FeedbackEvidenceInput, FeedbackHistory, FeedbackJob, FeedbackListInput, FeedbackReport } from '@h-ai/api-contract/feedback'
-import type { HaiResult } from '@h-ai/core'
-import type { DmlOperations, DmlWithTxOperations } from '@h-ai/reldb'
-import type { FeedbackCapture } from './feedback-capture.js'
-import type { FeedbackConfig } from './feedback-config.js'
-import type { FeedbackAttachmentRow, FeedbackEvidenceRow, FeedbackJobRow, FeedbackReportRepository, FeedbackReportRow } from './feedback-repository.js'
-import type { FeedbackCollectedEvidence, FeedbackContext, FeedbackFunctions, FeedbackInitOptions, FeedbackWebhookEvent } from './feedback-types.js'
-import { Buffer } from 'node:buffer'
-import { createHash, createHmac, randomUUID } from 'node:crypto'
-import { apiContract, FeedbackAppendEvidenceInputSchema, FeedbackAttachmentInputSchema, FeedbackAttachmentSchema, FeedbackCompleteInputSchema, FeedbackEvidenceInputSchema, FeedbackEvidenceQuerySchema, FeedbackEvidenceSchema, FeedbackExportInputSchema, FeedbackHistorySchema, FeedbackJobSchema, FeedbackListInputSchema, FeedbackRetryInputSchema, FeedbackSetStatusInputSchema, FeedbackSubmitInputSchema, FeedbackUploadInputSchema } from '@h-ai/api-contract/feedback'
+import type { FeedbackAttachment, FeedbackListInput, FeedbackMessage, FeedbackReport } from '@h-ai/api-contract/feedback'
+import type { DmlWithTxOperations } from '@h-ai/reldb'
+import type { FeedbackReportRepository } from './feedback-repository.js'
+import type { FeedbackContext, FeedbackFunctions } from './feedback-types.js'
+import {
+  FeedbackAddMessageInputSchema,
+  FeedbackAttachmentQuerySchema,
+  FeedbackIdInputSchema,
+  FeedbackListInputSchema,
+  FeedbackMessageQuerySchema,
+  FeedbackSetStatusInputSchema,
+  FeedbackSubmitInputSchema,
+} from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { storage } from '@h-ai/storage'
-import { feedback } from './bundle/index.js'
-import { feedbackClockSql } from './feedback-clock.js'
-import { createFeedbackCollection } from './feedback-collection.js'
-import { feedbackClientEvidenceLimits } from './feedback-evidence-budget.js'
 import { feedbackM } from './feedback-i18n.js'
-import { feedbackTextEquals, readFeedbackJson } from './feedback-repository.js'
-import { canonicalFeedbackJson, redactFeedbackText, sanitizeFeedbackValue } from './feedback-sanitize.js'
-import { feedbackObjectPrefix } from './feedback-storage-key.js'
 import { HaiFeedbackError } from './feedback-types.js'
-import { createFeedbackWorker } from './feedback-worker.js'
 
-/**
- * 内部运行时，任务资源由模块生命周期停止。
- * @example 模块内部上下文
- * ```ts
- * async function drain(runtime: FeedbackRuntime) { await runtime.close() }
- * void drain
- * ```
- */
-export type FeedbackRuntime = Omit<FeedbackFunctions, 'init' | 'close' | 'config' | 'budget' | 'isInitialized'
-  | 'createBundle' | 'getBundleViewerFiles' | 'queryBundle' | 'readBundle' | 'summarizeBundle'> & { start: () => void, close: () => Promise<void> }
+export type FeedbackOperations = Omit<FeedbackFunctions, 'init' | 'close' | 'isInitialized' | 'config'>
 
-/**
- * 详情接口只读取任务摘要所需的列。
- * @example 模块内部上下文
- * ```ts
- * function summaryState(row: FeedbackJobSummaryRow) { return row.status }
- * ```
- */
-type FeedbackJobSummaryRow = Pick<FeedbackJobRow, 'id' | 'report_id' | 'kind' | 'status' | 'attempts'
-  | 'created_at' | 'updated_at' | 'next_run_at' | 'last_error' | 'result'>
-
-const jobSummaryColumns = 'id, report_id, kind, status, attempts, created_at, updated_at, next_run_at, last_error, result'
-
-/**
- * 导出冻结报告与附件状态，证据按同一修订号重新读取。
- * @example 模块内部上下文
- * ```ts
- * function evidenceInSnapshot(snapshot: FeedbackExportSnapshot) { return snapshot.evidenceCount }
- * ```
- */
-interface FeedbackExportSnapshot {
-  report: FeedbackReport
-  evidenceCount: number
-  attachments: FeedbackAttachmentRow[]
-  history: FeedbackHistory[]
-  maxBytes: number
-  snapshotExpiresAt: number
+function validIdentity(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 128 && value.trim().length > 0 && !value.includes('\0')
 }
 
-/** 将异常留在公共 HaiResult 边界之内；不向用户返回 SDK/SQL/凭据原文。 */
-function failed() {
-  return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
+function validContext(context: FeedbackContext) {
+  return !!context && validIdentity(context.scopeId) && validIdentity(context.userId)
 }
-function invalid() {
-  return core.err(HaiFeedbackError.INVALID_INPUT, feedbackM('feedback_invalidInput'))
+
+function permitted(context: FeedbackContext, permission: string) {
+  return context.permissions?.some(value => value === permission || value === 'feedback:*' || value === '*') ?? false
 }
-function conflict() {
-  return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+
+function canProcess(context: FeedbackContext) {
+  return permitted(context, 'feedback:read') && permitted(context, 'feedback:process')
 }
+
 function forbidden() {
   return core.err(HaiFeedbackError.FORBIDDEN, feedbackM('feedback_forbidden'))
 }
+
 function missing() {
   return core.err(HaiFeedbackError.NOT_FOUND, feedbackM('feedback_notFound'))
 }
-function limited() {
-  return core.err(HaiFeedbackError.LIMIT_EXCEEDED, feedbackM('feedback_limitExceeded'))
-}
-function hash(value: string | Uint8Array) {
-  return createHash('sha256').update(value).digest('hex')
-}
-function permitted(actor: FeedbackContext, permission: string) {
-  return actor.permissions?.includes('feedback:*') || actor.permissions?.includes(permission)
-}
-function validActor(actor: FeedbackContext) {
-  return !!actor && typeof actor.scopeId === 'string' && actor.scopeId.length > 0 && actor.scopeId.length <= 128 && typeof actor.userId === 'string' && actor.userId.length > 0 && actor.userId.length <= 128
-}
-function escapeHtml(value: string) {
-  return value.replace(/[&<>"']/g, character => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    '\'': '&#39;',
-  })[character] ?? character)
+
+function invalid() {
+  return core.err(HaiFeedbackError.INVALID_INPUT, feedbackM('feedback_invalidInput'))
 }
 
-/**
- * 服务端操作编排，数据表/存储/通知均使用依赖的公开入口。
- * @example 模块内部上下文
- * ```ts
- * function createRuntime(repository: FeedbackReportRepository, config: FeedbackConfig, capture: FeedbackCapture) {
- *   return createFeedbackOperations(repository, config, capture)
- * }
- * void createRuntime
- * ```
- */
-export function createFeedbackOperations(repo: FeedbackReportRepository, config: FeedbackConfig, capture: FeedbackCapture, options: FeedbackInitOptions = {}): FeedbackRuntime {
-  const budget = apiContract.resolveFeedbackBudget(config.limits)
-  const clientEvidence = feedbackClientEvidenceLimits(budget)
-  const table = repo.tables
-  const clock = feedbackClockSql()
-  const collection = createFeedbackCollection(repo)
-  const worker = createFeedbackWorker(repo, {
-    appId: config.appId,
-    intervalMs: config.worker.intervalMs,
-    leaseMs: config.worker.leaseMs,
-    maxAttempts: config.worker.maxAttempts,
-    notificationsEnabled: config.notification.mode !== 'disabled',
-    exportRetentionHours: config.retention.exportHours,
-    scopeQuotaId,
-    collection,
-    executeJob,
-  })
-  const { withLease } = worker
-  const collectEvidence = options.collectEvidence
+function conflict() {
+  return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+}
 
-  function quotaExceeded() {
-    return core.err(HaiFeedbackError.QUOTA_EXCEEDED, feedbackM('feedback_quotaExceeded'))
-  }
-  function scopeQuotaId(scopeId: string) {
-    return hash(JSON.stringify([config.appId, scopeId, 'storage']))
-  }
+function activityTime(updatedAt: number) {
+  return Math.max(Date.now(), updatedAt + 1)
+}
 
-  /** 同一数据库事务先预留最大材料及导出容量，避免多节点先检查后写穿透。 */
-  async function reserveQuota(tx: DmlWithTxOperations, actor: FeedbackContext, reportId: string) {
-    const time = await tx.get<{ now: number }>(`SELECT ${clock} AS now`)
-    if (!time.success)
-      return time
-    const now = Number(time.data?.now)
-    if (!Number.isFinite(now))
-      return failed()
-    const day = Math.floor(now / 86400000) * 86400000
-    const bytes = budget.maxTotalBytes * (config.limits.maxExportsPerReport + 1)
-    const buckets = [
-      {
-        id: scopeQuotaId(actor.scopeId),
-        period: 0,
-        maxReports: Number.MAX_SAFE_INTEGER,
-        maxBytes: config.limits.maxStoredBytesPerScope,
-      },
-      {
-        id: hash(JSON.stringify([
-          config.appId,
-          actor.scopeId,
-          actor.userId,
-          day,
-        ])),
-        period: day,
-        maxReports: config.limits.maxReportsPerUserDay,
-        maxBytes: config.limits.maxBytesPerUserDay,
-      },
-    ]
-    for (const bucket of buckets) {
-      const suffix = reldb.config?.type === 'mysql'
-        ? 'ON DUPLICATE KEY UPDATE id = id'
-        : 'ON CONFLICT (id) DO NOTHING'
-      const inserted = await tx.execute(`INSERT INTO ${table.quotas} (id, app_id, scope_id, user_id, period, report_count, reserved_bytes, updated_at) VALUES (?, ?, ?, ?, ?, 0, 0, ?) ${suffix}`, [
-        bucket.id,
-        config.appId,
-        actor.scopeId,
-        bucket.period === 0
-          ? ''
-          : actor.userId,
-        bucket.period,
-        now,
-      ])
-      if (!inserted.success)
-        return inserted
-      const reserved = await tx.execute(`UPDATE ${table.quotas} SET report_count = report_count + 1, reserved_bytes = reserved_bytes + ?, updated_at = ? WHERE id = ? AND report_count < ? AND reserved_bytes <= ?`, [
-        bytes,
-        now,
-        bucket.id,
-        bucket.maxReports,
-        bucket.maxBytes - bytes,
-      ])
-      if (!reserved.success)
-        return reserved
-      if (!reserved.data.changes)
-        return quotaExceeded()
-    }
-    return tx.execute(`INSERT INTO ${table.quotas} (id, app_id, scope_id, user_id, period, report_count, reserved_bytes, report_bytes, export_limit, updated_at) VALUES (?, ?, ?, ?, -1, 1, ?, ?, ?, ?)`, [
-      reportId,
-      config.appId,
-      actor.scopeId,
-      actor.userId,
-      bytes,
-      budget.maxTotalBytes,
-      config.limits.maxExportsPerReport,
-      now,
-    ])
-  }
-
-  async function access(id: string, actor: FeedbackContext, permission?: string, sql: DmlOperations = reldb.sql): Promise<HaiResult<FeedbackReportRow>> {
-    if (!validActor(actor))
+export function createFeedbackOperations(repo: FeedbackReportRepository, appId: string): FeedbackOperations {
+  async function access(id: string, context: FeedbackContext, tx?: DmlWithTxOperations) {
+    if (!validContext(context))
       return forbidden()
-    const result = await repo.find(id, actor.scopeId, sql)
+    const result = await repo.find(appId, context.scopeId, id, tx)
     if (!result.success)
       return result
-    if (!result.data || result.data.id !== id || result.data.scope_id !== actor.scopeId || result.data.app_id !== config.appId || Number(result.data.deleting))
+    if (!result.data)
       return missing()
-    if (permission
-      ? !permitted(actor, permission)
-      : (result.data.user_id !== actor.userId && !permitted(actor, 'feedback:read'))) {
+    if (result.data.user_id !== context.userId && !permitted(context, 'feedback:read'))
       return forbidden()
-    }
-    return core.ok(result.data)
+    return core.ok(repo.report(result.data))
   }
 
-  async function accessWrite(id: string, actor: FeedbackContext, sql: DmlOperations = reldb.sql) {
-    const result = await access(id, actor, permitted(actor, 'feedback:process')
-      ? 'feedback:process'
-      : undefined, sql)
-    if (!result.success)
-      return result
-    return result.data.user_id === actor.userId || permitted(actor, 'feedback:process')
-      ? result
-      : forbidden()
-  }
-
-  async function insertJob(tx: DmlOperations, report: FeedbackReport, kind: FeedbackJobRow['kind'], suffix: string, payload: unknown, nextRun?: number) {
-    const id = hash(`${report.id}:${kind}:${suffix}`)
-    const previous = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [id])
-    if (!previous.success)
-      return previous
-    if (previous.data)
-      return core.ok(id)
-    const inserted = await tx.execute(`INSERT INTO ${table.jobs} (id, app_id, snapshot_revision, snapshot_version, report_id, scope_id, kind, status, token, lease_until, attempts, next_run_at, created_at, updated_at, last_error, payload, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, ${clock}), ${clock}, ${clock}, ?, ?, ?)`, [
-      id,
-      config.appId,
-      kind === 'export'
-        ? report.evidenceRevision
-        : null,
-      kind === 'export'
-        ? report.version
-        : null,
-      report.id,
-      report.scopeId,
-      kind,
-      'pending',
-      null,
-      0,
-      0,
-      nextRun ?? null,
-      null,
-      JSON.stringify(payload),
-      null,
-    ])
-    return inserted.success
-      ? core.ok(id)
-      : inserted
-  }
-
-  function jobData(row: FeedbackJobSummaryRow): FeedbackJob {
-    const result = readFeedbackJson(row.result)
-    return FeedbackJobSchema.parse({
-      id: row.id,
-      feedbackId: row.report_id,
-      type: row.kind,
-      status: row.status,
-      attempts: Number(row.attempts),
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at),
-      nextRunAt: Number(row.next_run_at),
-      lastError: row.last_error ?? undefined,
-      result: result && typeof result === 'object'
-        ? { available: true }
-        : undefined,
-    })
-  }
-
-  function attachmentData(row: FeedbackAttachmentRow): FeedbackAttachment {
-    return FeedbackAttachmentSchema.parse({
-      ...FeedbackAttachmentSchema.parse(readFeedbackJson(row.payload)),
-      status: row.status,
-    })
-  }
-
-  async function appendInside(tx: DmlWithTxOperations, row: FeedbackReportRow, events: FeedbackEvidenceInput[], mode: 'client' | 'server' | 'capture' = 'client', reserveBusiness = false) {
-    const acknowledged: string[] = []
-    const additions: Array<{ key: string, event: FeedbackEvidenceInput, bytes: number }> = []
-    let evidenceBytes = Number(row.evidence_bytes)
-    let truncated = false
-    const eventLimit = budget.maxEvidenceCount - (reserveBusiness ? 1 : 0)
-    const byteLimit = budget.maxEvidenceBytes - (reserveBusiness
-      ? Math.min(16 * 1024, Math.floor((budget.maxEvidenceBytes - clientEvidence.bytes) / 2))
-      : 0)
-    for (const input of events) {
-      if (mode === 'client' && input.source.startsWith('server:'))
-        return invalid()
-      const event = FeedbackEvidenceInputSchema.parse(sanitizeFeedbackValue(input))
-      const key = hash(`${row.id}:${event.source}:${event.sequence}`)
-      const previous = await tx.get<FeedbackEvidenceRow>(`SELECT * FROM ${table.evidence} WHERE id = ?`, [key])
-      if (!previous.success)
-        return previous
-      if (previous.data) {
-        // 旧任务可能已经保存日志，再次关联到错误时保留第一次确认的记录。
-        if (mode !== 'capture' && canonicalFeedbackJson(readFeedbackJson(previous.data.payload)) !== canonicalFeedbackJson(event))
-          return conflict()
-      }
-      else {
-        const bytes = Buffer.byteLength(JSON.stringify(event))
-        if (bytes > 1024 * 1024)
-          return limited()
-        const staged = additions.find(item => item.key === key)
-        if (staged && canonicalFeedbackJson(staged.event) !== canonicalFeedbackJson(event))
-          return conflict()
-        if (!staged) {
-          if (mode === 'capture' && (Number(row.evidence_count) + additions.length + 1 > eventLimit || evidenceBytes + bytes > byteLimit)) {
-            truncated = true
-            continue
-          }
-          additions.push({ key, event, bytes })
-          evidenceBytes += bytes
-        }
-      }
-      acknowledged.push(event.id)
-    }
-    if (!additions.length) {
-      return core.ok({
-        acknowledged,
-        evidenceRevision: Number(row.revision),
-        truncated,
-      })
-    }
-    const incomingClient = additions.filter(item => !item.event.source.startsWith('server:'))
-    if (incomingClient.length) {
-      const prefix = reldb.config?.type === 'mysql'
-        ? 'CAST(LEFT(source, 7) AS BINARY) <> CAST(\'server:\' AS BINARY)'
-        : 'SUBSTR(source, 1, 7) <> \'server:\''
-      const stored = await tx.get<{ count: number, bytes: number }>(`SELECT COUNT(*) AS count, COALESCE(SUM(bytes), 0) AS bytes FROM ${table.evidence} WHERE report_id = ? AND ${prefix}`, [row.id])
-      if (!stored.success)
-        return stored
-      if (Number(stored.data?.count ?? 0) + incomingClient.length > clientEvidence.events || Number(stored.data?.bytes ?? 0) + incomingClient.reduce((total, item) => total + item.bytes, 0) > clientEvidence.bytes)
-        return limited()
-    }
-    const bytes = additions.reduce((total, item) => total + item.bytes, 0)
-    const revision = Number(row.revision) + 1
-    const params: unknown[] = [
-      additions.length,
-      bytes,
-      revision,
-      Date.now(),
-    ]
-    const identity = `${feedbackTextEquals('id', row.id, params)} AND ${feedbackTextEquals('scope_id', row.scope_id, params)}`
-    params.push(row.revision, additions.length, budget.maxEvidenceCount, bytes, budget.maxEvidenceBytes)
-    const changed = await tx.execute(`UPDATE ${table.reports} SET evidence_count = evidence_count + ?, evidence_bytes = evidence_bytes + ?, revision = ?, updated_at = ? WHERE ${identity} AND revision = ? AND deleting = 0 AND evidence_count + ? <= ? AND evidence_bytes + ? <= ?`, params)
-    if (!changed.success)
-      return changed
-    if (!changed.data.changes) {
-      return Number(row.evidence_count) + additions.length > budget.maxEvidenceCount || Number(row.evidence_bytes) + bytes > budget.maxEvidenceBytes
-        ? limited()
-        : conflict()
-    }
-    for (const { key, event, bytes: itemBytes } of additions) {
-      const inserted = await tx.execute(`INSERT INTO ${table.evidence} (id, report_id, scope_id, user_id, app_id, source, sequence, kind, timestamp, request_id, error_id, revision, bytes, expires_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-        key,
-        row.id,
-        row.scope_id,
-        row.user_id,
-        row.app_id,
-        event.source,
-        event.sequence,
-        event.kind,
-        event.timestamp,
-        event.requestId ?? null,
-        event.errorId ?? null,
-        revision,
-        itemBytes,
-        row.expires_at,
-        JSON.stringify(event),
-      ])
-      if (!inserted.success)
-        return inserted
-    }
-    return core.ok({ acknowledged, evidenceRevision: revision, truncated })
-  }
-
-  async function attachments(id: string, sql: DmlOperations = reldb.sql) {
-    return sql.query<FeedbackAttachmentRow>(`SELECT * FROM ${table.attachments} WHERE report_id = ? ORDER BY id`, [id])
-  }
-  async function history(id: string, sql: DmlOperations = reldb.sql) {
-    const result = await sql.query<{ payload: unknown }>(`SELECT payload FROM ${table.history} WHERE report_id = ? ORDER BY id`, [id])
-    return result.success
-      ? core.ok(result.data.map(row => FeedbackHistorySchema.parse(readFeedbackJson(row.payload))))
-      : result
-  }
-  async function evidence(id: string, revision: number, sql: DmlOperations = reldb.sql) {
-    const result = await sql.query<FeedbackEvidenceRow>(`SELECT * FROM ${table.evidence} WHERE report_id = ? AND revision <= ? ORDER BY timestamp, source, sequence, id`, [id, revision])
-    return result.success
-      ? core.ok(result.data.map(row => FeedbackEvidenceSchema.parse({
-          ...FeedbackEvidenceInputSchema.parse(readFeedbackJson(row.payload)),
-          feedbackId: id,
-          revision: Number(row.revision),
-        })))
-      : result
-  }
-
-  async function listReports(input: FeedbackListInput, actor: FeedbackContext, mine: boolean) {
-    if (!validActor(actor) || (!mine && !permitted(actor, 'feedback:read')))
+  async function listReports(input: FeedbackListInput, context: FeedbackContext, mine: boolean) {
+    if (!validContext(context) || (!mine && !permitted(context, 'feedback:read')))
       return forbidden()
-    const parsed = FeedbackListInputSchema.safeParse(input)
-    if (!parsed.success)
+    const query = FeedbackListInputSchema.safeParse(input)
+    if (!query.success)
       return invalid()
-    const query = parsed.data
-    if (query.from !== undefined && query.to !== undefined && query.from > query.to)
-      return invalid()
-    const params: unknown[] = []
-    const conditions = [
-      feedbackTextEquals('scope_id', actor.scopeId, params),
-      feedbackTextEquals('app_id', config.appId, params),
-      'deleting = 0',
-      `expires_at > ${clock}`,
-    ]
-    if (mine)
-      conditions.push(feedbackTextEquals('user_id', actor.userId, params))
-    if (query.category !== undefined) {
-      // 类别在正式报告 JSON 已存在，旧记录也能匹配。同一类别值跨数据库按原文匹配。
-      const type = reldb.config?.type
-      const filter = type === 'postgresql'
-        ? 'jsonb_typeof(payload::jsonb -> \'category\') = \'string\' AND payload::jsonb ->> \'category\' = ?'
-        : type === 'mysql'
-          ? 'JSON_TYPE(JSON_EXTRACT(payload, \'$.category\')) = \'STRING\' AND CAST(JSON_UNQUOTE(JSON_EXTRACT(payload, \'$.category\')) AS BINARY) = CAST(? AS BINARY)'
-          : 'json_type(payload, \'$.category\') = \'text\' AND json_extract(payload, \'$.category\') = ?'
-      conditions.push(filter)
-      params.push(query.category)
-    }
-    for (const [column, value] of [
-      ['status', query.status],
-      ['collection_status', query.collectionStatus],
-      ['notification_status', query.notificationStatus],
-      ['app_id', query.appId],
-    ] as const) {
-      if (value) {
-        if (column === 'app_id') {
-          conditions.push(feedbackTextEquals(column, value, params))
-        }
-        else {
-          conditions.push(`${column} = ?`)
-          params.push(value)
-        }
-      }
-    }
-    if (query.from !== undefined) {
-      conditions.push('created_at >= ?')
-      params.push(query.from)
-    }
-    if (query.to !== undefined) {
-      conditions.push('created_at <= ?')
-      params.push(query.to)
-    }
-    // 用独立的短摘要列执行跨数据库筛选，不扫描诊断 JSON 大字段。
-    if (query.search) {
-      conditions.push('(number LIKE ? ESCAPE \'!\' OR summary LIKE ? ESCAPE \'!\')')
-      const search = `%${query.search.replaceAll('!', '!!').replaceAll('%', '!%').replaceAll('_', '!_')}%`
-      params.push(search, search)
-    }
-    if (query.appVersion) {
-      conditions.push('app_version = ?')
-      params.push(query.appVersion)
-    }
-    const direction = query.sortDirection === 'asc'
-      ? 'ASC'
-      : 'DESC'
-    const page = await reldb.sql.queryPage<FeedbackReportRow>({
-      sql: `SELECT * FROM ${table.reports} WHERE ${conditions.join(' AND ')} ORDER BY created_at ${direction}, id ${direction}`,
-      params,
-      pagination: { page: query.page, pageSize: query.pageSize },
-    })
-    return page.success
+    const result = await repo.list(appId, context.scopeId, query.data, mine ? context.userId : undefined)
+    return result.success
       ? core.ok({
-          ...page.data,
-          items: page.data.items.map(row => repo.report(row)),
+          ...result.data,
+          items: result.data.items.map(row => repo.report(row)),
         })
-      : page
+      : result
   }
 
-  const operations: FeedbackRuntime = {
-    start: worker.start,
-    close: worker.close,
-
-    async submit(input, actor) {
-      if (!validActor(actor))
-        return forbidden()
-      if (actor.permissions !== undefined && !permitted(actor, 'feedback:create'))
+  return {
+    async submit(input, context) {
+      if (!validContext(context) || !permitted(context, 'feedback:create'))
         return forbidden()
       const parsed = FeedbackSubmitInputSchema.safeParse(input)
-      if (!parsed.success || parsed.data.appId !== config.appId)
-        return invalid()
-      const sanitized = FeedbackSubmitInputSchema.parse(sanitizeFeedbackValue(parsed.data))
-      if (sanitized.evidence?.some(event => event.source.startsWith('server:')))
-        return invalid()
-      const submissionKey = hash(JSON.stringify([
-        actor.scopeId,
-        actor.userId,
-        config.appId,
-        sanitized.submissionId,
-      ]))
-      const digest = hash(canonicalFeedbackJson(sanitized))
-      const bySubmission = `SELECT *, CASE WHEN deleting = 0 AND expires_at > ${clock} THEN 1 ELSE 0 END AS live FROM ${table.reports} WHERE submission_key = ?`
-      const existing = await reldb.sql.get<FeedbackReportRow & { live: number }>(bySubmission, [submissionKey])
-      if (!existing.success)
-        return existing
-      if (existing.data && (existing.data.scope_id !== actor.scopeId || existing.data.user_id !== actor.userId || existing.data.app_id !== config.appId))
-        return conflict()
-      if (existing.data && !Number(existing.data.live))
-        return missing()
-      if (existing.data) {
-        return existing.data.submission_hash === digest
-          ? core.ok(repo.report(existing.data))
-          : conflict()
-      }
-      const time = await reldb.sql.get<{ now: number }>(`SELECT ${clock} AS now`)
-      if (!time.success)
-        return time
-      const now = Number(time.data?.now)
-      if (!Number.isFinite(now))
-        return failed()
-      const id = `fb_${randomUUID()}`
-      const row: FeedbackReportRow = {
-        id,
-        scope_id: actor.scopeId,
-        user_id: actor.userId,
-        app_id: config.appId,
-        number: `FB-${new Date(now).toISOString().slice(0, 10).replaceAll('-', '')}-${id.slice(-8).toUpperCase()}`,
-        app_version: sanitized.appVersion ?? config.build.appVersion ?? null,
-        summary: (sanitized.description?.trim() || sanitized.url || feedbackM('feedback_defaultSummary')).slice(0, 200),
-        submission_key: submissionKey,
-        submission_hash: digest,
-        status: 'pending',
-        collection_status: 'collecting',
-        notification_status: config.notification.mode === 'disabled'
-          ? 'disabled'
-          : 'pending',
-        created_at: now,
-        updated_at: now,
-        version: 1,
-        revision: 1,
-        evidence_count: 0,
-        evidence_bytes: 0,
-        collect_deadline: now + config.collection.timeoutMs,
-        expires_at: now + config.retention.days * 86400000,
-        payload: {
-          description: sanitized.description,
-          category: sanitized.category,
-          contact: sanitized.contact,
-          url: sanitized.url,
-          buildId: sanitized.buildId ?? config.build.buildId,
-          commit: sanitized.commit ?? config.build.commit,
-        },
-        deleting: 0,
-      }
-      const report = repo.report(row)
-      const result = await repo.transaction(async (tx) => {
-        const inserted = await repo.create({ ...row }, tx)
-        if (!inserted.success)
-          return inserted
-        const reservation = await reserveQuota(tx, actor, id)
-        if (!reservation.success)
-          return reservation
-        // 受理与环境证据共同提交；环境写入失败时同一 submissionId 可安全重试。
-        let environment = capture.environment()
-        const environmentBudget = budget.maxEvidenceBytes - clientEvidence.bytes
-        const fitsEnvironmentBudget = (item: FeedbackEvidenceInput) => Buffer.byteLength(JSON.stringify(sanitizeFeedbackValue(item))) <= environmentBudget
-        if (!fitsEnvironmentBudget(environment)) {
-          environment = {
-            ...environment,
-            data: { appId: config.appId, truncated: true },
-          }
-          // 应用标识也可能耗尽最小预算，完整标识已保存在报告上。
-          if (!fitsEnvironmentBudget(environment))
-            environment.data = { truncated: true }
-        }
-        const initial = await appendInside(tx, row, [
-          ...sanitized.evidence ?? [],
-          environment,
-        ], 'server')
-        if (!initial.success)
-          return initial
-        if ((sanitized.attachments ?? []).reduce((total, file) => total + file.size, 0) > budget.maxAttachmentsBytes)
-          return limited()
-        for (const attachment of sanitized.attachments ?? []) {
-          if (attachment.id.startsWith('server:') || attachment.size > budget.maxAttachmentBytes || !allowedContentType(attachment.contentType))
-            return invalid()
-          const attachmentId = hash(`${id}:${attachment.id}`)
-          const data: FeedbackAttachment = { ...attachment, feedbackId: id, status: 'pending' }
-          const saved = await tx.execute(`INSERT INTO ${table.attachments} (id, client_id, report_id, scope_id, object_key, status, size, checksum, updated_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-            attachmentId,
-            attachment.id,
-            id,
-            actor.scopeId,
-            `${feedbackObjectPrefix(actor.scopeId, id)}${attachmentId}`,
-            'pending',
-            attachment.size,
-            attachment.checksum,
-            now,
-            JSON.stringify(data),
-          ])
-          if (!saved.success)
-            return saved
-        }
-        for (const recipient of config.notification.mode === 'disabled'
-          ? []
-          : config.notification.mode === 'console'
-            ? ['console']
-            : config.notification.recipients) {
-          const saved = await insertJob(tx, report, 'notify', recipient, { recipient }, row.collect_deadline)
-          if (!saved.success)
-            return saved
-        }
-        if (config.webhook.url) {
-          const webhook = await insertJob(tx, report, 'webhook', 'created', { url: config.webhook.url }, row.collect_deadline)
-          if (!webhook.success)
-            return webhook
-        }
-        const collected = await insertJob(tx, report, 'collect', 'initial', { anchor: sanitized.anchor?.timestamp ?? now, businessEvidence: !!collectEvidence }, row.collect_deadline)
-        if (!collected.success)
-          return collected
-        const cleanup = await insertJob(tx, report, 'cleanup', 'expiry', {}, row.expires_at)
-        if (!cleanup.success)
-          return cleanup
-        return core.ok({ ...report, evidenceRevision: initial.data.evidenceRevision })
-      })
-      if (!result.success) {
-        const duplicate = await reldb.sql.get<FeedbackReportRow & { live: number }>(bySubmission, [submissionKey])
-        if (!duplicate.success || !duplicate.data)
-          return result
-        if (duplicate.data.scope_id !== actor.scopeId || duplicate.data.user_id !== actor.userId || duplicate.data.app_id !== config.appId)
-          return conflict()
-        if (!Number(duplicate.data.live))
-          return missing()
-        return duplicate.data.submission_hash === digest
-          ? core.ok(repo.report(duplicate.data))
-          : conflict()
-      }
-      worker.wake()
-      const current = await repo.find(id, actor.scopeId)
-      return current.success && current.data
-        ? core.ok(repo.report(current.data))
-        : result
-    },
-
-    list: (input, actor) => listReports(input, actor, false),
-    listMine: (input, actor) => listReports(input, actor, true),
-
-    async get(id, actor) {
-      const report = await access(id, actor)
-      if (!report.success)
-        return report
-      const files = await attachments(id)
-      if (!files.success)
-        return files
-      const changes = await history(id)
-      if (!changes.success)
-        return changes
-      const jobs = await reldb.sql.query<FeedbackJobSummaryRow>(`SELECT ${jobSummaryColumns} FROM ${table.jobs} WHERE report_id = ? ORDER BY created_at, id`, [id])
-      return jobs.success
-        ? core.ok({
-            report: repo.report(report.data),
-            attachments: files.data.map(attachmentData),
-            history: changes.data,
-            jobs: jobs.data.map(jobData),
-          })
-        : jobs
-    },
-
-    async getEvidence(input, actor) {
-      const parsed = FeedbackEvidenceQuerySchema.safeParse(input)
       if (!parsed.success)
         return invalid()
-      const accessResult = await access(parsed.data.id, actor)
-      if (!accessResult.success)
-        return accessResult
-      const query = parsed.data
-      const params: unknown[] = []
-      const conditions = [
-        feedbackTextEquals('report_id', query.id, params),
-        feedbackTextEquals('scope_id', actor.scopeId, params),
-      ]
-      for (const [column, value] of [
-        ['source', query.source],
-        ['kind', query.kind],
-        ['request_id', query.requestId],
-      ] as const) {
-        if (value) {
-          if (column === 'kind') {
-            conditions.push(`${column} = ?`)
-            params.push(value)
-          }
-          else {
-            conditions.push(feedbackTextEquals(column, value, params))
-          }
-        }
+      const { id, body, attachments = [] } = parsed.data
+      const saved = await repo.find(appId, context.scopeId, id)
+      if (!saved.success)
+        return saved
+      if (saved.data) {
+        return saved.data.user_id === context.userId
+          ? core.ok(repo.report(saved.data))
+          : conflict()
       }
-      if (query.errorId) {
-        const anchorParams: unknown[] = []
-        const anchorIdentity = `${feedbackTextEquals('report_id', query.id, anchorParams)} AND ${feedbackTextEquals('error_id', query.errorId, anchorParams)}`
-        const anchor = await reldb.sql.get<FeedbackEvidenceRow>(`SELECT * FROM ${table.evidence} WHERE ${anchorIdentity} AND kind IN ('error', 'request') ORDER BY CASE WHEN kind = 'error' THEN 0 ELSE 1 END, timestamp, id`, anchorParams)
-        if (!anchor.success)
-          return anchor
-        if (!anchor.data) {
-          return core.ok({
-            items: [],
-            total: 0,
-            page: query.page ?? 1,
-            pageSize: query.pageSize ?? 20,
-          })
-        }
-        const contextParams: unknown[] = []
-        const contextIdentity = `${feedbackTextEquals('report_id', query.id, contextParams)} AND ${feedbackTextEquals('source', anchor.data.source, contextParams)}`
-        const request = anchor.data.request_id
-          ? feedbackTextEquals('request_id', anchor.data.request_id, contextParams)
-          : 'request_id IS NULL'
-        const before = await reldb.sql.query<{ id: string }>(`SELECT id FROM ${table.evidence} WHERE ${contextIdentity} AND ${request} AND kind IN ('log', 'error') AND sequence < ? ORDER BY sequence DESC LIMIT 100`, [...contextParams, anchor.data.sequence])
-        if (!before.success)
-          return before
-        const after = await reldb.sql.query<{ id: string }>(`SELECT id FROM ${table.evidence} WHERE ${contextIdentity} AND ${request} AND kind IN ('log', 'error') AND sequence > ? ORDER BY sequence ASC LIMIT 100`, [...contextParams, anchor.data.sequence])
-        if (!after.success)
-          return after
-        const ids = [
-          anchor.data,
-          ...before.data,
-          ...after.data,
-        ].map(row => row.id)
-        conditions.push(`id IN (${ids.map(() => '?').join(',')})`)
-        params.push(...ids)
+
+      const time = Date.now()
+      const report = {
+        id,
+        app_id: appId,
+        scope_id: context.scopeId,
+        user_id: context.userId,
+        body,
+        status: 'pending' as const,
+        created_at: time,
+        updated_at: time,
       }
-      if (query.from !== undefined) {
-        conditions.push('timestamp >= ?')
-        params.push(query.from)
-      }
-      if (query.to !== undefined) {
-        conditions.push('timestamp <= ?')
-        params.push(query.to)
-      }
-      const page = await reldb.sql.queryPage<FeedbackEvidenceRow>({
-        sql: `SELECT * FROM ${table.evidence} WHERE ${conditions.join(' AND ')} ORDER BY timestamp, source, sequence`,
-        params,
-        pagination: { page: query.page, pageSize: query.pageSize },
+      const stored = await reldb.tx.wrapResult(async (tx) => {
+        const created = await repo.create(report, tx)
+        if (!created.success)
+          return created
+        const files = await repo.addFiles(id, null, attachments, tx)
+        return files.success
+          ? core.ok(repo.report(report))
+          : files
       })
-      return page.success
-        ? core.ok({
-            ...page.data,
-            items: page.data.items.map(row => FeedbackEvidenceSchema.parse({
-              ...FeedbackEvidenceInputSchema.parse(readFeedbackJson(row.payload)),
-              feedbackId: query.id,
-              revision: Number(row.revision),
-            })),
-          })
-        : page
+      if (stored.success)
+        return stored
+
+      // 同一个 UUID 的并发请求可能已经写入，读回该作者已保存的记录。
+      const concurrent = await repo.find(appId, context.scopeId, id)
+      if (concurrent.success && concurrent.data) {
+        return concurrent.data.user_id === context.userId
+          ? core.ok(repo.report(concurrent.data))
+          : conflict()
+      }
+      return stored
     },
 
-    async setStatus(input, actor) {
+    list(input, context) {
+      return listReports(input, context, false)
+    },
+
+    listMine(input, context) {
+      return listReports(input, context, true)
+    },
+
+    async get(id, context) {
+      const parsed = FeedbackIdInputSchema.safeParse({ id })
+      if (!parsed.success)
+        return invalid()
+      const report = await access(parsed.data.id, context)
+      if (!report.success)
+        return report
+      const files = await repo.files(report.data.id, null)
+      return files.success
+        ? core.ok({
+            report: report.data,
+            attachments: files.data.map(({ file }) => file),
+          })
+        : files
+    },
+
+    async listMessages(input, context) {
+      const query = FeedbackMessageQuerySchema.safeParse(input)
+      if (!query.success)
+        return invalid()
+      const report = await access(query.data.id, context)
+      if (!report.success)
+        return report
+      const page = await repo.listMessages(query.data)
+      if (!page.success)
+        return page
+      if (!page.data.items.length)
+        return core.ok({ ...page.data, items: [] })
+      const files = await repo.files(report.data.id, page.data.items.map(item => item.id))
+      if (!files.success)
+        return files
+      const grouped = new Map<string, FeedbackAttachment[]>()
+      for (const { messageId, file } of files.data) {
+        if (!messageId)
+          continue
+        const existing = grouped.get(messageId)
+        if (existing)
+          existing.push(file)
+        else
+          grouped.set(messageId, [file])
+      }
+      return core.ok({
+        ...page.data,
+        items: page.data.items.map(item => repo.message(item, grouped.get(item.id) ?? [])),
+      })
+    },
+
+    async addMessage(input, context) {
+      const parsed = FeedbackAddMessageInputSchema.safeParse(input)
+      if (!parsed.success)
+        return invalid()
+      const message = parsed.data
+      return reldb.tx.wrapResult(async (tx) => {
+        const report = await access(message.id, context, tx)
+        if (!report.success)
+          return report
+        const isAuthor = report.data.userId === context.userId
+        const requestsInfo = message.kind === 'request_info'
+        if ((requestsInfo || !isAuthor) && !canProcess(context))
+          return forbidden()
+        const role: FeedbackMessage['authorRole'] = isAuthor && !requestsInfo
+          ? 'author'
+          : 'staff'
+
+        const existing = await repo.findMessage(message.messageId, tx)
+        if (!existing.success)
+          return existing
+        if (existing.data) {
+          if (existing.data.report_id !== message.id || existing.data.author_id !== context.userId || existing.data.kind !== message.kind)
+            return conflict()
+          const files = await repo.files(message.id, [message.messageId], tx)
+          return files.success
+            ? core.ok(repo.message(existing.data, files.data.map(({ file }) => file)))
+            : files
+        }
+
+        const now = activityTime(report.data.updatedAt)
+        const saved = await repo.addMessage(message, context.userId, role, now, tx)
+        if (!saved.success)
+          return saved
+        const files = await repo.addFiles(message.id, message.messageId, message.attachments ?? [], tx)
+        if (!files.success)
+          return files
+        let status: FeedbackReport['status'] = report.data.status
+        if (requestsInfo)
+          status = 'awaiting_user'
+        else if (isAuthor && status === 'awaiting_user')
+          status = 'pending'
+        const updated = await repo.updateActivity(message.id, status, now, tx)
+        if (!updated.success)
+          return updated
+        return core.ok({
+          id: message.messageId,
+          reportId: message.id,
+          authorId: context.userId,
+          authorRole: role,
+          kind: message.kind,
+          body: message.body,
+          createdAt: now,
+          attachments: files.data,
+        })
+      })
+    },
+
+    async setStatus(input, context) {
+      if (!validContext(context) || !canProcess(context))
+        return forbidden()
       const parsed = FeedbackSetStatusInputSchema.safeParse(input)
       if (!parsed.success)
         return invalid()
-      return repo.transaction(async (tx) => {
-        const row = await access(input.id, actor, input.status === 'handled'
-          ? 'feedback:process'
-          : 'feedback:reopen', tx)
-        if (!row.success)
-          return row
-        if (Number(row.data.version) !== parsed.data.expectedVersion)
-          return conflict()
-        if (row.data.status === parsed.data.status)
-          return core.ok(repo.report(row.data))
-        const now = Date.now()
-        const params: unknown[] = [parsed.data.status, now]
-        const identity = `${feedbackTextEquals('id', input.id, params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
-        params.push(parsed.data.expectedVersion)
-        const updated = await tx.execute(`UPDATE ${table.reports} SET status = ?, version = version + 1, updated_at = ? WHERE ${identity} AND version = ?`, params)
-        if (!updated.success)
-          return updated
-        if (!updated.data.changes)
-          return conflict()
-        const change: FeedbackHistory = {
-          id: randomUUID(),
-          feedbackId: input.id,
-          userId: actor.userId,
-          from: repo.report(row.data).status,
-          to: parsed.data.status,
-          timestamp: now,
-          note: parsed.data.note
-            ? redactFeedbackText(parsed.data.note)
-            : undefined,
-        }
-        const previousHistory = await history(input.id, tx)
-        if (!previousHistory.success)
-          return previousHistory
-        if (Buffer.byteLength(JSON.stringify([...previousHistory.data, change])) > 256 * 1024)
-          return limited()
-        const saved = await tx.execute(`INSERT INTO ${table.history} (id, report_id, payload) VALUES (?, ?, ?)`, [
-          change.id,
-          input.id,
-          JSON.stringify(change),
-        ])
-        return saved.success
-          ? core.ok({
-              ...repo.report(row.data),
-              status: parsed.data.status,
-              version: parsed.data.expectedVersion + 1,
-              updatedAt: now,
-            })
-          : saved
-      })
-    },
-
-    async appendEvidence(input, actor) {
-      const parsed = FeedbackAppendEvidenceInputSchema.safeParse(input)
-      if (!parsed.success)
-        return invalid()
-      return repo.transaction(async (tx) => {
-        const row = await accessWrite(input.id, actor, tx)
-        if (!row.success)
-          return row
-        const time = await tx.get<{ now: number }>(`SELECT ${clock} AS now`)
-        if (!time.success)
-          return time
-        if (Number(row.data.collect_deadline) + 5 * 60000 < Number(time.data?.now))
-          return conflict()
-        const result = await appendInside(tx, row.data, parsed.data.evidence)
+      const { id, status } = parsed.data
+      return reldb.tx.wrapResult(async (tx) => {
+        const report = await access(id, context, tx)
+        if (!report.success || report.data.status === status)
+          return report
+        const updatedAt = activityTime(report.data.updatedAt)
+        const result = await repo.updateActivity(id, status, updatedAt, tx)
         return result.success
-          ? core.ok({ acknowledged: result.data.acknowledged, evidenceRevision: result.data.evidenceRevision })
+          ? core.ok({ ...report.data, status, updatedAt })
           : result
       })
     },
 
-    async completeCollection(input, actor) {
-      const parsed = FeedbackCompleteInputSchema.safeParse(input)
-      if (!parsed.success)
+    async getAttachment(input, context) {
+      const query = FeedbackAttachmentQuerySchema.safeParse(input)
+      if (!query.success)
         return invalid()
-      const result = await repo.transaction(async (tx) => {
-        const row = await accessWrite(input.id, actor, tx)
-        if (!row.success)
-          return row
-        const report = repo.report(row.data)
-        const collect = await collection.findJob(tx, input.id)
-        if (!collect.success)
-          return collect
-        const progress = collection.progress(collect.data?.payload)
-        const items = [
-          ...new Set(parsed.data.missing),
-        ].sort()
-        if (items.length) {
-          const digest = hash(JSON.stringify(items))
-          const reserveBusiness = (collect.data?.status === 'pending' || collect.data?.status === 'running')
-            && progress.businessEvidence
-          const saved = await appendInside(tx, row.data, [
-            {
-              id: digest,
-              source: `server:collection:client:${digest}`,
-              sequence: 0,
-              kind: 'missing',
-              timestamp: report.createdAt,
-              data: { missing: items },
-              missingReason: 'collection_incomplete',
-            },
-          ], 'capture', reserveBusiness)
-          if (!saved.success)
-            return saved
-          report.evidenceRevision = saved.data.evidenceRevision
-        }
-        const completed = await collection.completeClient(tx, report, collect.data, items.length > 0)
-        if (!completed.success)
-          return completed
-        report.collectionStatus = completed.data
-        if (report.evidenceRevision === Number(row.data.revision) && report.collectionStatus === row.data.collection_status)
-          return core.ok(report)
-        const updated = await repo.find(input.id, actor.scopeId, tx)
-        if (!updated.success)
-          return updated
-        return updated.data
-          ? core.ok(repo.report(updated.data))
-          : missing()
-      })
-      if (result.success)
-        worker.wake()
-      return result
+      const { id, attachmentId } = query.data
+      const report = await access(id, context)
+      if (!report.success)
+        return report
+      const file = await repo.file(id, attachmentId)
+      if (!file.success)
+        return file
+      return file.data
+        ? core.ok(file.data)
+        : missing()
     },
-
-    async uploadAttachment(input, actor) {
-      return upload(input, actor)
-    },
-    async getAttachment(input, actor) {
-      const row = await access(input.id, actor)
-      if (!row.success)
-        return row
-      const params: unknown[] = []
-      const identity = `${feedbackTextEquals('report_id', input.id, params)} AND ${feedbackTextEquals('client_id', input.attachmentId, params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
-      const found = await reldb.sql.get<FeedbackAttachmentRow>(`SELECT * FROM ${table.attachments} WHERE ${identity}`, params)
-      if (!found.success)
-        return found
-      if (!found.data || found.data.report_id !== input.id || found.data.scope_id !== actor.scopeId || found.data.client_id !== input.attachmentId || found.data.status !== 'available')
-        return missing()
-      const bytes = await storage.file.get(found.data.object_key)
-      if (!bytes.success)
-        return bytes
-      if (hash(bytes.data) !== found.data.checksum)
-        return core.err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
-      const metadata = attachmentData(found.data)
-      return core.ok({
-        name: metadata.name,
-        contentType: metadata.contentType,
-        dataBase64: bytes.data.toString('base64'),
-      })
-    },
-
-    async retry(input, actor) {
-      const parsed = FeedbackRetryInputSchema.safeParse(input)
-      if (!parsed.success)
-        return invalid()
-      const permission = input.target === 'export'
-        ? 'feedback:export'
-        : 'feedback:process'
-      const result = await repo.transaction(async (tx) => {
-        const row = await access(input.id, actor, permission, tx)
-        if (!row.success)
-          return row
-        if (input.target === 'attachment') {
-          const params: unknown[] = []
-          const identity = `${feedbackTextEquals('report_id', input.id, params)} AND ${feedbackTextEquals('client_id', input.targetId ?? '', params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
-          const updated = await tx.execute(`UPDATE ${table.attachments} SET status = 'pending', updated_at = ${clock} WHERE ${identity} AND status = 'failed'`, params)
-          return updated.success
-            ? core.ok(undefined)
-            : updated
-        }
-        return worker.retry(tx, input.id, input.target)
-      })
-      if (result.success)
-        worker.wake()
-      return result
-    },
-
-    async export(input, actor) {
-      const parsed = FeedbackExportInputSchema.safeParse(input)
-      if (!parsed.success)
-        return invalid()
-      const result = await repo.transaction(async (tx) => {
-        const row = await access(input.id, actor, 'feedback:export', tx)
-        if (!row.success)
-          return row
-        const time = await tx.get<{ now: number }>(`SELECT ${clock} AS now`)
-        if (!time.success)
-          return time
-        const now = Number(time.data?.now)
-        if (!Number.isFinite(now))
-          return failed()
-        const revision = parsed.data.evidenceRevision ?? Number(row.data.revision)
-        if (revision > Number(row.data.revision))
-          return conflict()
-        const snapshotVersion = revision === Number(row.data.revision)
-          ? ' AND snapshot_version = ?'
-          : ''
-        const previous = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE report_id = ? AND kind = 'export' AND snapshot_revision = ?${snapshotVersion} ORDER BY created_at DESC, id DESC LIMIT 1`, [
-          input.id,
-          revision,
-          ...(snapshotVersion
-            ? [row.data.version]
-            : []),
-        ])
-        if (!previous.success)
-          return previous
-        if (previous.data) {
-          const snapshot = readFeedbackJson(previous.data.payload)
-          const live = snapshot && typeof snapshot === 'object' && 'snapshotExpiresAt' in snapshot && typeof snapshot.snapshotExpiresAt === 'number' && snapshot.snapshotExpiresAt > now
-          if ((previous.data.status === 'succeeded' && Number(previous.data.created_at) + config.retention.exportHours * 3600000 > now) || (previous.data.status !== 'succeeded' && live))
-            return core.ok(jobData(previous.data))
-        }
-        if (revision < Number(row.data.revision)) {
-          return missing()
-        }
-        const exports = await tx.get<{ count: number }>(`SELECT COUNT(*) AS count FROM ${table.jobs} WHERE report_id = ? AND kind = 'export'`, [input.id])
-        if (!exports.success)
-          return exports
-        const reservation = await tx.get<{ report_bytes: number, export_limit: number }>(`SELECT report_bytes, export_limit FROM ${table.quotas} WHERE id = ?`, [input.id])
-        if (!reservation.success)
-          return reservation
-        if (!reservation.data || Number(exports.data?.count ?? 0) >= Math.min(config.limits.maxExportsPerReport, Number(reservation.data.export_limit)))
-          return quotaExceeded()
-        const files = await attachments(input.id, tx)
-        if (!files.success)
-          return files
-        const changes = await history(input.id, tx)
-        if (!changes.success)
-          return changes
-        const suffix = `${revision}:${row.data.version}${previous.data
-          ? `:${previous.data.id}`
-          : ''}`
-        const report = repo.report(row.data)
-        const snapshot: FeedbackExportSnapshot = {
-          report,
-          evidenceCount: Number(row.data.evidence_count),
-          attachments: files.data,
-          history: changes.data,
-          maxBytes: Number(reservation.data.report_bytes),
-          snapshotExpiresAt: now + 3600000,
-        }
-        const added = await insertJob(tx, report, 'export', suffix, snapshot)
-        if (!added.success)
-          return added
-        const job = await tx.get<FeedbackJobSummaryRow>(`SELECT ${jobSummaryColumns} FROM ${table.jobs} WHERE id = ?`, [added.data])
-        return job.success && job.data
-          ? core.ok(jobData(job.data))
-          : missing()
-      })
-      if (result.success)
-        worker.wake()
-      return result
-    },
-
-    async getExport(input, actor) {
-      const row = await access(input.id, actor, 'feedback:export')
-      if (!row.success)
-        return row
-      const params: unknown[] = []
-      const identity = `${feedbackTextEquals('id', input.jobId, params)} AND ${feedbackTextEquals('report_id', input.id, params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)} AND ${feedbackTextEquals('app_id', config.appId, params)}`
-      const job = await reldb.sql.get<FeedbackJobRow & { now: number }>(`SELECT *, ${clock} AS now FROM ${table.jobs} WHERE ${identity} AND kind = 'export'`, params)
-      if (!job.success)
-        return job
-      if (!job.data)
-        return missing()
-      const now = Number(job.data.now)
-      if (job.data.status === 'pending' || job.data.status === 'running') {
-        const snapshot = readFeedbackJson(job.data.payload)
-        if (!snapshot || typeof snapshot !== 'object' || !('snapshotExpiresAt' in snapshot) || typeof snapshot.snapshotExpiresAt !== 'number')
-          return failed()
-        if (snapshot.snapshotExpiresAt <= now)
-          return missing()
-        return core.err(HaiFeedbackError.CONFLICT, feedbackM('feedback_exportPending'))
-      }
-      if (Number(job.data.created_at) + config.retention.exportHours * 3600000 <= now)
-        return missing()
-      if (job.data.status === 'failed')
-        return failed()
-      const data = readFeedbackJson(job.data.result)
-      if (!data || typeof data !== 'object' || !('key' in data) || typeof data.key !== 'string')
-        return missing()
-      const bytes = await storage.file.get(data.key)
-      if (!bytes.success)
-        return bytes
-      if (!('checksum' in data) || typeof data.checksum !== 'string' || hash(bytes.data) !== data.checksum)
-        return core.err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
-      return core.ok({
-        name: `${repo.report(row.data).number}.zip`,
-        contentType: 'application/zip',
-        dataBase64: bytes.data.toString('base64'),
-      })
-    },
-
-    runJobs: worker.runJobs,
   }
-
-  // 附件和后台任务在同一运行时内共享受权查询与固定快照。
-  async function upload(input: Parameters<FeedbackFunctions['uploadAttachment']>[0], actor: FeedbackContext): ReturnType<FeedbackFunctions['uploadAttachment']> {
-    const parsed = FeedbackUploadInputSchema.safeParse(input)
-    if (!parsed.success)
-      return invalid()
-    const row = await accessWrite(input.id, actor)
-    if (!row.success)
-      return row
-    const params: unknown[] = []
-    const identity = `${feedbackTextEquals('report_id', input.id, params)} AND ${feedbackTextEquals('client_id', input.attachmentId, params)} AND ${feedbackTextEquals('scope_id', actor.scopeId, params)}`
-    const found = await reldb.sql.get<FeedbackAttachmentRow>(`SELECT * FROM ${table.attachments} WHERE ${identity}`, params)
-    if (!found.success)
-      return found
-    if (!found.data || found.data.report_id !== input.id || found.data.scope_id !== actor.scopeId || found.data.client_id !== input.attachmentId)
-      return missing()
-    const attachment = found.data
-    const metadata = attachmentData(attachment)
-    const bytes = Buffer.from(parsed.data.dataBase64, 'base64')
-    if (bytes.length !== Number(attachment.size) || bytes.length > budget.maxAttachmentBytes || !matchesContentType(bytes, metadata.contentType))
-      return invalid()
-    if (hash(bytes) !== attachment.checksum)
-      return core.err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
-    const stored = await storage.file.put(attachment.object_key, bytes, {
-      contentType: metadata.contentType,
-      ifNoneMatch: '*',
-      signal: AbortSignal.timeout(30000),
-    })
-    if (!stored.success) {
-      const existing = await storage.file.get(attachment.object_key)
-      if (!existing.success || hash(existing.data) !== attachment.checksum) {
-        await reldb.sql.execute(`UPDATE ${table.attachments} SET status = 'failed', updated_at = ? WHERE id = ? AND status <> 'available'`, [
-          Date.now(),
-          attachment.id,
-        ])
-        return stored
-      }
-    }
-    const updated = await repo.transaction(async (tx) => {
-      const live = await accessWrite(input.id, actor, tx)
-      if (!live.success)
-        return live
-      const currentParams: unknown[] = []
-      const currentIdentity = `${feedbackTextEquals('id', attachment.id, currentParams)} AND ${feedbackTextEquals('scope_id', actor.scopeId, currentParams)}`
-      const currentFile = await tx.get<FeedbackAttachmentRow>(`SELECT * FROM ${table.attachments} WHERE ${currentIdentity}`, currentParams)
-      if (!currentFile.success)
-        return currentFile
-      if (!currentFile.data || currentFile.data.id !== attachment.id || currentFile.data.report_id !== input.id || currentFile.data.scope_id !== actor.scopeId || currentFile.data.client_id !== input.attachmentId)
-        return missing()
-      if (currentFile.data.status === 'available')
-        return core.ok(undefined)
-      const confirmed = await tx.execute(`UPDATE ${table.attachments} SET status = 'available', updated_at = ${clock} WHERE ${currentIdentity}`, currentParams)
-      if (!confirmed.success)
-        return confirmed
-      if (!confirmed.data.changes)
-        return conflict()
-      const revised = await tx.execute(`UPDATE ${table.reports} SET revision = revision + 1, updated_at = ${clock} WHERE id = ? AND deleting = 0`, [input.id])
-      return revised.success && revised.data.changes
-        ? core.ok(undefined)
-        : conflict()
-    })
-    if (!updated.success) {
-      if (updated.error.code === HaiFeedbackError.NOT_FOUND.code)
-        await storage.file.delete(attachment.object_key)
-      return updated
-    }
-    return core.ok({ ...metadata, status: 'available' })
-  }
-
-  /** 上传与最终关联分开；只有持有租约的事务能发布材料，孤立对象由反馈到期清理回收。 */
-  async function collectBusiness(job: FeedbackJobRow, report: FeedbackReport, shutdown: AbortSignal): Promise<HaiResult<void>> {
-    const marker = hash(`${report.id}:server:business:0`)
-    const previous = await reldb.sql.get(`SELECT id FROM ${table.evidence} WHERE id = ?`, [marker])
-    if (!previous.success)
-      return previous
-    if (previous.data)
-      return core.ok(undefined)
-    if (!collectEvidence)
-      return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
-    const controller = new AbortController()
-    const signal = AbortSignal.any([controller.signal, shutdown])
-    const timeout = setTimeout(() => controller.abort(), config.collection.businessTimeoutMs)
-    timeout.unref()
-    let collected: FeedbackCollectedEvidence
-    let onAbort: (() => void) | undefined
-    try {
-      collected = await Promise.race([
-        Promise.resolve().then(() => collectEvidence({
-          report: Object.freeze({ ...report }),
-          signal,
-        })),
-        new Promise<never>((_resolve, reject) => {
-          onAbort = () => reject(new Error('Feedback business collection aborted'))
-          signal.addEventListener('abort', onAbort, { once: true })
-          if (signal.aborted)
-            onAbort()
-        }),
-      ])
-    }
-    catch {
-      return failed()
-    }
-    finally {
-      clearTimeout(timeout)
-      if (onAbort)
-        signal.removeEventListener('abort', onAbort)
-    }
-    if (!collected || typeof collected !== 'object' || (collected.text !== undefined && typeof collected.text !== 'string') || (collected.attachments !== undefined && !Array.isArray(collected.attachments)))
-      return invalid()
-    if ((collected.attachments?.length ?? 0) > budget.maxAttachmentCount)
-      return limited()
-    const files: Array<{ metadata: FeedbackAttachment, bytes: Buffer, key: string, rowId: string }> = []
-    for (const input of collected.attachments ?? []) {
-      if (!input || !(input.bytes instanceof Uint8Array) || typeof input.id !== 'string' || input.id.length > 100)
-        return invalid()
-      if (input.bytes.byteLength > budget.maxAttachmentBytes)
-        return limited()
-      let bytes = Buffer.from(input.bytes)
-      if (!matchesContentType(bytes, input.contentType))
-        return invalid()
-      // 文本附件全文脱敏；压缩包是宿主生成的原始材料，不在服务端解压或执行。
-      if (input.contentType === 'text/plain')
-        bytes = Buffer.from(redactFeedbackText(bytes.toString('utf8')))
-      if (input.contentType === 'application/json')
-        bytes = Buffer.from(JSON.stringify(sanitizeFeedbackValue(JSON.parse(bytes.toString('utf8')))))
-      if (bytes.length > budget.maxAttachmentBytes)
-        return limited()
-      const parsed = FeedbackAttachmentInputSchema.safeParse({
-        id: `server:business:${input.id}`,
-        name: typeof input.name === 'string'
-          ? redactFeedbackText(input.name)
-          : input.name,
-        contentType: input.contentType,
-        size: bytes.length,
-        checksum: hash(bytes),
-      })
-      if (!parsed.success || !input.id || files.some(file => file.metadata.id === parsed.data.id))
-        return invalid()
-      const rowId = hash(`${report.id}:${parsed.data.id}`)
-      const key = `${feedbackObjectPrefix(report.scopeId, report.id)}business/${rowId}-${parsed.data.checksum}`
-      files.push({
-        metadata: { ...parsed.data, feedbackId: report.id, status: 'available' },
-        bytes,
-        key,
-        rowId,
-      })
-    }
-    const event = FeedbackEvidenceInputSchema.safeParse(sanitizeFeedbackValue({
-      id: `business-${report.id}`,
-      source: 'server:business',
-      sequence: 0,
-      kind: 'business',
-      timestamp: report.createdAt,
-      data: {
-        ...collected.data,
-        ...(collected.text !== undefined
-          ? { text: collected.text }
-          : {}),
-        attachmentIds: files.map(file => file.metadata.id),
-      },
-    }))
-    if (!event.success)
-      return invalid()
-    async function checkCapacity(sql: DmlOperations) {
-      const existing = await attachments(report.id, sql)
-      if (!existing.success)
-        return existing
-      if (existing.data.length + files.length > budget.maxAttachmentCount || existing.data.reduce((total, item) => total + Number(item.size), 0) + files.reduce((total, file) => total + file.bytes.length, 0) > budget.maxAttachmentsBytes)
-        return limited()
-      return core.ok(undefined)
-    }
-    // 首次上传前冻结业务文件清单；失败重试不能通过变化 ID/内容制造无限孤立对象。
-    const frozenFiles = files.map(file => ({ id: file.rowId, size: file.bytes.length, checksum: file.metadata.checksum })).sort((left, right) => left.id.localeCompare(right.id))
-    const frozen = await withLease(job, async (tx) => {
-      const current = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [job.id])
-      if (!current.success || !current.data)
-        return missing()
-      const payload = readFeedbackJson(current.data.payload)
-      if (!payload || typeof payload !== 'object')
-        return invalid()
-      if ('businessFiles' in payload) {
-        return canonicalFeedbackJson(payload.businessFiles) === canonicalFeedbackJson(frozenFiles)
-          ? core.ok(undefined)
-          : conflict()
-      }
-      const updated = await tx.execute(`UPDATE ${table.jobs} SET payload = ? WHERE id = ? AND token = ?`, [
-        JSON.stringify({ ...payload, businessFiles: frozenFiles }),
-        job.id,
-        job.token,
-      ])
-      return updated.success
-        ? core.ok(undefined)
-        : updated
-    })
-    if (!frozen.success)
-      return frozen
-    const capacity = await checkCapacity(reldb.sql)
-    if (!capacity.success)
-      return capacity
-    for (const file of files) {
-      const stored = await storage.file.put(file.key, file.bytes, {
-        contentType: file.metadata.contentType,
-        ifNoneMatch: '*',
-        signal: AbortSignal.any([
-          shutdown,
-          AbortSignal.timeout(30000),
-        ]),
-      })
-      if (!stored.success) {
-        const existing = await storage.file.get(file.key)
-        if (!existing.success || hash(existing.data) !== file.metadata.checksum)
-          return stored
-      }
-    }
-    return withLease(job, async (tx, fresh) => {
-      const completed = await tx.get(`SELECT id FROM ${table.evidence} WHERE id = ?`, [marker])
-      if (!completed.success)
-        return completed
-      if (completed.data)
-        return core.ok(undefined)
-      const capacity = await checkCapacity(tx)
-      if (!capacity.success)
-        return capacity
-      const appended = await appendInside(tx, fresh, [event.data], 'server')
-      if (!appended.success)
-        return appended
-      for (const file of files) {
-        const saved = await tx.execute(`INSERT INTO ${table.attachments} (id, client_id, report_id, scope_id, object_key, status, size, checksum, updated_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-          file.rowId,
-          file.metadata.id,
-          report.id,
-          report.scopeId,
-          file.key,
-          'available',
-          file.bytes.length,
-          file.metadata.checksum,
-          Date.now(),
-          JSON.stringify(file.metadata),
-        ])
-        if (!saved.success)
-          return saved
-      }
-      return core.ok(undefined)
-    })
-  }
-
-  async function executeJob(job: FeedbackJobRow, report: FeedbackReport, payload: object, signal: AbortSignal): Promise<HaiResult<unknown>> {
-    if (job.kind === 'collect') {
-      const progress = collection.progress(payload)
-      const needsBusiness = progress.businessEvidence
-      let count = 0
-      if (!progress.serverCaptured) {
-        const anchor = progress.anchor ?? report.createdAt
-        const captured = await capture.collect(report.scopeId, report.userId, anchor)
-        const saved = await withLease(job, async (tx, fresh) => {
-          const current = await tx.get<{ payload: unknown }>(`SELECT payload FROM ${table.jobs} WHERE id = ?`, [job.id])
-          if (!current.success)
-            return current
-          const stored = collection.progress(current.data?.payload)
-          if (!stored.valid)
-            return invalid()
-          const appended = await appendInside(tx, fresh, captured.length
-            ? captured
-            : [
-                {
-                  id: `missing-server-${report.id}`,
-                  source: 'server:collection',
-                  sequence: 0,
-                  kind: 'missing',
-                  timestamp: report.createdAt,
-                  data: { source: 'server_logs' },
-                  missingReason: 'no_correlated_server_logs',
-                },
-              ], 'capture', needsBusiness)
-          if (!appended.success)
-            return appended
-          const marked = await collection.completeServer(tx, job, stored.payload, captured.length === 0 || appended.data.truncated)
-          return marked.success
-            ? core.ok(captured.length ? appended.data.acknowledged.length : 0)
-            : marked
-        })
-        if (!saved.success)
-          return saved
-        count = saved.data
-      }
-      if (needsBusiness) {
-        const business = await collectBusiness(job, report, signal)
-        if (!business.success)
-          return business
-      }
-      return core.ok({ collected: count })
-    }
-    if (job.kind === 'webhook') {
-      if (!('url' in payload) || payload.url !== config.webhook.url || !config.webhook.url)
-        return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
-      // 材料仍在采集中时等待，不消耗发送尝试次数；终态失败也应通知接收方。
-      if (report.collectionStatus === 'collecting')
-        return core.ok({ pending: true })
-      const frozen = await withLease(job, async (tx, live) => {
-        if (live.collection_status === 'collecting')
-          return conflict()
-        const stored = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [job.id])
-        if (!stored.success || !stored.data)
-          return missing()
-        const snapshot = readFeedbackJson(stored.data.payload)
-        if (snapshot && typeof snapshot === 'object' && 'body' in snapshot && typeof snapshot.body === 'string')
-          return core.ok(snapshot.body)
-        const files = await attachments(report.id, tx)
-        if (!files.success)
-          return files
-        const business = await tx.get(`SELECT id FROM ${table.evidence} WHERE id = ?`, [
-          hash(`${report.id}:server:business:0`),
-        ])
-        if (!business.success)
-          return business
-        const detailUrl = config.notification.adminUrl
-          ? new URL(config.notification.adminUrl)
-          : undefined
-        detailUrl?.searchParams.set('feedback', report.id)
-        const event: FeedbackWebhookEvent = {
-          event: 'feedback.created',
-          eventId: job.id,
-          createdAt: report.createdAt,
-          report: repo.report(live),
-          evidence: {
-            revision: Number(live.revision),
-            business: !!business.data,
-            attachments: files.data.map(attachmentData),
-          },
-          ...(detailUrl
-            ? { detailUrl: detailUrl.href }
-            : {}),
-        }
-        const body = JSON.stringify(event)
-        const saved = await tx.execute(`UPDATE ${table.jobs} SET payload = ? WHERE id = ? AND token = ?`, [
-          JSON.stringify({ url: config.webhook.url, body }),
-          job.id,
-          job.token,
-        ])
-        return saved.success
-          ? core.ok(body)
-          : saved
-      })
-      if (!frozen.success)
-        return frozen
-      const timestamp = String(Math.floor(Date.now() / 1000))
-      const headers: Record<string, string> = {
-        'content-type': 'application/json',
-        'idempotency-key': job.id,
-        'x-hai-feedback-event': 'feedback.created',
-        'x-hai-feedback-timestamp': timestamp,
-      }
-      if (config.webhook.secret)
-        headers['x-hai-feedback-signature'] = `sha256=${createHmac('sha256', config.webhook.secret).update(`${timestamp}.${frozen.data}`).digest('hex')}`
-      try {
-        const response = await fetch(config.webhook.url, {
-          method: 'POST',
-          headers,
-          body: frozen.data,
-          redirect: 'manual',
-          signal: AbortSignal.any([
-            signal,
-            AbortSignal.timeout(config.webhook.timeoutMs),
-          ]),
-        })
-        await response.body?.cancel()
-        return response.ok
-          ? core.ok({ status: response.status })
-          : failed()
-      }
-      catch {
-        return failed()
-      }
-    }
-    if (job.kind === 'notify') {
-      if (config.notification.mode === 'disabled')
-        return core.ok({ disabled: true })
-      const recipient = 'recipient' in payload && typeof payload.recipient === 'string'
-        ? payload.recipient
-        : ''
-      if (config.notification.mode === 'reach' && !config.notification.recipients.includes(recipient))
-        return invalid()
-      // 受理通知与补采独立；发送前以数据库租约和存活报告再次确认副作用资格。
-      const live = await withLease(job, async (_tx, live) => core.ok(live))
-      if (!live.success)
-        return live
-      const current = repo.report(live.data)
-      if (config.notification.mode === 'console') {
-        core.logger.info('Feedback notification', {
-          module: 'feedback',
-          number: current.number,
-          appId: current.appId,
-          appVersion: current.appVersion,
-          buildId: current.buildId,
-          commit: current.commit,
-          collectionStatus: current.collectionStatus,
-          ...(config.notification.consoleContent === 'summary'
-            ? { summary: current.summary }
-            : {}),
-        })
-        return core.ok({ channel: 'console' })
-      }
-      const { HaiReachError, reach } = await import('@h-ai/reach')
-      const materialStatus = {
-        collecting: feedbackM('feedback_materialCollecting'),
-        complete: feedbackM('feedback_materialComplete'),
-        partial: feedbackM('feedback_materialPartial'),
-        failed: feedbackM('feedback_materialFailed'),
-      }[current.collectionStatus]
-      const detailUrl = config.notification.adminUrl
-        ? new URL(config.notification.adminUrl)
-        : undefined
-      detailUrl?.searchParams.set('feedback', report.id)
-      const facts = [
-        current.number,
-        `${current.appId} ${current.appVersion ?? ''}`,
-        `${feedbackM('feedback_submittedAt')}: ${new Date(current.createdAt).toISOString()}`,
-        `${feedbackM('feedback_materialStatus')}: ${materialStatus}`,
-        current.summary ?? '',
-        ...(detailUrl
-          ? [detailUrl.href]
-          : []),
-      ]
-      const isEmail = reach.config?.providers.find(provider => provider.name === config.notification.provider)?.type === 'smtp'
-      const body = isEmail
-        ? facts.map(value => `<p>${escapeHtml(value)}</p>`).join('')
-        : facts.join('\n')
-      const sent = await reach.send({
-        provider: config.notification.provider,
-        to: recipient,
-        subject: `${feedbackM('feedback_received')} ${current.number}`,
-        body,
-        extra: { notificationId: job.id },
-        deferPolicy: 'reject',
-      })
-      if (!sent.success && sent.error.code === HaiReachError.DND_BLOCKED.code)
-        return core.ok({ pending: true, deferred: true })
-      if (!sent.success)
-        return sent
-      if (!sent.data.success)
-        return failed()
-      if (sent.data.deferred) {
-        return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
-      }
-      return core.ok({ messageId: sent.data.messageId ?? '' })
-    }
-    if (job.kind === 'export') {
-      if (!('report' in payload) || !('evidenceCount' in payload) || !('attachments' in payload))
-        return invalid()
-      const fixed = payload as FeedbackExportSnapshot
-      const revision = Number(job.snapshot_revision)
-      if (fixed.report?.id !== report.id || fixed.report.evidenceRevision !== revision || fixed.report.version !== Number(job.snapshot_version)
-        || !Number.isSafeInteger(fixed.evidenceCount) || fixed.evidenceCount < 0 || !Number.isSafeInteger(fixed.snapshotExpiresAt)
-        || !Number.isSafeInteger(fixed.maxBytes) || fixed.maxBytes < 4 * 1024 * 1024 || fixed.maxBytes > 40 * 1024 * 1024) {
-        return invalid()
-      }
-      // 短事务持有反馈行及任务租约，避免到期清理期间读出不完整的证据快照。
-      const events = await withLease(job, async (tx, live) => {
-        const time = await tx.get<{ now: number }>(`SELECT ${clock} AS now`)
-        if (!time.success)
-          return time
-        if (!time.data || fixed.snapshotExpiresAt <= Number(time.data.now))
-          return missing()
-        if (live.app_id !== job.app_id || Number(live.revision) < revision)
-          return conflict()
-        const result = await evidence(report.id, revision, tx)
-        if (!result.success)
-          return result
-        return result.data.length === fixed.evidenceCount
-          ? result
-          : conflict()
-      })
-      if (!events.success)
-        return events
-      const files: Array<{ id: string, name: string, contentType: string, checksum: string, bytes: Uint8Array }> = []
-      const unavailable = fixed.attachments.filter(file => file.status !== 'available').map(file => `attachment:${file.client_id}:${file.status}`).sort()
-      let total = Buffer.byteLength(JSON.stringify(events.data))
-      for (const file of fixed.attachments) {
-        if (file.status !== 'available')
-          continue
-        const stored = await storage.file.get(file.object_key)
-        if (!stored.success)
-          return stored
-        if (hash(stored.data) !== file.checksum)
-          return core.err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
-        total += stored.data.length
-        if (total > 64 * 1024 * 1024)
-          return limited()
-        const info = attachmentData(file)
-        files.push({
-          id: info.id,
-          name: info.name,
-          contentType: info.contentType,
-          checksum: info.checksum,
-          bytes: stored.data,
-        })
-      }
-      const bundle = await feedback.createBundle({
-        maxBytes: fixed.maxBytes,
-        createdAt: Number(job.created_at),
-        report: fixed.report,
-        evidence: events.data,
-        history: fixed.history,
-        attachments: files,
-        missing: unavailable,
-      })
-      if (!bundle.success)
-        return bundle
-      const key = `${feedbackObjectPrefix(report.scopeId, report.id)}exports/${job.id}.zip`
-      const stored = await storage.file.put(key, bundle.data, { contentType: 'application/zip', ifNoneMatch: '*' })
-      if (!stored.success) {
-        const existing = await storage.file.get(key)
-        if (!existing.success || hash(existing.data) !== hash(bundle.data))
-          return stored
-      }
-      return core.ok({
-        key,
-        checksum: hash(bundle.data),
-        size: bundle.data.length,
-      })
-    }
-    return failed()
-  }
-
-  return operations
-}
-
-function allowedContentType(type: string) {
-  return [
-    'image/png',
-    'image/jpeg',
-    'image/webp',
-    'video/webm',
-    'video/mp4',
-    'text/plain',
-    'application/json',
-    'application/pdf',
-    'application/zip',
-    'application/gzip',
-  ].includes(type)
-}
-function matchesContentType(bytes: Buffer, type: string) {
-  if (type === 'application/zip')
-    return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B && ((bytes[2] === 3 && bytes[3] === 4) || (bytes[2] === 5 && bytes[3] === 6))
-  if (type === 'application/gzip')
-    return bytes.length >= 10 && bytes[0] === 0x1F && bytes[1] === 0x8B && bytes[2] === 8
-  if (type === 'image/png')
-    return bytes.length >= 24 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) && bytes.readUInt32BE(16) * bytes.readUInt32BE(20) <= 32 * 1024 * 1024
-  if (type === 'image/jpeg')
-    return bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
-  if (type === 'image/webp')
-    return bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP'
-  if (type === 'application/pdf')
-    return bytes.subarray(0, 5).toString() === '%PDF-'
-  if (type === 'video/webm')
-    return bytes.length >= 12 && bytes.subarray(0, 4).equals(Buffer.from([0x1A, 0x45, 0xDF, 0xA3]))
-  if (type === 'video/mp4')
-    return bytes.length >= 12 && bytes.subarray(4, 8).toString() === 'ftyp'
-  if (type === 'application/json') {
-    try {
-      JSON.parse(bytes.toString('utf8'))
-      return true
-    }
-    catch {
-      return false
-    }
-  }
-  return type === 'text/plain' && !bytes.includes(0)
 }

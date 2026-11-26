@@ -1,13 +1,9 @@
 import type { HaiResult } from '@h-ai/core'
-import type { FeedbackConfigInput } from './feedback-config.js'
-import type { FeedbackRuntime } from './feedback-functions.js'
-import type { FeedbackFunctions, FeedbackInitOptions } from './feedback-types.js'
-import { apiContract } from '@h-ai/api-contract/feedback'
+import type { FeedbackConfig } from './feedback-config.js'
+import type { FeedbackOperations } from './feedback-functions.js'
+import type { FeedbackFunctions } from './feedback-types.js'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { storage } from '@h-ai/storage'
-import { createFeedbackBundle, getFeedbackBundleViewerFiles, queryFeedbackBundle, readFeedbackBundle, summarizeFeedbackBundle } from './bundle/feedback-bundle-functions.js'
-import { createFeedbackCapture } from './feedback-capture.js'
 import { FeedbackConfigSchema } from './feedback-config.js'
 import { createFeedbackOperations } from './feedback-functions.js'
 import { feedbackM } from './feedback-i18n.js'
@@ -15,182 +11,110 @@ import { FeedbackReportRepository } from './feedback-repository.js'
 import { HaiFeedbackError } from './feedback-types.js'
 
 const notInitialized = core.module.createNotInitializedKit(HaiFeedbackError.NOT_INITIALIZED, () => feedbackM('feedback_notInitialized'))
-const unavailable = notInitialized.proxy<FeedbackRuntime>()
-let current: { operations: FeedbackRuntime, capture: ReturnType<typeof createFeedbackCapture>, config: ReturnType<typeof FeedbackConfigSchema.parse> } | null = null
-let generation = 0
-let initializing: Promise<void> | null = null
-let closingPromise: Promise<HaiResult<void>> | null = null
+let current: { operations: FeedbackOperations, config: FeedbackConfig } | null = null
+let initializing: Promise<HaiResult<void>> | null = null
+let closing: Promise<HaiResult<void>> | null = null
 const inFlight = new Set<Promise<unknown>>()
 
+function operationFailed() {
+  return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
+}
+
+async function execute<T>(work: (operations: FeedbackOperations) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+  if (!current)
+    return notInitialized.result<T>()
+  const operations = current.operations
+  const call = Promise.resolve().then(() => work(operations))
+  inFlight.add(call)
+  try {
+    const result = await call
+    if (!result.success && typeof result.error.code === 'string' && result.error.code.startsWith('hai:reldb:')) {
+      core.logger.warn('Feedback database operation failed', { module: 'feedback', errorCode: result.error.code })
+      return operationFailed()
+    }
+    return result
+  }
+  catch {
+    core.logger.error('Unexpected feedback operation failure', { module: 'feedback' })
+    return operationFailed()
+  }
+  finally {
+    inFlight.delete(call)
+  }
+}
+
 /**
- * Feedback 生命周期与公共操作入口；依赖由应用初始化并在 feedback 关闭后释放。
+ * 用户反馈的服务端入口。
  * @example
  * ```ts
  * import { feedback } from '@h-ai/feedback'
- *
- * // 宿主先初始化 reldb、storage、reach，并在反馈关闭后释放依赖。
- * async function collectFeedback() {
- *   const initialized = await feedback.init({
- *     appId: 'orders',
- *     notification: { recipients: ['admin@example.test'], adminUrl: 'https://app.example.test/admin/feedback' },
- *   })
- *   if (!initialized.success) return initialized
- *   try {
- *     return await feedback.submit({ appId: 'orders', submissionId: 'stable-submission' }, { scopeId: 'tenant-1', userId: 'user-1' })
- *   } finally {
- *     await feedback.close()
- *   }
- * }
- * void collectFeedback
+ * // 连接 RelDB 后初始化。
+ * const ready = await feedback.init({ appId: 'orders' })
+ * if (!ready.success) throw new Error(ready.error.message)
  * ```
  */
 export const feedback: FeedbackFunctions = {
-  createBundle: createFeedbackBundle,
-  getBundleViewerFiles: getFeedbackBundleViewerFiles,
-  queryBundle: queryFeedbackBundle,
-  readBundle: readFeedbackBundle,
-  summarizeBundle: summarizeFeedbackBundle,
-  async init(config: FeedbackConfigInput, options: FeedbackInitOptions = {}) {
-    if (initializing || closingPromise)
+  async init(config) {
+    if (initializing || closing)
       return core.err(HaiFeedbackError.INIT_IN_PROGRESS, feedbackM('feedback_initInProgress'))
-    let completeInitialization: (() => void) | undefined
-    initializing = new Promise<void>((resolve) => {
-      completeInitialization = resolve
-    })
-    const epoch = ++generation
-    let candidateCapture: ReturnType<typeof createFeedbackCapture> | undefined
-    try {
-      const parsed = FeedbackConfigSchema.safeParse(config)
-      if (!parsed.success)
-        return configFailure(parsed.error.issues.map(issue => issue.path.join('.')))
-      if (options.collectEvidence !== undefined && typeof options.collectEvidence !== 'function')
-        return configFailure(['collectEvidence'])
-      if (!reldb.isInitialized || !storage.isInitialized) {
-        return configFailure([
-          !reldb.isInitialized
-            ? 'reldb'
-            : 'storage',
-        ])
-      }
-      if (parsed.data.notification.mode === 'reach') {
-        const provider = await import('@h-ai/reach').catch(() => undefined)
-        if (!provider)
-          return configFailure(['reach'])
-        const { reach } = provider
-        if (!reach.isInitialized)
-          return configFailure(['reach'])
-        if (!reach.config?.providers.some(provider => provider.name === parsed.data.notification.provider))
-          return configFailure(['notification.provider'])
-      }
-      if (epoch !== generation)
-        return notInitialized.result()
-      if (current) {
-        const previous = current
-        current = null
-        const closing = previous.operations.close()
-        await Promise.allSettled([...inFlight])
-        await closing
-        await previous.capture.close()
-      }
-      if (epoch !== generation)
-        return notInitialized.result()
+    const parsed = FeedbackConfigSchema.safeParse(config)
+    if (!parsed.success || !reldb.isInitialized)
+      return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+
+    current = null
+    initializing = (async () => {
+      await Promise.allSettled([...inFlight])
       const repository = new FeedbackReportRepository()
       const ready = await repository.ready()
       if (!ready.success)
         return ready
-      if (epoch !== generation)
-        return notInitialized.result()
-      candidateCapture = createFeedbackCapture(parsed.data.appId, parsed.data.collection.envAllowlist, parsed.data.build)
-      const operations = createFeedbackOperations(repository, parsed.data, candidateCapture, options)
-      if (epoch !== generation) {
-        await operations.close()
-        await candidateCapture.close()
-        return notInitialized.result()
+      if (closing)
+        return notInitialized.result<void>()
+      current = {
+        operations: createFeedbackOperations(repository, parsed.data.appId),
+        config: parsed.data,
       }
-      current = { operations, capture: candidateCapture, config: parsed.data }
-      operations.start()
       core.logger.info('Feedback module initialized', { module: 'feedback', appId: parsed.data.appId })
       return core.ok(undefined)
+    })()
+    try {
+      return await initializing
     }
     catch {
-      if (candidateCapture)
-        await candidateCapture.close()
-      return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+      return operationFailed()
     }
     finally {
       initializing = null
-      completeInitialization?.()
     }
   },
+
   close() {
-    if (closingPromise)
-      return closingPromise
-    generation++
-    const previous = current
+    if (closing)
+      return closing
     current = null
-    closingPromise = (async () => {
-      try {
-        const closing = previous?.operations.close()
-        await Promise.allSettled([...inFlight])
-        await closing
-        await previous?.capture.close()
-        await initializing
-        return core.ok(undefined)
-      }
-      catch {
-        return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
-      }
-    })().finally(() => { closingPromise = null })
-    return closingPromise
+    closing = (async () => {
+      await Promise.allSettled([...inFlight, initializing])
+      return core.ok(undefined)
+    })().finally(() => { closing = null })
+    return closing
   },
+
   get isInitialized() {
     return current !== null
   },
+
   get config() {
     return current
-      ? structuredClone(current.config)
+      ? { ...current.config }
       : null
   },
-  get budget() {
-    return apiContract.resolveFeedbackBudget(current?.config.limits)
-  },
-  submit: (input, actor) => guarded(() => (current?.operations ?? unavailable).submit(input, actor)),
-  list: (input, actor) => guarded(() => (current?.operations ?? unavailable).list(input, actor)),
-  listMine: (input, actor) => guarded(() => (current?.operations ?? unavailable).listMine(input, actor)),
-  get: (id, actor) => guarded(() => (current?.operations ?? unavailable).get(id, actor)),
-  getEvidence: (input, actor) => guarded(() => (current?.operations ?? unavailable).getEvidence(input, actor)),
-  setStatus: (input, actor) => guarded(() => (current?.operations ?? unavailable).setStatus(input, actor)),
-  appendEvidence: (input, actor) => guarded(() => (current?.operations ?? unavailable).appendEvidence(input, actor)),
-  completeCollection: (input, actor) => guarded(() => (current?.operations ?? unavailable).completeCollection(input, actor)),
-  uploadAttachment: (input, actor) => guarded(() => (current?.operations ?? unavailable).uploadAttachment(input, actor)),
-  getAttachment: (input, actor) => guarded(() => (current?.operations ?? unavailable).getAttachment(input, actor)),
-  retry: (input, actor) => guarded(() => (current?.operations ?? unavailable).retry(input, actor)),
-  export: (input, actor) => guarded(() => (current?.operations ?? unavailable).export(input, actor)),
-  getExport: (input, actor) => guarded(() => (current?.operations ?? unavailable).getExport(input, actor)),
-  runJobs: () => guarded(() => (current?.operations ?? unavailable).runJobs()),
-}
 
-function configFailure(fields: string[]) {
-  return {
-    success: false as const,
-    error: {
-      ...HaiFeedbackError.CONFIG_ERROR,
-      message: feedbackM('feedback_configError'),
-      ext: { module: 'feedback', fields },
-    },
-  }
-}
-
-async function guarded<T>(work: () => Promise<import('@h-ai/core').HaiResult<T>>) {
-  const promise = core.context.run({ suppressLogObservers: true }, work)
-  inFlight.add(promise)
-  try {
-    return await promise
-  }
-  catch {
-    return core.err(HaiFeedbackError.OPERATION_FAILED, feedbackM('feedback_operationFailed'))
-  }
-  finally {
-    inFlight.delete(promise)
-  }
+  submit: (input, context) => execute(ops => ops.submit(input, context)),
+  listMine: (input, context) => execute(ops => ops.listMine(input, context)),
+  list: (input, context) => execute(ops => ops.list(input, context)),
+  get: (id, context) => execute(ops => ops.get(id, context)),
+  listMessages: (input, context) => execute(ops => ops.listMessages(input, context)),
+  addMessage: (input, context) => execute(ops => ops.addMessage(input, context)),
+  setStatus: (input, context) => execute(ops => ops.setStatus(input, context)),
+  getAttachment: (input, context) => execute(ops => ops.getAttachment(input, context)),
 }

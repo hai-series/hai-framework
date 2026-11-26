@@ -9,8 +9,6 @@ export default mergeConfig(baseTestConfig, {
       '@h-ai/api-contract': fileURLToPath(new URL('../api-contract/src/index.ts', import.meta.url)),
       '@h-ai/core': fileURLToPath(new URL('../core/src/index.ts', import.meta.url)),
       '@h-ai/reldb': fileURLToPath(new URL('../reldb/src/index.ts', import.meta.url)),
-      '@h-ai/storage': fileURLToPath(new URL('../storage/src/index.ts', import.meta.url)),
-      '@h-ai/reach': fileURLToPath(new URL('../reach/src/index.ts', import.meta.url)),
     },
   },
 })

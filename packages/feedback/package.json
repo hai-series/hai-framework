@@ -2,28 +2,12 @@
   "name": "@h-ai/feedback",
   "type": "module",
   "version": "1.0.0-beta.37",
-  "description": "Hai Framework feedback collection, evidence, notifications and offline diagnostic bundles.",
+  "description": "User feedback, replies and private attachments.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./client": {
-      "types": "./dist/client/index.d.ts",
-      "import": "./dist/client/index.js"
-    },
-    "./bundle": {
-      "types": "./dist/bundle/index.d.ts",
-      "import": "./dist/bundle/index.js"
-    },
-    "./tauri": {
-      "types": "./dist/tauri.d.ts",
-      "import": "./dist/tauri.js"
-    },
-    "./capacitor": {
-      "types": "./dist/capacitor.d.ts",
-      "import": "./dist/capacitor.js"
     }
   },
   "main": "./dist/index.js",
@@ -48,50 +32,14 @@
     "clean": "rimraf dist .turbo",
     "build:clean": "rimraf dist"
   },
-  "peerDependencies": {
-    "@capacitor/filesystem": "catalog:",
-    "@capacitor/share": "catalog:",
-    "@h-ai/reach": "workspace:*",
-    "@tauri-apps/plugin-dialog": "catalog:",
-    "@tauri-apps/plugin-fs": "catalog:"
-  },
-  "peerDependenciesMeta": {
-    "@capacitor/filesystem": {
-      "optional": true
-    },
-    "@capacitor/share": {
-      "optional": true
-    },
-    "@h-ai/reach": {
-      "optional": true
-    },
-    "@tauri-apps/plugin-dialog": {
-      "optional": true
-    },
-    "@tauri-apps/plugin-fs": {
-      "optional": true
-    }
-  },
   "dependencies": {
     "@h-ai/api-contract": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/reldb": "workspace:*",
-    "@h-ai/storage": "workspace:*",
-    "@rrweb/record": "catalog:",
-    "@rrweb/replay": "catalog:",
-    "fflate": "catalog:",
-    "html2canvas": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@capacitor/filesystem": "catalog:",
-    "@capacitor/share": "catalog:",
-    "@h-ai/reach": "workspace:*",
-    "@tauri-apps/plugin-dialog": "catalog:",
-    "@tauri-apps/plugin-fs": "catalog:",
     "@types/node": "catalog:",
-    "esbuild": "catalog:",
-    "jsdom": "catalog:",
     "rimraf": "catalog:",
     "testcontainers": "catalog:",
     "tsup": "catalog:",

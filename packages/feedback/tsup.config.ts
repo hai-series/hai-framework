@@ -1,34 +1,7 @@
 import { defineConfig } from 'tsup'
 import { baseConfig } from '../tsup.base'
-import { buildFeedbackReplayViewer } from './feedback-build-viewer'
 
-export default defineConfig(async () => ({
+export default defineConfig({
   ...baseConfig,
-  entry: {
-    'index': 'src/index.ts',
-    'client/index': 'src/client/index.ts',
-    'bundle/index': 'src/bundle/index.ts',
-    'feedback-bundle-node-worker': 'src/bundle/feedback-bundle-node-worker.ts',
-    'feedback-bundle-web-worker': 'src/bundle/feedback-bundle-web-worker.ts',
-    'tauri': 'src/client/feedback-client-tauri-entry.ts',
-    'capacitor': 'src/client/feedback-client-capacitor-entry.ts',
-  },
-  external: [
-    '@capacitor/filesystem',
-    '@capacitor/share',
-    '@tauri-apps/plugin-dialog',
-    '@tauri-apps/plugin-fs',
-    '@h-ai/core',
-    '@h-ai/reldb',
-    '@h-ai/storage',
-    '@h-ai/reach',
-    '@h-ai/api-contract',
-    '@rrweb/record',
-    'html2canvas',
-    'fflate',
-    'zod',
-  ],
-  define: {
-    __FEEDBACK_REPLAY_SCRIPT__: JSON.stringify(await buildFeedbackReplayViewer()),
-  },
-}))
+  entry: { index: 'src/index.ts' },
+})

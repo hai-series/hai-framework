@@ -25,7 +25,7 @@ import { haiResultSchema, HaiVoidResultSchema } from './common/result-schemas.js
 import { pathOf, route } from './common/route.js'
 import { contractExtensions } from './composition/contract-extensions.js'
 import { createApiContract } from './composition/create-api-contract.js'
-import { resolveFeedbackBudget } from './feedback/feedback-budget.js'
+import { feedbackTransportRoutes } from './feedback/feedback-budget.js'
 import { feedbackContract } from './feedback/feedback-contract.js'
 import { iamContract } from './iam/iam-contract.js'
 import { paymentContract } from './payment/payment-contract.js'
@@ -43,8 +43,8 @@ import { storageContract } from './storage/storage-contract.js'
  * ```
  */
 export const apiContract = {
-  /** 根据已校验反馈配置计算材料与传输容量。 */
-  resolveFeedbackBudget,
+  /** 反馈文件相关路径的明文容量。 */
+  feedbackTransportRoutes,
   /** 组合任意领域 contract，过滤掉 `false` / `undefined`，输出可被 serv 挂载的 router。 */
   create: createApiContract,
 
@@ -71,6 +71,6 @@ export const apiContract = {
   ai: aiContract,
   /** Payment 领域 contract。 */
   payment: paymentContract,
-  /** 用户反馈、证据采集和离线导出。 */
+  /** 用户反馈、对话和附件。 */
   feedback: feedbackContract,
 }

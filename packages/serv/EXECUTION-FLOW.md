@@ -104,7 +104,7 @@ serv.listen(app, { onClose: closeApp })
 - `serv.createIamProcedures()`：登录、登出、当前用户、用户/角色/权限 CRUD
 - `serv.createStorageProcedures()`：预签名上传/下载、文件列表、元数据、删除
 - `serv.createAiProcedures()`：对话补全、发消息、历史、记忆、会话列表
-- `serv.createFeedbackProcedures()`：反馈提交、查询、处理和导出
+- `serv.createFeedbackProcedures()`：反馈提交、查询、会话、附件和处理状态
 
 这些 feature 是“开箱即用的默认装配”，不是强制依赖。调用方可以：
 

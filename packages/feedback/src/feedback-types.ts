@@ -1,24 +1,5 @@
-import type {
-  FeedbackAppendEvidenceInput,
-  FeedbackAttachment,
-  FeedbackAttachmentData,
-  FeedbackBudget,
-  FeedbackCompleteInput,
-  FeedbackDetail,
-  FeedbackEvidence,
-  FeedbackEvidenceInput,
-  FeedbackEvidenceQuery,
-  FeedbackExportInput,
-  FeedbackJob,
-  FeedbackListInput,
-  FeedbackReport,
-  FeedbackRetryInput,
-  FeedbackSetStatusInput,
-  FeedbackSubmitInput,
-  FeedbackUploadInput,
-} from '@h-ai/api-contract/feedback'
-
-import type { ErrorInfo, HaiResult, PaginatedResult } from '@h-ai/core'
+import type { FeedbackHttpOperations } from '@h-ai/api-contract/feedback'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import type { FeedbackConfig, FeedbackConfigInput } from './feedback-config.js'
 import { core } from '@h-ai/core'
 
@@ -30,167 +11,32 @@ const FeedbackErrorInfo = {
   NOT_FOUND: '021:404',
   FORBIDDEN: '022:403',
   CONFLICT: '023:409',
-  LIMIT_EXCEEDED: '024:413',
   INVALID_INPUT: '025:400',
-  CHECKSUM_MISMATCH: '026:422',
-  QUOTA_EXCEEDED: '027:429',
 } satisfies ErrorInfo
 
-/**
- * Feedback 错误定义。
- * @example
- * ```ts
- * import { HaiFeedbackError } from '@h-ai/feedback'
- * const code = HaiFeedbackError.NOT_FOUND.code
- * void code
- * ```
- */
+/** 反馈服务公开错误定义。 */
 export const HaiFeedbackError = core.error.buildHaiErrorsDef('feedback', FeedbackErrorInfo)
 
-/**
- * 由可信服务端认证与授权策略生成的范围；HTTP 输入不能指定此对象。
- * @example
- * ```ts
- * import type { FeedbackContext } from '@h-ai/feedback'
- * const context: FeedbackContext = { scopeId: 'tenant-1', userId: 'user-1', permissions: ['feedback:create'] }
- * void context
- * ```
- */
-export interface FeedbackContext {
-  scopeId: string
-  userId: string
-  permissions?: readonly string[]
-}
-
-/**
- * 业务采集附件；ID 在同一反馈内稳定，正文由框架计算校验和并写入私有存储。
- * @example
- * ```ts
- * import type { FeedbackCollectedAttachment } from '@h-ai/feedback'
- * const file: FeedbackCollectedAttachment = { id: 'logs', name: 'logs.txt', contentType: 'text/plain', bytes: new TextEncoder().encode('diagnostics') }
- * void file
- * ```
- */
-export interface FeedbackCollectedAttachment {
-  id: string
-  name: string
-  contentType: string
-  bytes: Uint8Array
-}
-
-/**
- * 业务补充材料；短文本/结构化信息出现在 business 证据，完整日志使用附件。
- * @example
- * ```ts
- * import type { FeedbackCollectedEvidence } from '@h-ai/feedback'
- * const evidence: FeedbackCollectedEvidence = { text: 'Order diagnostics', data: { orderId: 'order-1' } }
- * void evidence
- * ```
- */
-export interface FeedbackCollectedEvidence {
-  text?: string
-  data?: FeedbackEvidenceInput['data']
-  attachments?: FeedbackCollectedAttachment[]
-}
-
-/**
- * 采集扩展在持久任务中执行并等待异步结果；可能重试，宿主应按 report.id 幂等并响应 signal。
- * @example
- * ```ts
- * import type { FeedbackInitOptions } from '@h-ai/feedback'
- * const options: FeedbackInitOptions = { collectEvidence: async ({ report, signal }) => { signal.throwIfAborted(); return { text: report.number } } }
- * void options
- * ```
- */
-export interface FeedbackInitOptions {
-  collectEvidence?: (context: { report: Readonly<FeedbackReport>, signal: AbortSignal }) => FeedbackCollectedEvidence | Promise<FeedbackCollectedEvidence>
-}
-
-/**
- * 采集结束后发送的 feedback.created 事件；eventId 跨重试稳定，附件正文通过受权 API 读取。
- * @example
- * ```ts
- * import type { FeedbackWebhookEvent } from '@h-ai/feedback'
- * function eventKey(event: FeedbackWebhookEvent) { return event.eventId }
- * void eventKey
- * ```
- */
-export interface FeedbackWebhookEvent {
-  event: 'feedback.created'
-  eventId: string
-  createdAt: number
-  report: FeedbackReport
-  evidence: { revision: number, business: boolean, attachments: FeedbackAttachment[] }
-  detailUrl?: string
-}
-
-/**
- * 反馈服务对象；领域操作返回 HaiResult，close 不释放宿主依赖连接。
- * @example
- * ```ts
- * import type { FeedbackContext, FeedbackFunctions } from '@h-ai/feedback'
- * async function submit(service: FeedbackFunctions, context: FeedbackContext) {
- *   const result = await service.submit({ appId: 'orders', submissionId: 'stable-operation-id' }, context)
- *   return result.success ? result.data.id : result.error.code
- * }
- * void submit
- * ```
- */
-export interface FeedbackFunctions {
-  /** 离线包工具无需初始化服务，按原有输入输出契约执行。 */
-  createBundle: typeof import('./bundle/feedback-bundle-functions.js').createFeedbackBundle
-  /** 获取离线查看器静态文件，无需初始化。 */
-  getBundleViewerFiles: typeof import('./bundle/feedback-bundle-functions.js').getFeedbackBundleViewerFiles
-  /** 查询离线包，无需初始化。 */
-  queryBundle: typeof import('./bundle/feedback-bundle-functions.js').queryFeedbackBundle
-  /** 读取离线包，无需初始化。 */
-  readBundle: typeof import('./bundle/feedback-bundle-functions.js').readFeedbackBundle
-  /** 汇总离线包，无需初始化。 */
-  summarizeBundle: typeof import('./bundle/feedback-bundle-functions.js').summarizeFeedbackBundle
-  init: (config: FeedbackConfigInput, options?: FeedbackInitOptions) => Promise<HaiResult<void>>
+/** 使用 RelDB 保存反馈、对话和私有附件的服务。 */
+export interface FeedbackFunctions extends FeedbackHttpOperations {
+  init: (config: FeedbackConfigInput) => Promise<HaiResult<void>>
   close: () => Promise<HaiResult<void>>
-  readonly isInitialized: boolean
   readonly config: FeedbackConfig | null
-  readonly budget: FeedbackBudget
-  submit: (input: FeedbackSubmitInput, context: FeedbackContext) => Promise<HaiResult<FeedbackReport>>
-  list: (input: FeedbackListInput, context: FeedbackContext) => Promise<HaiResult<PaginatedResult<FeedbackReport>>>
-  /**
-   * 列出当前可信身份在同一应用和作用域内提交且尚未过期的报告。
-   * @example
-   * ```ts
-   * import { feedback } from '@h-ai/feedback'
-   * const page = await feedback.listMine({ category: 'bug', page: 1 }, { scopeId: 'tenant-a', userId: 'user-a' })
-   * if (page.success) void page.data.items
-   * ```
-   */
-  listMine: (input: FeedbackListInput, context: FeedbackContext) => Promise<HaiResult<PaginatedResult<FeedbackReport>>>
-  get: (id: string, context: FeedbackContext) => Promise<HaiResult<FeedbackDetail>>
-  getEvidence: (input: FeedbackEvidenceQuery, context: FeedbackContext) => Promise<HaiResult<PaginatedResult<FeedbackEvidence>>>
-  setStatus: (input: FeedbackSetStatusInput, context: FeedbackContext) => Promise<HaiResult<FeedbackReport>>
-  appendEvidence: (input: FeedbackAppendEvidenceInput, context: FeedbackContext) => Promise<HaiResult<{ acknowledged: string[], evidenceRevision: number }>>
-  completeCollection: (input: FeedbackCompleteInput, context: FeedbackContext) => Promise<HaiResult<FeedbackReport>>
-  uploadAttachment: (input: FeedbackUploadInput, context: FeedbackContext) => Promise<HaiResult<FeedbackAttachment>>
-  getAttachment: (input: { id: string, attachmentId: string }, context: FeedbackContext) => Promise<HaiResult<FeedbackAttachmentData>>
-  retry: (input: FeedbackRetryInput, context: FeedbackContext) => Promise<HaiResult<void>>
-  export: (input: FeedbackExportInput, context: FeedbackContext) => Promise<HaiResult<FeedbackJob>>
-  getExport: (input: { id: string, jobId: string }, context: FeedbackContext) => Promise<HaiResult<FeedbackAttachmentData>>
-  runJobs: () => Promise<HaiResult<{ processed: number }>>
 }
 
 export type {
-  FeedbackAppendEvidenceInput,
+  FeedbackAddMessageInput,
   FeedbackAttachment,
   FeedbackAttachmentData,
-  FeedbackCompleteInput,
+  FeedbackAttachmentInput,
+  FeedbackAttachmentQuery,
+  FeedbackContext,
   FeedbackDetail,
-  FeedbackEvidence,
-  FeedbackEvidenceQuery,
-  FeedbackExportInput,
-  FeedbackJob,
   FeedbackListInput,
+  FeedbackMessage,
+  FeedbackMessageQuery,
   FeedbackReport,
-  FeedbackRetryInput,
   FeedbackSetStatusInput,
+  FeedbackStatus,
   FeedbackSubmitInput,
-  FeedbackUploadInput,
 } from '@h-ai/api-contract/feedback'

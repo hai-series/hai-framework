@@ -1,5 +1,6 @@
-/** @h-ai/serv — 按需挂载反馈领域，不接收客户端身份或对象存储路径。 */
-import type { FeedbackContext, FeedbackFunctions } from '@h-ai/feedback'
+/** @h-ai/serv — 挂载反馈的会话、处理与附件操作。 */
+import type { FeedbackContext, FeedbackHttpOperations } from '@h-ai/api-contract/feedback'
+import type { HaiResult } from '@h-ai/core'
 import type { ServContext } from '../serv-context.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
 import { apiContract } from '@h-ai/api-contract'
@@ -7,156 +8,74 @@ import { core, HaiCommonError } from '@h-ai/core'
 import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
 
-/**
- * 已认证请求到反馈范围的可信映射，返回 null 时拒绝访问。
- * @example
- * ```ts
- * import type { FeedbackProcedureDeps } from '@h-ai/serv/features/feedback'
- * import { feedback } from '@h-ai/feedback'
- * const deps: FeedbackProcedureDeps = { feedback, resolveContext: ({ session }) => ({ scopeId: 'tenant-from-server', userId: session.userId, permissions: session.permissions }) }
- * ```
- */
+/** 已认证请求到反馈范围的可信映射，返回 null 时拒绝访问。 */
 export interface FeedbackProcedureDeps {
-  readonly feedback: FeedbackFunctions
+  readonly feedback: FeedbackHttpOperations
   readonly resolveContext: (context: AuthenticatedServContext) => FeedbackContext | null | Promise<FeedbackContext | null>
 }
 
 /**
- * 创建反馈的默认 procedures。宿主解析租户与权限，领域模块再次检查资源范围。
+ * 创建反馈 procedures；范围和权限由宿主解析，领域服务再次检查资源归属。
  * @example
  * ```ts
  * import { feedback } from '@h-ai/feedback'
  * import { serv } from '@h-ai/serv'
- * const procedures = serv.createFeedbackProcedures({ feedback, resolveContext: ({ session }) => ({ scopeId: 'trusted-tenant', userId: session.userId, permissions: session.permissions }) })
+ * const procedures = serv.createFeedbackProcedures({
+ *   feedback,
+ *   resolveContext: ({ session }) => ({ scopeId: 'orders', userId: session.userId, permissions: session.permissions }),
+ * })
  * ```
  */
 export function createFeedbackProcedures(deps: FeedbackProcedureDeps) {
-  const contextFor = async (context: AuthenticatedServContext) => {
+  const service = deps.feedback
+
+  async function withActor<T>(context: AuthenticatedServContext, action: (actor: FeedbackContext) => Promise<HaiResult<T>>) {
+    let actor: FeedbackContext | null
     try {
-      const actor = await deps.resolveContext(context)
-      if (!actor?.scopeId || actor.userId !== context.session.userId)
-        return core.err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: context.locale }))
-      return { success: true as const, data: actor }
+      actor = await deps.resolveContext(context)
     }
     catch {
       return core.err(HaiCommonError.INTERNAL_ERROR, servM('serv_errorInternal', { locale: context.locale }))
     }
+    if (!actor?.scopeId || actor.userId !== context.session.userId)
+      return core.err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: context.locale }))
+    return action(actor)
   }
-  const router = implement(apiContract.feedback).context<ServContext>()
-  return router
-    .route('reports.policy')
-    .auth()
-    .handle(async ({ context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return deps.feedback.isInitialized === false
-        ? core.err(HaiCommonError.SERVICE_UNAVAILABLE, servM('serv_feedbackUnavailable'))
-        : core.ok(deps.feedback.budget)
-    })
+
+  return implement(apiContract.feedback)
+    .context<ServContext>()
+
     .route('reports.submit')
     .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.submit(input, actor.data))
-    })
+    .handle(({ input, context }) => withActor(context, actor => service.submit(input, actor)))
+
     .route('reports.list')
     .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.list(input, actor.data))
-    })
+    .handle(({ input, context }) => withActor(context, actor => service.list(input, actor)))
+
     .route('reports.listMine')
     .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.listMine(input, actor.data))
-    })
+    .handle(({ input, context }) => withActor(context, actor => service.listMine(input, actor)))
+
     .route('reports.get')
     .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.get(input.id, actor.data))
-    })
-    .route('reports.getEvidence')
+    .handle(({ input, context }) => withActor(context, actor => service.get(input.id, actor)))
+
+    .route('reports.listMessages')
     .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.getEvidence(input, actor.data))
-    })
+    .handle(({ input, context }) => withActor(context, actor => service.listMessages(input, actor)))
+
+    .route('reports.addMessage')
+    .auth()
+    .handle(({ input, context }) => withActor(context, actor => service.addMessage(input, actor)))
+
     .route('reports.setStatus')
     .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.setStatus(input, actor.data))
-    })
-    .route('reports.retry')
-    .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.retry(input, actor.data))
-    })
-    .route('reports.export')
-    .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.export(input, actor.data))
-    })
-    .route('reports.getExport')
-    .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.getExport(input, actor.data))
-    })
-    .route('reports.appendEvidence')
-    .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.appendEvidence(input, actor.data))
-    })
-    .route('reports.completeCollection')
-    .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.completeCollection(input, actor.data))
-    })
-    .route('attachments.upload')
-    .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.uploadAttachment(input, actor.data))
-    })
+    .handle(({ input, context }) => withActor(context, actor => service.setStatus(input, actor)))
+
     .route('attachments.get')
     .auth()
-    .handle(async ({ input, context }) => {
-      const actor = await contextFor(context)
-      if (!actor.success)
-        return actor
-      return core.context.run(actor.data, () => deps.feedback.getAttachment(input, actor.data))
-    })
+    .handle(({ input, context }) => withActor(context, actor => service.getAttachment(input, actor)))
+
     .build()
 }

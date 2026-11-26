@@ -16,7 +16,6 @@ export default defineConfig({
     '@h-ai/audit',
     '@h-ai/core',
     '@h-ai/crypto',
-    '@h-ai/feedback',
     '@h-ai/iam',
     '@h-ai/storage',
     '@orpc/contract',

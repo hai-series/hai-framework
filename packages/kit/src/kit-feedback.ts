@@ -1,22 +1,18 @@
-import type { HaiResult } from '@h-ai/core'
 /** 可直接挂到 SvelteKit catch-all 路由的反馈适配，无 serv 或 Svelte UI 依赖。 */
-import type { FeedbackContext, FeedbackFunctions } from '@h-ai/feedback'
+import type { FeedbackContext, FeedbackHttpOperations } from '@h-ai/api-contract/feedback'
+import type { HaiResult } from '@h-ai/core'
 import type { RequestEvent, RequestHandler } from '@sveltejs/kit'
 import type { z } from 'zod'
 import {
-  FeedbackAppendEvidenceInputSchema,
+  FeedbackAddMessageInputSchema,
   FeedbackAttachmentQuerySchema,
-  FeedbackCompleteInputSchema,
-  FeedbackEvidenceQuerySchema,
-  FeedbackExportInputSchema,
-  FeedbackExportQuerySchema,
   FeedbackIdInputSchema,
+  feedbackLimits,
   FeedbackListInputSchema,
-  FeedbackRetryInputSchema,
+  FeedbackMessageQuerySchema,
   FeedbackSetStatusInputSchema,
   FeedbackSubmitInputSchema,
-  FeedbackUploadInputSchema,
-} from '@h-ai/api-contract'
+} from '@h-ai/api-contract/feedback'
 import { core, HaiCommonError } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
 import { fromError, ok } from './kit-response.js'
@@ -32,13 +28,14 @@ import { fromError, ok } from './kit-response.js'
  * ```
  */
 export interface FeedbackHandlerOptions {
-  readonly feedback: FeedbackFunctions
+  readonly feedback: FeedbackHttpOperations
   readonly resolveContext: (event: RequestEvent) => FeedbackContext | null | Promise<FeedbackContext | null>
   readonly basePath?: string
 }
 
 /**
- * 装配反馈 REST 路由；默认路径 /api/feedback，由宿主 handle 保持 CSRF、认证和传输加密。
+ * 装配反馈 REST 路由。默认路径 /api/feedback，子目录部署时用 basePath 指定实际路径。
+ * 宿主 handle 负责 CSRF、认证和传输加密。
  * @param options - 已初始化服务与可信范围映射。
  * @returns 可赋值给 catch-all 路由 GET/POST/PATCH 的同一 handler。
  * @example
@@ -89,8 +86,6 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
       return invalid(400)
     }
     const method = event.request.method
-    if (parts.length === 1 && parts[0] === 'policy' && method === 'GET')
-      return ok(options.feedback.budget)
     const listMine = parts.length === 1 && parts[0] === 'my-reports' && method === 'GET'
     if (!listMine && (parts[0] !== 'reports' || parts.length > 4)) {
       return fromError({
@@ -99,11 +94,14 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
       })
     }
     let body: unknown = {}
-    if (!['GET', 'HEAD'].includes(method)) {
+    if (method === 'POST' || method === 'PATCH') {
       if (event.request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json')
         return invalid(415)
       try {
-        body = await readBoundedJson(event.request, options.feedback.budget.maxTransportBytes)
+        const maxBytes = method === 'PATCH'
+          ? 16 * 1024
+          : feedbackLimits.maxPlaintextBytes
+        body = await readBoundedJson(event.request, maxBytes)
       }
       catch (error) {
         return invalid(error instanceof RangeError
@@ -129,10 +127,12 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
       if (!parsed.success)
         return invalid(400)
       try {
-        const result = await core.context.run(actor!, () => operation(parsed.data))
-        return result.success
+        const result = await operation(parsed.data)
+        const response = result.success
           ? ok(result.data)
           : fromError(result.error)
+        response.headers.set('Cache-Control', 'no-store')
+        return response
       }
       catch {
         return fromError({
@@ -152,29 +152,16 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
     if (parts.length === 2 && method === 'GET')
       return execute(FeedbackIdInputSchema, value => service.get(value.id, actor))
     if (parts.length === 3) {
-      if (parts[2] === 'evidence' && method === 'GET')
-        return execute(FeedbackEvidenceQuerySchema, value => service.getEvidence(value, actor))
-      if (parts[2] === 'evidence' && method === 'POST')
-        return execute(FeedbackAppendEvidenceInputSchema, value => service.appendEvidence(value, actor))
+      if (parts[2] === 'messages' && method === 'GET')
+        return execute(FeedbackMessageQuerySchema, value => service.listMessages(value, actor))
+      if (parts[2] === 'messages' && method === 'POST')
+        return execute(FeedbackAddMessageInputSchema, value => service.addMessage(value, actor))
       if (parts[2] === 'status' && method === 'PATCH')
         return execute(FeedbackSetStatusInputSchema, value => service.setStatus(value, actor))
-      if (parts[2] === 'retry' && method === 'POST')
-        return execute(FeedbackRetryInputSchema, value => service.retry(value, actor))
-      if (parts[2] === 'complete' && method === 'POST')
-        return execute(FeedbackCompleteInputSchema, value => service.completeCollection(value, actor))
-      if (parts[2] === 'exports' && method === 'POST')
-        return execute(FeedbackExportInputSchema, value => service.export(value, actor))
     }
-    if (parts.length === 4 && parts[2] === 'attachments') {
+    if (parts.length === 4 && parts[2] === 'attachments' && method === 'GET') {
       Object.assign(input, { attachmentId: parts[3] })
-      if (method === 'POST')
-        return execute(FeedbackUploadInputSchema, value => service.uploadAttachment(value, actor))
-      if (method === 'GET')
-        return execute(FeedbackAttachmentQuerySchema, value => service.getAttachment(value, actor))
-    }
-    if (parts.length === 4 && parts[2] === 'exports' && method === 'GET') {
-      Object.assign(input, { jobId: parts[3] })
-      return execute(FeedbackExportQuerySchema, value => service.getExport(value, actor))
+      return execute(FeedbackAttachmentQuerySchema, value => service.getAttachment(value, actor))
     }
     return fromError({
       ...HaiCommonError.NOT_FOUND,
