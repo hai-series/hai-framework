@@ -1095,46 +1095,33 @@ export async function closeUnpaidOrder(client: ProjectClient, order: PaymentClos
 
 <a id="feedback-requests"></a>
 
-### フィードバックを送信・処理：`client.feedback`
+### フィードバックを送信・処理 `client.feedback`
 
-サービスに `apiContract.feedback` を登録し、[アプリの契約](#http-contract-extensions) からフィードバックフォームと管理画面で同じ型付き操作を使います。投稿者は主に `submit` と `listMine` を使います。管理、再試行、エクスポートにはホストの権限が必要です。資料数と容量は `reports.policy` で確認します。
+アプリの契約に `apiContract.feedback` を登録すると、ログイン済みの `client.feedback` から提出、参照、返信を行えます。対象範囲、利用者、権限はサーバーで信頼できるセッションから決定します。
 
-#### インターフェース一覧
+| API | 用途 | 呼び出し例 |
+| --- | --- | --- |
+| `client.feedback.reports.submit(input, options?)` | 本文と添付を提出 | `await client.feedback.reports.submit({ id, body, attachments })` |
+| `client.feedback.reports.listMine(input, options?)` | 自分の問題票を一覧表示 | `await client.feedback.reports.listMine({})` |
+| `client.feedback.reports.list(input, options?)` | 担当者が一覧を取得 | `await client.feedback.reports.list({ status: 'pending' })` |
+| `client.feedback.reports.get(input, options?)` | 本文と最初の添付を取得 | `await client.feedback.reports.get({ id })` |
+| `client.feedback.reports.listMessages(input, options?)` | 最新の返信をページで取得 | `await client.feedback.reports.listMessages({ id, page: 1 })` |
+| `client.feedback.reports.addMessage(input, options?)` | 返信または追加情報を依頼 | `await client.feedback.reports.addMessage({ id, messageId, body, kind: 'reply' })` |
+| `client.feedback.reports.setStatus(input, options?)` | 未処理または処理済みに変更 | `await client.feedback.reports.setStatus({ id, status: 'handled' })` |
+| `client.feedback.attachments.get(input, options?)` | 選択した添付を取得 | `await client.feedback.attachments.get({ id, attachmentId })` |
 
-| API | 用途 | 引数と既定値 | 戻り値とエラー | 呼び出し例 |
-| --- | --- | --- | --- | --- |
-| `client.feedback.reports.policy(input, options?)` | フィードバック容量を取得 | `{}` を渡す。 | `HaiResult<FeedbackBudget>` | `await client.feedback.reports.policy({})` |
-| `client.feedback.reports.submit(input, options?)` | フィードバックを送信 | `submissionId` と `appId` が必須。説明、連絡先、ページ、アプリの版、エラー位置、資料は任意。同じ送信の再試行では ID を再利用。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.submit({ submissionId, appId, description })` |
-| `client.feedback.reports.listMine(input, options?)` | 自分のフィードバックを一覧取得 | 既定ページには `{}`。状態、アプリ、期間などで絞り込み可能。 | `HaiResult` にフィードバックのページが入る。 | `await client.feedback.reports.listMine({ page: 1 })` |
-| `client.feedback.reports.list(input, options?)` | 管理権限でフィードバックを一覧取得 | `{}` またはページ、状態、アプリ、期間などの条件を渡す。 | `HaiResult` に認可範囲内のページが入る。 | `await client.feedback.reports.list({ page: 1, status: 'pending' })` |
-| `client.feedback.reports.get(input, options?)` | フィードバックの詳細を取得 | フィードバックの `id` が必須。 | `HaiResult<FeedbackDetail>` | `await client.feedback.reports.get({ id })` |
-| `client.feedback.reports.getEvidence(input, options?)` | 証拠をページ取得 | フィードバックの `id` が必須。ページ、`source`、`kind`、`requestId`、`errorId`、期間は任意。 | `HaiResult` に証拠のページが入る。 | `await client.feedback.reports.getEvidence({ id, requestId })` |
-| `client.feedback.reports.setStatus(input, options?)` | フィードバックを処理済みにする、または再開 | `id`、`status`（`pending` または `handled`）、最後に読んだ `expectedVersion` が必須。`note` は任意。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.setStatus({ id, status: 'handled', expectedVersion })` |
-| `client.feedback.reports.retry(input, options?)` | バックグラウンドジョブを再試行 | `id` と `target`（`collect`、`notify`、`webhook`、`export`、`attachment`）が必須。`targetId` は任意。 | `HaiResult<void>` | `await client.feedback.reports.retry({ id, target: 'notify' })` |
-| `client.feedback.reports.appendEvidence(input, options?)` | 取得済みの証拠を追加 | `id` と最大 1000 項目の `evidence` 配列が必須。 | `HaiResult<FeedbackEvidenceAck>` | `await client.feedback.reports.appendEvidence({ id, evidence })` |
-| `client.feedback.reports.completeCollection(input, options?)` | 証拠の収集を完了 | `id` が必須。`missing` で収集できなかった資料を指定可能。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.completeCollection({ id, missing })` |
-| `client.feedback.reports.export(input, options?)` | エクスポートジョブを作成 | `id` が必須。`evidenceRevision` で証拠の版を固定可能。 | `HaiResult<FeedbackJob>` | `await client.feedback.reports.export({ id })` |
-| `client.feedback.reports.getExport(input, options?)` | 生成済みエクスポートを取得 | フィードバックの `id` とエクスポートの `jobId` が必須。 | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.reports.getExport({ id, jobId })` |
-| `client.feedback.attachments.upload(input, options?)` | 宣言済みの添付データをアップロード | フィードバックの `id`、宣言済みの `attachmentId`、`dataBase64` が必須。 | `HaiResult<FeedbackAttachment>` | `await client.feedback.attachments.upload({ id, attachmentId, dataBase64 })` |
-| `client.feedback.attachments.get(input, options?)` | 認可された添付データを取得 | フィードバックの `id` と `attachmentId` が必須。 | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.attachments.get({ id, attachmentId })` |
+#### 利用例：提出して詳細を開く
 
-#### 利用例：フィードバックを送信して受理済みの詳細を開く
-
-フォームの説明とアプリの `appId` を渡します。今回の `submissionId` を生成して保存し、ネットワーク障害で再試行するときは同じ ID を使います。受理後、返された ID で詳細を開きます。
+アプリの非同期関数でフィードバック契約のある `client` を使います。提出成功後に返された ID で詳細を開きます。
 
 ```ts
-import type { ProjectClient } from './project-api'
-
-export async function submitAndReadFeedback(
-  client: ProjectClient,
-  input: { submissionId: string, appId: string, description: string },
-) {
-  const submitted = await client.feedback.reports.submit(input)
-  if (!submitted.success)
-    return submitted
-  return client.feedback.reports.get({ id: submitted.data.id })
-}
+const submitted = await client.feedback.reports.submit({ id, body, attachments })
+if (!submitted.success)
+  return submitted
+return client.feedback.reports.get({ id: submitted.data.id })
 ```
+
+[@h-ai/feedback](feedback.ja.md#api-reference)
 
 <a id="encrypted-requests"></a>
 

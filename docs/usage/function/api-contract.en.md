@@ -412,42 +412,20 @@ Select existing route groups from the root module. Each domain owns its business
 - **Storage**. Use presigned URLs for uploads and file endpoints for lists and metadata. Storage defines object keys, prefixes, deletion, and expiry. [Storage API reference](storage.en.md#api-reference)
 - **AI**. `ai.chats.createCompletion` returns non-streaming JSON. Declare a separate endpoint for streaming. [AI API reference](ai.en.md#api-reference)
 - **Payment**. Use the channels configured on the server to create or query an order. An acknowledged Alipay notification returns HTTP 200 and plain text `success`. [Alipay notification acknowledgment](payment.en.md#alipay-notification-ack)
-- **Feedback**. Users read their reports with `reports.listMine`. Administrators read authorized reports with `reports.list`. `reports.policy` exposes the active capacity. Continue evidence uploads from the acknowledged revision and export the selected revision. [Feedback guide](feedback.en.md)
+- **Feedback**. Users call `reports.listMine` to view their reports. Staff call `reports.list` for authorized reports. Both sides read `reports.listMessages` and reply through `reports.addMessage`. [@h-ai/feedback](feedback.en.md#api-reference)
 
 <a id="feedback-budget"></a>
 
-### Calculate feedback capacity with `apiContract.resolveFeedbackBudget(input?)`
+### Declare feedback transport limits
 
-Use the same settings to calculate limits for client-side collection, server-side uploads, and offline packages. Values are uncompressed bytes except for the evidence count.
-
-#### Interface list
-
-| API | Purpose | Parameters and defaults | Return or failure | Example call |
-| --- | --- | --- | --- | --- |
-| `apiContract.resolveFeedbackBudget(input?)` | Calculate effective capacity from feedback configuration. | Optional `input`. Defaults are 32 MiB total, 5 MiB per attachment, 4 MiB per evidence item, and 2,000 evidence items. The total may lower per-item limits. | `FeedbackBudget`. Throws a schema validation error if the result is out of range. | `apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })` |
-
-##### Budget parameters
-
-| Parameter | Type and default | Effect |
-| --- | --- | --- |
-| `maxTotalBytes` | Integer from 4–40 MiB, default 32 MiB. | Total budget for attachments, evidence, and offline packages. Determines the HTTP payload budget. |
-| `maxAttachmentBytes` | Positive integer, default 5 MiB. | Per-attachment budget, capped by the total attachment allowance. |
-| `maxEvidenceBytes` | Positive integer, default 4 MiB. | Per-evidence budget, capped at one eighth of the overall total. |
-| `maxEvidenceCount` | Positive integer, default 2,000. | Retain up to 2,000 pieces of evidence. |
-
-#### Scenario: Calculate the transport budget from shared feedback limits
-
-A feedback service or offline export client has a configured total of 16 MiB. Use the feedback subpath to calculate individual limits and the full HTTP payload budget.
+Import `feedbackTransportRoutes(apiPrefix?)` from `@h-ai/api-contract/feedback`. It returns a route-to-byte mapping under the API prefix, which defaults to `/api`. Merge it into the host’s `routePlaintextBytes`.
 
 ```ts
-import { apiContract } from '@h-ai/api-contract/feedback'
+import { feedbackTransportRoutes } from '@h-ai/api-contract/feedback'
 
-// Derive attachment, evidence, and HTTP plaintext limits from a total of 16 MiB.
-const budget = apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })
-console.info(budget.maxTransportBytes) // 22435160 bytes
+const routePlaintextBytes = feedbackTransportRoutes('/api')
+void routePlaintextBytes
 ```
-
-Use `maxTransportBytes` when setting a limit for endpoints that carry feedback material. The server verifies attachment bytes, sizes, and checksums. [Feedback configuration](../configuration/feedback.en.md)
 
 <a id="http-contract-extensions"></a>
 

@@ -967,7 +967,7 @@ const app = serv.createApp({
 
 业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `crypto.transport.resolveBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 [Transport capacity and upgrade](crypto.md#transport-capacity)。
 
-普通接口沿用 `transport.maxPlaintextBytes`，设为 `auto` 或省略时上限为 1 MiB。反馈上报、证据、附件和 ZIP 下载通常需要更大正文。给这些路由单独设置 `routePlaintextBytes`，取值可用 `feedback.budget.maxTransportBytes`。路径中的 `*` 只匹配一个路径段。若应用已为某条路由配置额度，以该值为准。
+普通接口沿用全局 `transport.maxPlaintextBytes`。在 `routePlaintextBytes` 中合并 `feedbackTransportRoutes(apiPrefix)`，为反馈提交、消息与附件保留 16 MiB 的明文容量。
 
 握手、Node HTTP 适配器和反向代理按各路由的最大值预留空间。HTTP 适配器为显式配置且超过 1 MiB 的路由最多同时处理 2 个请求，普通路由另有 16 个名额。响应发送完毕或请求失败时释放名额。忙碌时返回 HTTP 503（`hai:crypto:072`），应用决定是否重试。
 
@@ -975,9 +975,9 @@ Serv/Kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的请
 
 #### 场景：从已验证会话解析反馈范围
 
-从 `@h-ai/serv` 导入 `serv`，通过 `serv.createFeedbackProcedures` 挂载 `apiContract.feedback`。工厂接收应用已经初始化的 `feedback`。应用先初始化 RelDB 和私有 Storage，使用 Reach 投递通知时也先初始化 Reach。收到请求后，从已验证会话和部署配置确定用户可访问的反馈范围。resolveContext 返回 null 或用户不匹配时拒绝访问，领域模块再次校验范围与权限。
+从 `@h-ai/serv` 导入 `serv`，通过 `serv.createFeedbackProcedures` 挂载 `apiContract.feedback`。工厂接收应用已经初始化的 `feedback`。应用先初始化 RelDB，再初始化 Feedback。收到请求后，从已验证会话和部署配置确定用户可访问的反馈范围。resolveContext 返回 null 或用户不匹配时拒绝访问，领域模块再次校验范围与权限。
 
-所有 HTTP 响应（包括探活、404、中间件短路）携带有界 X-Request-Id。普通业务日志需由已有 createContext 的可选 scopeId 建立可信范围，scopeId 从不读取客户端头。HTTP 入口清理旧身份，认证后的异步业务日志自动继承当前请求 ID 与用户。
+所有 HTTP 响应携带有界的 X-Request-Id。反馈接口的范围来自服务端应用的可信上下文。
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'

@@ -1016,44 +1016,31 @@ export async function closeUnpaidOrder(client: ProjectClient, order: PaymentClos
 
 ### 提交和处理反馈 `client.feedback`
 
-服务端挂载 `apiContract.feedback` 后，反馈表单和管理台可以从[应用契约](#http-contract-extensions)获得同一套类型化调用。作者常用 `submit` 和 `listMine`。管理、重试和导出按宿主权限执行，材料数量和容量以 `reports.policy` 为准。
+服务端在应用契约中挂载 `apiContract.feedback` 后，从 `client.feedback` 调用相同的提交、查询和回复接口。服务端从可信会话确定业务范围、作者和权限。
 
-#### 接口清单
+| API | 用途 | 调用示例 |
+| --- | --- | --- |
+| `client.feedback.reports.submit(input, options?)` | 提交正文和附件 | `await client.feedback.reports.submit({ id, body, attachments })` |
+| `client.feedback.reports.listMine(input, options?)` | 查看自己的反馈 | `await client.feedback.reports.listMine({})` |
+| `client.feedback.reports.list(input, options?)` | 在管理端查询反馈 | `await client.feedback.reports.list({ status: 'pending' })` |
+| `client.feedback.reports.get(input, options?)` | 打开正文和首帖附件 | `await client.feedback.reports.get({ id })` |
+| `client.feedback.reports.listMessages(input, options?)` | 分页读取最新回复 | `await client.feedback.reports.listMessages({ id, page: 1 })` |
+| `client.feedback.reports.addMessage(input, options?)` | 发送回复或请求补充 | `await client.feedback.reports.addMessage({ id, messageId, body, kind: 'reply' })` |
+| `client.feedback.reports.setStatus(input, options?)` | 标记待处理或已处理 | `await client.feedback.reports.setStatus({ id, status: 'handled' })` |
+| `client.feedback.attachments.get(input, options?)` | 获取附件内容 | `await client.feedback.attachments.get({ id, attachmentId })` |
 
-| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
-| --- | --- | --- | --- | --- |
-| `client.feedback.reports.policy(input, options?)` | 读取反馈容量 | 传 `{}`。 | `HaiResult<FeedbackBudget>` | `await client.feedback.reports.policy({})` |
-| `client.feedback.reports.submit(input, options?)` | 提交一份反馈 | 必填 `submissionId` 和 `appId`。可选说明、联系信息、页面、应用版本、错误定位和材料。同一提交重试沿用 `submissionId`。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.submit({ submissionId, appId, description })` |
-| `client.feedback.reports.listMine(input, options?)` | 查看自己提交的反馈 | 传 `{}` 使用默认分页；可选分页、状态、应用和时间等过滤条件。 | `HaiResult`，反馈分页。 | `await client.feedback.reports.listMine({ page: 1 })` |
-| `client.feedback.reports.list(input, options?)` | 按管理权限查询反馈 | 传 `{}` 或分页、状态、应用和时间等过滤参数。 | `HaiResult`，授权范围内的反馈分页。 | `await client.feedback.reports.list({ page: 1, status: 'pending' })` |
-| `client.feedback.reports.get(input, options?)` | 打开反馈详情 | 必填报告 `id`。 | `HaiResult<FeedbackDetail>` | `await client.feedback.reports.get({ id })` |
-| `client.feedback.reports.getEvidence(input, options?)` | 分页查看证据 | 必填报告 `id`。可选分页、`source`、`kind`、`requestId`、`errorId` 和时间窗口。 | `HaiResult`，证据分页。 | `await client.feedback.reports.getEvidence({ id, requestId })` |
-| `client.feedback.reports.setStatus(input, options?)` | 处理或重新打开反馈 | 必填 `id`、`status`（`pending` 或 `handled`）及当前详情的 `expectedVersion`。可选 `note`。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.setStatus({ id, status: 'handled', expectedVersion })` |
-| `client.feedback.reports.retry(input, options?)` | 重试后台任务 | 必填 `id` 和 `target`（`collect`、`notify`、`webhook`、`export` 或 `attachment`）。可选 `targetId`。 | `HaiResult<void>` | `await client.feedback.reports.retry({ id, target: 'notify' })` |
-| `client.feedback.reports.appendEvidence(input, options?)` | 补充已采集的证据 | 必填 `id` 与 `evidence` 数组（最多 1000 项）。 | `HaiResult<FeedbackEvidenceAck>` | `await client.feedback.reports.appendEvidence({ id, evidence })` |
-| `client.feedback.reports.completeCollection(input, options?)` | 结束本轮采集 | 必填 `id`。可选 `missing` 说明未收集材料。 | `HaiResult<FeedbackReport>` | `await client.feedback.reports.completeCollection({ id, missing })` |
-| `client.feedback.reports.export(input, options?)` | 创建导出任务 | 必填 `id`，可选 `evidenceRevision` 指定证据修订。 | `HaiResult<FeedbackJob>` | `await client.feedback.reports.export({ id })` |
-| `client.feedback.reports.getExport(input, options?)` | 读取已生成的导出内容 | 必填报告 `id` 与导出任务 `jobId`。 | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.reports.getExport({ id, jobId })` |
-| `client.feedback.attachments.upload(input, options?)` | 上传已声明的反馈附件 | 必填报告 `id`、反馈提交时已声明的 `attachmentId` 与 `dataBase64`。 | `HaiResult<FeedbackAttachment>` | `await client.feedback.attachments.upload({ id, attachmentId, dataBase64 })` |
-| `client.feedback.attachments.get(input, options?)` | 读取有权限的附件数据 | 必填报告 `id` 和 `attachmentId`。 | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.attachments.get({ id, attachmentId })` |
+#### 场景：提交后查看自己的反馈
 
-#### 场景：提交反馈后打开已受理详情
-
-表单填好后传入应用的 `appId` 和说明。为此次提交生成并保存一个 `submissionId`，遇到网络中断重试时使用同一个 ID。提交成功后用服务端返回的报告编号打开详情。
+下例在异步函数中使用带反馈子契约的 `client`。提交成功后，使用服务端返回的 ID 打开详情。
 
 ```ts
-import type { ProjectClient } from './project-api'
-
-export async function submitAndReadFeedback(
-  client: ProjectClient,
-  input: { submissionId: string, appId: string, description: string },
-) {
-  const submitted = await client.feedback.reports.submit(input)
-  if (!submitted.success)
-    return submitted
-  return client.feedback.reports.get({ id: submitted.data.id })
-}
+const submitted = await client.feedback.reports.submit({ id, body, attachments })
+if (!submitted.success)
+  return submitted
+return client.feedback.reports.get({ id: submitted.data.id })
 ```
+
+[@h-ai/feedback](feedback.md#api-reference)
 
 <a id="encrypted-requests"></a>
 

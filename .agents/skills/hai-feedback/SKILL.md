@@ -1,6 +1,6 @@
 ---
 name: hai-feedback
-description: "接入 @h-ai/feedback 用户反馈、业务异步证据、Webhook、管理员处理、独立通知与离线诊断包。"
+description: "接入 @h-ai/feedback 提交反馈、双向回复、补充请求、状态和附件。"
 ---
 
 # hai-feedback
@@ -9,12 +9,12 @@ description: "接入 @h-ai/feedback 用户反馈、业务异步证据、Webhook�
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 维护反馈采集、截图/短录屏/回放、异步业务证据、Webhook、管理员处理、独立通知与离线诊断的共享契约 |
+| 能力 | 维护提交、本人反馈、双方回复、补充请求、处理状态和附件的共享契约 |
 | 适用场景 | 仓库内新增反馈消费方或修改 feedback 公共接口、模板和文档 |
 | 输入 | 当前源码、反馈设计、可信身份范围及使用方需求 |
 | 输出 | 同步的模块、适配器、UI、生成模板与有效验证证据 |
-| 限制 | 使用正文由共享 skill 维护；模块生命周期和分布式任务按当前类型及规范实施 |
+| 限制 | 使用正文由共享 skill 维护；RelDB 生命周期与请求事务按当前类型及规范实施 |
 
 ## 使用路径
 
-读取 [共享使用契约](../../../packages/cli/templates/skills/hai-feedback/SKILL.md)。仓库内 API 以当前公开入口为准；同步服务、contract、UI、CLI 模板、三语文档与受影响测试，不复制新的采集或通知实现。
+读取 [共享使用契约](../../../packages/cli/templates/skills/hai-feedback/SKILL.md)。仓库内 API 以当前公开入口为准；同步服务、contract、UI、CLI 模板、三语文档与受影响测试，复用统一契约与组件。

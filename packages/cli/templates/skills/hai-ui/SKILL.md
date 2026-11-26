@@ -82,7 +82,7 @@ AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供
 
 ## 表单布局与错误提示
 
-问题反馈使用 `FeedbackModal/FeedbackForm` 收集、`FeedbackList/FeedbackDetail` 管理、`FeedbackScreenshot` 标注。组件只负责交互，先固定现场再打开弹窗；跨页截图用 oncapture，实际脱敏材料用 evidence，短录屏随 onfileschange 接入，详情 onreplay 按需读取完整操作记录；可靠受理、上传、通知、权限和离线包按 [hai-feedback](../hai-feedback/SKILL.md) 接入，不把表单回调完成当作持久化成功。
+用 `FeedbackModal` 提交有附件的反馈，`FeedbackList` 和 `FeedbackDetail` 查看报告并回复。宿主传入鉴权后的操作，接口和权限见 [hai-feedback](../hai-feedback/SKILL.md)。
 
 文本控件输入后失焦显示前端错误，修正输入时即时更新；未输入空字段留到提交校验，避免默认焦点离开时挤动操作。CRUD 新增/编辑同样在输入后失焦或提交时校验。Select 在焦点离开触发器及选项后校验。应用无需逐项绑定 blur；业务异步校验仍由应用提供。PasswordInput 的 minLength 提供时执行长度校验；登录现有密码时省略该属性。
 

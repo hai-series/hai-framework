@@ -673,7 +673,7 @@ transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` �
 
 业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `crypto.transport.resolveBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 [Transport capacity and upgrade](crypto.md#transport-capacity)。
 
-普通接口沿用 `transport.maxPlaintextBytes`，设为 `auto` 或省略时上限为 1 MiB。反馈上报、证据、附件和 ZIP 下载通常需要更大正文。给这些路由单独设置 `routePlaintextBytes`，取值可用 `feedback.budget.maxTransportBytes`。路径中的 `*` 只匹配一个路径段。若应用已为某条路由配置额度，以该值为准。
+普通接口沿用全局 `transport.maxPlaintextBytes`。在 `routePlaintextBytes` 中合并 `feedbackTransportRoutes(apiPrefix)`，为反馈提交、消息与附件保留 16 MiB 的明文容量。
 
 握手、Node HTTP 适配器和反向代理按各路由的最大值预留空间。HTTP 适配器为显式配置且超过 1 MiB 的路由最多同时处理 2 个请求，普通路由另有 16 个名额。响应发送完毕或请求失败时释放名额。忙碌时返回 HTTP 503（`hai:crypto:072`），应用决定是否重试。
 
@@ -745,11 +745,11 @@ export function load() {
 
 下面分别给出 feedback handler、Agent Card GET 和 A2A POST：输入业务处理器与认证函数，输出 JSON/SSE Response；路径不匹配的 A2A 分发返回 null，让后续 Hook 继续。
 
-#### 场景：挂载反馈处理器并关联业务日志
+#### 场景：挂载反馈处理器
 
 在 `/api/feedback/[...path]/+server.ts` 中，可以把 `kit.createFeedbackHandler()` 返回的函数导出为 GET、POST、PATCH。Kit 和 Serv 使用同一份 Feedback API 契约。服务端限制正文大小，也拒绝客户端声称自己的身份或租户。应用实现 `resolveContext`，从已经验证的 `locals.session` 取用户信息并决定反馈范围和权限。返回 `null` 表示拒绝。现有的 CSRF、认证和传输加密仍由 `kit.createHandle()` 中设置的中间件处理。
 
-createHandle 保留有效且有界的入站 X-Request-Id，补写响应头，并为异步业务传递请求 ID 和已验证用户。需要收集普通业务后端日志时，在应用的请求中间件中以 `core.context.run({ scopeId: 'configured-product' }, next)` 包住实际业务；该可信范围应与反馈接口一致，不能从客户端头推导。
+反馈业务范围由应用从已验证会话和部署配置解析。提交和回复的附件随正文在一次请求中发送。
 
 ```ts
 

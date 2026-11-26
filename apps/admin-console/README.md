@@ -16,7 +16,7 @@
 - 🔒 **API 传输加密** — 浏览器与 `/api/*` 默认通过 `@h-ai/crypto` 做密钥协商与请求/响应加解密
 - 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @h-ai/ui 场景组件
 - 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志；用户按角色 code 在数据库分页前筛选，总数与结果一致
-- 💬 **问题反馈** — 默认开启，普通用户可提交，业务操作员分页查看、处理/撤销并导出离线诊断包
+- 💬 **问题反馈** — 从顶栏提交和查看自身反馈，业务操作员可回复、请求补充及标记状态
 - 🧩 **UI Gallery** — @h-ai/ui 组件的交互式展览（4 分类标签页）
 - 校验错误演示由“显示校验提示”按钮触发，可清除并恢复；页面初始不推送预设错误，未配置加密示例按需打开。
 - 🔧 **模块演示** — Core、DB、Cache、Storage、AI（含多厂商文生图）、Crypto 交互式示例
@@ -36,7 +36,7 @@
 - 🛡️ 权限管理：权限 CRUD、审计日志（`/admin/iam/permissions`）
 - 🧩 UI Gallery：组件交互式展示（4 标签页）（`/admin/ui-gallery`）
 - 🔧 模块演示：Core / DB / Cache / Storage / AI（LLM、Audio、Image）/ Crypto 演示（`/admin/modules`）
-- 💬 问题反馈：顶栏收集入口与管理员处理（`/admin/feedback`）
+- 💬 问题反馈：顶栏提交及本人反馈、处理列表（`/admin/feedback`）
 - ⚙️ 设置：业务公告、主题切换、语言切换（`/admin/settings`）
 
 #### 角色与演示行为
@@ -63,13 +63,9 @@
 
 ## 默认问题反馈
 
-管理台提交的 config/_feedback.yml 默认启用问题反馈。启动时复用数据库、存储和 Reach，管理员通知使用配置的 email Provider；生产配置私有 S3、真实 SMTP 和通知地址。
+`config/_feedback.yml` 提供应用 ID。Feedback 将反馈、对话与附件写入应用的关系数据库。普通用户拥有 `feedback:create` 时可从顶栏提交。在「我的反馈」中查看回复、补充请求和状态，也可附上图片或其他文件继续回复。
 
-业务异步补采使用 feedback.init(config, { collectEvidence })，可返回 text/data 与文本或 ZIP/GZIP 附件；同 appId 的每个实例都要注册。_feedback.yml 可配置 `HAI_FEEDBACK_WEBHOOK_URL`、`HAI_FEEDBACK_WEBHOOK_SECRET`、`HAI_FEEDBACK_WEBHOOK_TIMEOUTMS` 与 `HAI_FEEDBACK_COLLECTION_BUSINESSTIMEOUTMS`；密钥保存在服务端私有环境。详情展示 Webhook 状态及尝试次数，管理员重试失败项。使用方式见 [feedback](../../packages/feedback/README.md)。
-
-普通 user 角色获得 feedback:create，可从顶栏直接提交空说明或附带图片；窄屏仍保留带可访问名称的入口。business_operator 角色获得 feedback:create/read/process/reopen/export，可打开 /admin/feedback，分页筛选、查看材料、处理或撤销并导出诊断包。创建者可读取自己的报告/续传材料；普通用户不能列出管理记录或执行管理操作。无角色且未授权的用户不显示提交入口，服务端仍拒绝请求。
-
-采集失败可再次点击入口；提交失败保留说明、附件与现场，可重试或保存本地包。受理回执分别提示采集状态，受理不代表邮件已投递。反馈权限由宿主应用显式分配。
+`business_operator` 角色有 `feedback:read` 和 `feedback:process`，可在 `/admin/feedback` 筛选同范围的反馈、回复或要求补充，并标记状态。应用通过已验证会话确定身份和业务范围。 [两账号验收流程](../../docs/usage/operations/feedback.md)
 
 ## 使用入门
 
@@ -260,12 +256,6 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 - **i18n**：Paraglide
 - **包管理**：pnpm
 
-## 反馈现场与交付检查
-
-反馈入口默认预览当前页面，支持换页补图、拖选标注与无声短录屏（60秒/5 MiB，原始录屏需自行避开敏感信息）。展开“收集材料”查看日志和实际环境；“保存反馈到本地”下载ZIP。管理员在详情的“页面回放”播放页面操作，在“操作现场”查看录屏。离线分析运行 `hai feedback view <zip>`。
-
-反馈示例默认使用 `notification.mode: console`，不要求邮箱或 Reach。服务端反馈预算同时用于传输设置；客户端从 /api/feedback/policy 读取有效容量，使用 SDK 的 getView、比例标注、saveDraft 和 createFeedbackReview；退出账号清理草稿与观察器。初始化使用 core.module.createRuntime，模块自己的迁移在仓库初始化前执行。
-
 ## 界面设计与交互示例
 
 `/admin/ui-gallery/compounds` 的列表状态示例展示加载、空态、错误恢复、筛选、排序、分页与键盘操作。页面沿 [共享设计约定](../../.agents/instructions/ui-design.md) 和 hai-ui-design → hai-ui → hai-ui-review 工作流维护；浏览器测试覆盖实际渲染与交互，外部服务和原生平台另行验收。
@@ -286,7 +276,7 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 | [@h-ai/core](../../packages/core/README.md)                 | 配置、日志、结果与国际化       |
 | [@h-ai/crypto](../../packages/crypto/README.md)             | 认证加密传输和密码能力         |
 | [@h-ai/datapipe](../../packages/datapipe/README.md)         | 文本清洗、分块与管线           |
-| [@h-ai/feedback](../../packages/feedback/README.md)         | 反馈、现场材料和离线包         |
+| [@h-ai/feedback](../../packages/feedback/README.md)         | 反馈、对话和附件               |
 | [@h-ai/iam](../../packages/iam/README.md)                   | 身份、会话与权限               |
 | [@h-ai/kit](../../packages/kit/README.md)                   | SvelteKit 路由、请求与页面集成 |
 | [@h-ai/reach](../../packages/reach/README.md)               | 邮件、短信与通知               |

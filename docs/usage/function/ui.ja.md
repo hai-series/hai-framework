@@ -1142,23 +1142,20 @@ import { THEME_GROUPS, THEMES, ui } from '@h-ai/ui/theme'
 
 <a id="feedback"></a>
 
-### フィードバックと証拠：フィードバック部品
+### フィードバックの提出、参照、処理
 
-ホストが保護済みの証拠と認可済み操作を渡し、部品がユーザー操作を通知します。
+ホストから認証済みの操作を渡します。利用者は送信するファイルを自分で選びます。一覧では自分の問題票または管理対象を表示し、詳細で会話や添付を開きます。
 
 #### インターフェース一覧
 
-| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
-| --- | --- | --- | --- | --- |
-| [`<FeedbackModal>`](#component-feedbackmodal) | ホストへ送信、失敗時入力保持 | `open` は開閉状態。`onsubmit` はフォームの送信時に呼び出す。 | ホストへ送信、失敗時入力保持 | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
-| [`<FeedbackForm>`](#component-feedbackform) | 送信データと添付変更 | `attachments` は表示・編集する添付ファイル。`evidenceSummary` は収集する診断資料の概要を表示。`onsubmit` はフォームの送信時に呼び出す。`onfileschange` は添付ファイル選択の変更を受け取る。 | 送信データと添付変更 | `<FeedbackForm attachments={attachments} onsubmit={submitFeedback} />` |
-| [`<FeedbackList>`](#component-feedbacklist) | 照会コールバック、通信はホスト | `data` は表示するデータ。`query` は現在の一覧の検索条件。`permissions` は画面上の操作可否を決める権限情報。`onquerychange` は検索条件の変更を受け取る。`onstatus` は利用者が要求した報告の状態変更を受け取る。 | 照会コールバック、通信はホスト | `<FeedbackList data={feedbackRows} onquerychange={queryFeedback} />` |
-| [`<FeedbackDetail>`](#component-feedbackdetail) | 報告と許可済み証拠 | `report` は現在のフィードバック報告。`evidence` は表示を許可された診断資料。`attachments` は表示・編集する添付ファイル。`history` は対応履歴。`webhook` は表示する Webhook 配信状態。`onretry` は配信の再試行を処理。`onexport` は利用者の出力操作を処理。 | 報告と許可済み証拠 | `<FeedbackDetail report={report} />` |
-| `FeedbackScreenshot` | 注釈コールバック | `attachment`, `onannotate` | 注釈コールバック | `<FeedbackScreenshot attachment={attachment} onannotate={annotate} />` |
+| 部品 | 用途 | 呼び出し例 |
+| --- | --- | --- |
+| [`<FeedbackDetail>`](#component-feedbackdetail) | 問題票の ID と認証済みの操作を渡して、会話、返信、添付を扱います。`canProcess` で状態変更と資料の依頼を有効にします。 | `<FeedbackDetail {id} {actions} />` |
+| [`<FeedbackForm>`](#component-feedbackform) | ページ内に本文と添付の入力欄を表示します。`onsubmit` で入力を送信します。 | `<FeedbackForm onsubmit={submitFeedback} />` |
+| [`<FeedbackList>`](#component-feedbacklist) | `actions.list` と詳細に必要な操作を渡します。`initialId` で特定の問題票を開けます。 | `<FeedbackList {actions} />` |
+| [`<FeedbackModal>`](#component-feedbackmodal) | `open` で提出ダイアログを開き、`onsubmit` をホストの送信関数につなぎます。 | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
 
-#### 利用例：証拠を表示してフィードバックを送る
-
-収集済みの証拠を表示し、添付、注釈、送信操作を通知します。一覧と詳細には許可済みのデータを渡します。 詳細は[中国語の手順](ui.md#feedback)を参照してください。
+[@h-ai/feedback](feedback.ja.md#feedback-steps)
 
 <a id="utilities"></a>
 
@@ -3191,21 +3188,17 @@ Markdown 文書を目次付きで読み、ツールバーからコピーやダ�
 
 #### FeedbackDetail
 
-処理画面でフィードバックの詳細と閲覧権限のある資料を確認します。ホストが取得した `report` と `evidencePage` を渡し、資料の検索を `queryEvidence` に接続します。
-
-![FeedbackDetail プレビュー](../images/ui-component-feedbackdetail.png)
+問題票の ID と認証済みの操作を渡して、会話、返信、添付を扱います。`canProcess` で状態変更と資料の依頼を有効にします。
 
 ```svelte
-<FeedbackDetail {report} evidence={evidencePage} onevidencequery={queryEvidence} />
+<FeedbackDetail {id} {actions} />
 ```
 
 <a id="component-feedbackform"></a>
 
 #### FeedbackForm
 
-ページに問題の説明と添付ファイルを入力するフォームを置きます。ホストの非同期関数 `submitFeedback` が受付情報を返すと、フィードバック番号を表示できます。
-
-![FeedbackForm プレビュー](../images/ui-component-feedbackform.png)
+ページ内に本文と添付の入力欄を表示します。`onsubmit` で入力を送信します。
 
 ```svelte
 <FeedbackForm onsubmit={submitFeedback} />
@@ -3215,25 +3208,20 @@ Markdown 文書を目次付きで読み、ツールバーからコピーやダ�
 
 #### FeedbackList
 
-管理ページでフィードバックをページ単位で確認し、絞り込みや詳細表示ができます。ホストが `feedbackPage` を渡し、`loadFeedback` と `openFeedback` で検索と詳細表示を処理します。
-
-![FeedbackList プレビュー](../images/ui-component-feedbacklist.png)
+`actions.list` と詳細に必要な操作を渡します。`initialId` で特定の問題票を開けます。
 
 ```svelte
-<FeedbackList data={feedbackPage} onquerychange={loadFeedback} onview={openFeedback} />
+<FeedbackList {actions} />
 ```
 
 <a id="component-feedbackmodal"></a>
 
 #### FeedbackModal
 
-ページのボタンからフィードバックダイアログを開きます。ホストの `feedbackOpen` で開閉を管理し、非同期関数 `submitFeedback` で送信を処理します。
-
-![FeedbackModal プレビュー](../images/ui-component-feedbackmodal.png)
+`open` で提出ダイアログを開き、`onsubmit` をホストの送信関数につなぎます。
 
 ```svelte
-<button type='button' onclick={() => feedbackOpen = true}>Report an issue</button>
-<FeedbackModal bind:open={feedbackOpen} onsubmit={submitFeedback} />
+<FeedbackModal bind:open={open} onsubmit={submitFeedback} />
 ```
 
 <a id="component-guidehost"></a>

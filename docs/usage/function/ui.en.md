@@ -1138,23 +1138,20 @@ On the server, wrap the render in `core.i18n.runWithLocale(locale, render)`. The
 
 <a id="feedback"></a>
 
-### Display feedback and evidence: feedback components
+### Submit, view, and handle feedback
 
-The host supplies sanitized evidence and authorized callbacks; components report user actions.
+The host supplies authenticated feedback actions. Users explicitly choose the files to send. The list loads the author or staff view, and the detail view uses the same contract for messages and files.
 
 #### Interface list
 
-| API | Purpose | Parameters and defaults | Return value or failure | Call example |
-| --- | --- | --- | --- | --- |
-| [`<FeedbackModal>`](#component-feedbackmodal) | Submit to host; retain input on failure | `open` controls whether it is open. `onsubmit` runs on form submission. | Submit to host; retain input on failure | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
-| [`<FeedbackForm>`](#component-feedbackform) | Submission data and attachment changes | `attachments` supplies the attachments to show or edit. `evidenceSummary` shows a summary of diagnostic evidence to collect. `onsubmit` runs on form submission. `onfileschange` receives attachment selection changes. | Submission data and attachment changes | `<FeedbackForm attachments={attachments} onsubmit={submitFeedback} />` |
-| [`<FeedbackList>`](#component-feedbacklist) | Query/action callbacks; no internal requests | `data` provides the data to display. `query` supplies the current list query. `permissions` supplies permission information used by the UI. `onquerychange` receives changes to the query. `onstatus` receives a report status change requested by the user. | Query/action callbacks; no internal requests | `<FeedbackList data={feedbackRows} onquerychange={queryFeedback} />` |
-| [`<FeedbackDetail>`](#component-feedbackdetail) | Report and authorized evidence | `report` supplies the current feedback report. `evidence` supplies diagnostic evidence visible to the user. `attachments` supplies the attachments to show or edit. `history` supplies processing history. `webhook` supplies the webhook delivery state for display. `onretry` handles retrying a delivery. `onexport` handles the requested export. | Report and authorized evidence | `<FeedbackDetail report={report} />` |
-| `FeedbackScreenshot` | Annotation callback | `attachment`, `onannotate` | Annotation callback | `<FeedbackScreenshot attachment={attachment} onannotate={annotate} />` |
+| Component | Purpose | Example |
+| --- | --- | --- |
+| [`<FeedbackDetail>`](#component-feedbackdetail) | Supply a report ID and authorized actions for the conversation, replies, and files. Use `canProcess` to allow status changes and requests. | `<FeedbackDetail {id} {actions} />` |
+| [`<FeedbackForm>`](#component-feedbackform) | Render fields and file selection in a page. The host sends the input through `onsubmit`. | `<FeedbackForm onsubmit={submitFeedback} />` |
+| [`<FeedbackList>`](#component-feedbacklist) | Supply the author or staff list through `actions.list` and the detail actions. Set `initialId` to open a specific report. | `<FeedbackList {actions} />` |
+| [`<FeedbackModal>`](#component-feedbackmodal) | Open the submission dialog with `open` and connect `onsubmit` to the host’s submission function. | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
 
-#### Scenario: Display evidence and submit feedback
-
-Forms display captured evidence and report file, annotation and submit actions; list and detail views consume authorized data. For extended examples, see the [Chinese walkthrough](ui.md#feedback).
+[@h-ai/feedback](feedback.en.md#feedback-steps)
 
 <a id="utilities"></a>
 
@@ -3187,21 +3184,17 @@ Render the host’s `tools` catalog as a tool picker and parameter form. `runToo
 
 #### FeedbackDetail
 
-Inspect a feedback report and its authorized evidence. Pass the `report` and `evidencePage` returned by the host, and wire `queryEvidence` to the evidence query callback.
-
-![FeedbackDetail Preview](../images/ui-component-feedbackdetail.png)
+Supply a report ID and authorized actions for the conversation, replies, and files. Use `canProcess` to allow status changes and requests.
 
 ```svelte
-<FeedbackDetail {report} evidence={evidencePage} onevidencequery={queryEvidence} />
+<FeedbackDetail {id} {actions} />
 ```
 
 <a id="component-feedbackform"></a>
 
 #### FeedbackForm
 
-Collect a description and attachments on a page. The host’s async `submitFeedback` can return a receipt to display the feedback number.
-
-![FeedbackForm Preview](../images/ui-component-feedbackform.png)
+Render fields and file selection in a page. The host sends the input through `onsubmit`.
 
 ```svelte
 <FeedbackForm onsubmit={submitFeedback} />
@@ -3211,25 +3204,20 @@ Collect a description and attachments on a page. The host’s async `submitFeedb
 
 #### FeedbackList
 
-Review paginated feedback, apply filters, and open report details. The host provides `feedbackPage` and handles queries and row actions through `loadFeedback` and `openFeedback`.
-
-![FeedbackList Preview](../images/ui-component-feedbacklist.png)
+Supply the author or staff list through `actions.list` and the detail actions. Set `initialId` to open a specific report.
 
 ```svelte
-<FeedbackList data={feedbackPage} onquerychange={loadFeedback} onview={openFeedback} />
+<FeedbackList {actions} />
 ```
 
 <a id="component-feedbackmodal"></a>
 
 #### FeedbackModal
 
-Open feedback from a page action. Track the dialog in the host’s `feedbackOpen` state and submit through its async `submitFeedback` handler.
-
-![FeedbackModal Preview](../images/ui-component-feedbackmodal.png)
+Open the submission dialog with `open` and connect `onsubmit` to the host’s submission function.
 
 ```svelte
-<button type='button' onclick={() => feedbackOpen = true}>Report an issue</button>
-<FeedbackModal bind:open={feedbackOpen} onsubmit={submitFeedback} />
+<FeedbackModal bind:open={open} onsubmit={submitFeedback} />
 ```
 
 <a id="component-guidehost"></a>

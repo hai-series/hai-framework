@@ -1,90 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" xml:lang="en" width="580" height="688" viewBox="0 0 580 688" role="img" aria-labelledby="title description">
-  <title id="title">Feedback workflow from draft to handling and expiry</title>
-  <desc id="description">Start the service, then prepare and review a draft. On acceptance, the report number is available for viewing and handling. The browser keeps uploading material while the server runs collection, notifications, and Webhooks. Export is optional. Expired reports are cleaned up automatically.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="466" viewBox="0 0 520 466" role="img" aria-labelledby="title desc">
+  <title id="title">Submit feedback, ask for information, and record the outcome</title>
+  <desc id="desc">Submit feedback。Open the same report。Staff request more information。The author replies with details。Staff reply with the outcome</desc>
   <metadata id="diagram-source">flowchart TB
-  A["1. Start the feedback service&lt;br/&gt;Set up database, private storage, and browser SDK"]
-  B["2. Prepare and review a draft&lt;br/&gt;Review evidence, mask images, or save a local ZIP"]
-  C["3. Submit and get a report number&lt;br/&gt;On failure, retry with the same ID and submitted data"]
-  subgraph D["4. After acceptance, uploads and jobs run in parallel"]
-    direction LR
-    Browser["Browser uploads&lt;br/&gt;Send files and evidence&lt;br/&gt;Acknowledge completion"]
-    Worker["Server jobs&lt;br/&gt;Collect evidence&lt;br/&gt;Notify and send webhooks"]
-  end
-  E["5. View and handle the report by number&lt;br/&gt;Available immediately, even while evidence arrives"]
-  F["6. Export a ZIP on demand&lt;br/&gt;Freeze a snapshot, then download when ready"]
-  G["Expiry cleanup runs for every report"]
-  A --&gt; B --&gt; C
-  C --&gt; D
-  C --&gt;|"Number received"| E
-  D -.-&gt; E
-  E --&gt; F
-  C -.-&gt; G</metadata>
+  A["Submit feedback&lt;br/&gt;Enter text or attach files"]
+  B["Open the same report&lt;br/&gt;Pending"]
+  C["Staff request more information&lt;br/&gt;Awaiting user"]
+  D["The author replies with details&lt;br/&gt;Back to Pending"]
+  E["Staff reply with the outcome&lt;br/&gt;Mark Handled"]
+  A --&gt; B --&gt; C --&gt; D --&gt; E
+  B --&gt; E</metadata>
   <defs>
     <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M0 0 L8 4 L0 8 Z" fill="#557091"/>
+      <path d="M0 0 L8 4 L0 8 Z" fill="#526d90"/>
     </marker>
   </defs>
   <style>
     text { font-family: system-ui, "Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif; fill: #172b4d; }
-    .step rect { fill: #edf3ff; stroke: #a6bbdf; }
-    .accepted rect { fill: #e9f6ef; stroke: #79ac91; }
-    .step-title { font-size: 22px; font-weight: 700; }
-    .parallel-title { font-size: 18px; font-weight: 700; }
-    .lane rect { fill: #ffffff; stroke: #c7d3e4; }
-    .lane-title { font-size: 20px; font-weight: 700; }
-    .note { font-size: 17.5px; fill: #314968; }
-    .arrow { fill: none; stroke: #557091; stroke-width: 2; marker-end: url(#arrow); }
+    .title { font-weight: 700; font-size: 22px; }
+    .note { font-size: 18px; fill: #334d70; }
+    g rect { fill: #eef4ff; stroke: #a7bddc; }
+    .arrows path { fill: none; stroke: #526d90; stroke-width: 2; marker-end: url(#arrow); }
   </style>
-  <rect x="1" y="1" width="578" height="686" rx="16" fill="#ffffff" stroke="#dce3ef"/>
+  <rect x="1" y="1" width="518" height="464" rx="14" fill="#ffffff" stroke="#d9e3f1"/>
+  <g class="arrows">
+    <path d="M260 86 V108"/>
+    <path d="M260 176 V198"/>
+    <path d="M260 266 V288"/>
+    <path d="M260 356 V378"/>
+    <path d="M482 143 H500 V413 H485" stroke-dasharray="4 4"/>
+  </g>
   <g>
-    <path class="arrow" d="M305 86 V106"/>
-    <path class="arrow" d="M305 174 V194"/>
-    <path class="arrow" d="M305 262 V284"/>
-    <path class="arrow" d="M50 228 H24 V502 H48"/>
-    <path class="arrow" d="M305 432 V467" stroke-dasharray="4 4"/>
-    <path class="arrow" d="M305 535 V557"/>
-    <g class="step">
-      <rect x="50" y="20" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="49">1. Start the feedback service</text>
-      <text class="note" x="69" y="73">Set up database, private storage, and browser SDK</text>
-    </g>
-    <g class="step">
-      <rect x="50" y="108" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="137">2. Prepare and review a draft</text>
-      <text class="note" x="69" y="161">Review evidence, mask images, or save a local ZIP</text>
-    </g>
-    <g class="step accepted">
-      <rect x="50" y="196" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="225">3. Submit and get a report number</text>
-      <text class="note" x="69" y="249">On failure, retry with the same ID and submitted data</text>
-    </g>
-    <g class="step">
-      <rect x="50" y="469" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="498">5. View and handle the report by number</text>
-      <text class="note" x="69" y="522">Available immediately, even while evidence arrives</text>
-    </g>
-    <g class="step">
-      <rect x="50" y="559" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="588">6. Export a ZIP on demand</text>
-      <text class="note" x="69" y="612">Freeze a snapshot, then download when ready</text>
-    </g>
-    <g>
-      <rect x="50" y="286" width="510" height="146" rx="10" fill="#f2f5fa" stroke="#c7d3e4"/>
-      <text class="parallel-title" x="69" y="314">4. After acceptance, uploads and jobs run in parallel</text>
-      <g class="lane">
-        <rect x="65" y="331" width="235" height="85" rx="8"/>
-        <text class="lane-title" x="77" y="356">Browser uploads</text>
-        <text class="note" x="77" y="382">Send files and evidence</text>
-        <text class="note" x="77" y="403">Acknowledge completion</text>
-      </g>
-      <g class="lane">
-        <rect x="310" y="331" width="235" height="85" rx="8"/>
-        <text class="lane-title" x="322" y="356">Server jobs</text>
-        <text class="note" x="322" y="382">Collect evidence</text>
-        <text class="note" x="322" y="403">Notify and send webhooks</text>
-      </g>
-    </g>
-    <rect x="50" y="642" width="510" height="29" rx="7" fill="#f2f5fa"/>
-    <text class="note" x="69" y="662">Expiry cleanup runs for every report</text>
+    <g><rect x="38" y="20" width="444" height="66" rx="9"/>
+      <text x="57" y="49" class="title">Submit feedback</text>
+      <text x="57" y="72" class="note">Enter text or attach files</text></g>
+    <g><rect x="38" y="110" width="444" height="66" rx="9"/>
+      <text x="57" y="139" class="title">Open the same report</text>
+      <text x="57" y="162" class="note">Pending</text></g>
+    <g><rect x="38" y="200" width="444" height="66" rx="9"/>
+      <text x="57" y="229" class="title">Staff request more information</text>
+      <text x="57" y="252" class="note">Awaiting user</text></g>
+    <g><rect x="38" y="290" width="444" height="66" rx="9"/>
+      <text x="57" y="319" class="title">The author replies with details</text>
+      <text x="57" y="342" class="note">Back to Pending</text></g>
+    <g><rect x="38" y="380" width="444" height="66" rx="9"/>
+      <text x="57" y="409" class="title">Staff reply with the outcome</text>
+      <text x="57" y="432" class="note">Mark Handled</text></g>
   </g>
 </svg>

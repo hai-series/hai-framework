@@ -412,42 +412,20 @@ console.info(parsed.data.data.total) // 1
 - **Storage**。为上传选择预签名端点，为列表和元数据选择文件端点。对象键、前缀、删除与过期规则由 Storage 规定。[存储输入约束](storage.md#存储输入约束与跨端能力)
 - **AI**。`ai.chats.createCompletion` 返回非流式 JSON 结果。需要流时，应用为流声明独立端点。[AI 功能说明](ai.md#api-reference)
 - **Payment**。应用按服务端支持的渠道创建或查询订单。支付宝通知按渠道要求成功返回 HTTP 200 和纯文本 `success`。[支付宝通知回执](payment.md#alipay-notification-ack)
-- **Feedback**。普通用户通过 `reports.listMine` 读取自己的报告，管理端通过 `reports.list` 读取有权限的报告，`reports.policy` 返回当前有效容量。追加证据后按确认的修订号推进，导出读取指定修订。[反馈功能说明](feedback.md#api-reference)
+- **Feedback**. 普通用户通过 `reports.listMine` 查自己的反馈，处理人员通过 `reports.list` 查有权限的反馈。消息由 `reports.listMessages` 读取，双方通过 `reports.addMessage` 回复。 [@h-ai/feedback](feedback.md#api-reference)
 
 <a id="feedback-budget"></a>
 
-### 计算反馈容量：`apiContract.resolveFeedbackBudget(input?)`
+### 声明反馈传输容量
 
-用同一组配置为客户端反馈采集、服务端上传以及离线包计算预算。参数均按未压缩字节计算，证据条数除外。
-
-#### 接口清单
-
-| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
-| --- | --- | --- | --- | --- |
-| `apiContract.resolveFeedbackBudget(input?)` | 从反馈配置计算有效容量。 | 可选 `input`，默认使用 32 MiB 总量、5 MiB 单附件、4 MiB 单证据、2,000 条证据，实际单项会受总量限制。 | `FeedbackBudget`，输入导致预算超出范围时抛 Schema 校验错误。 | `apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })` |
-
-##### 容量参数
-
-| 参数 | 类型与默认值 | 作用 |
-| --- | --- | --- |
-| `maxTotalBytes` | 整数，范围 4–40 MiB，默认 32 MiB。 | 附件、证据与离线包的总预算，决定 HTTP 传输预算。 |
-| `maxAttachmentBytes` | 正整数，默认 5 MiB。 | 单个附件的预算，受附件总预算限制。 |
-| `maxEvidenceBytes` | 正整数，默认 4 MiB。 | 单份证据的预算，最高为总量的八分之一。 |
-| `maxEvidenceCount` | 正整数，默认 2,000。 | 最多保留 2,000 条证据。 |
-
-#### 场景：从统一反馈配置推导传输预算
-
-反馈服务或生成离线包的客户端已取得 16 MiB 的总量配置。用包的反馈入口计算单项和全量 HTTP 预算。
+从 `@h-ai/api-contract/feedback` 导入 `feedbackTransportRoutes(apiPrefix?)`。路径以 API 前缀为起点，默认 `/api`，返回供宿主合并到 `routePlaintextBytes` 的字节数映射。
 
 ```ts
-import { apiContract } from '@h-ai/api-contract/feedback'
+import { feedbackTransportRoutes } from '@h-ai/api-contract/feedback'
 
-// 从 16 MiB 的总量计算实际附件、证据和 HTTP 明文预算。
-const budget = apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })
-console.info(budget.maxTransportBytes) // 22435160 字节
+const routePlaintextBytes = feedbackTransportRoutes('/api')
+void routePlaintextBytes
 ```
-
-应用用 `maxTransportBytes` 设置需要承载反馈材料的接口上限。服务端仍对真实附件字节、大小和摘要做校验。[反馈配置](../configuration/feedback.md)
 
 <a id="http-contract-extensions"></a>
 

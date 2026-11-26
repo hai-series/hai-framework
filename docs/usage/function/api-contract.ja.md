@@ -412,42 +412,20 @@ console.info(parsed.data.data.total) // 1
 - **Storage**。アップロードには署名付き URL のエンドポイントを、一覧とメタデータにはファイル用のエンドポイントを選びます。オブジェクトキー、プレフィックス、削除、有効期限のルールは Storage で扱います。[Storage の入力検証](storage.ja.md#key-validation)
 - **AI**。`ai.chats.createCompletion` はストリーミングを使わない JSON の結果を返します。ストリーミングが必要なら、アプリで専用のエンドポイントを定義します。[AI の API リファレンス](ai.ja.md#api-reference)
 - **Payment**。サーバーが対応する決済手段で注文を作成または照会します。Alipay の通知を受理したときは、決済サービスの仕様に従って HTTP 200 とプレーンテキストの `success` を返します。[Alipay の通知応答](payment.ja.md#alipay-notification-ack)
-- **Feedback**。一般のユーザーは `reports.listMine` で自分の報告を、管理者は `reports.list` で権限のある報告を取得します。`reports.policy` は現在の上限を返します。証拠の追加は確認済みのリビジョン番号に従って進め、エクスポートは指定のリビジョンを読み取ります。[Feedback の API リファレンス](feedback.ja.md#api-reference)
+- **Feedback**. 提出者は `reports.listMine` で自分の問題票を、担当者は `reports.list` で権限のある問題票を取得します。双方が `reports.listMessages` で会話を取得し、`reports.addMessage` で返信します。 [@h-ai/feedback](feedback.ja.md#api-reference)
 
 <a id="feedback-budget"></a>
 
-### フィードバックの容量を計算する：`apiContract.resolveFeedbackBudget(input?)`
+### フィードバックの転送容量を宣言する
 
-クライアントのフィードバック収集、サーバーのアップロード、オフラインパッケージで同じ設定を使います。証拠の件数を除き、単位は圧縮前のバイトです。
-
-#### インターフェース一覧
-
-| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
-| --- | --- | --- | --- | --- |
-| `apiContract.resolveFeedbackBudget(input?)` | フィードバックの設定から上限を計算する。 | `input` は省略可。既定値は総量 32 MiB、添付 1 件あたり 5 MiB、証拠 1 件あたり 4 MiB、証拠 2,000 件です。実際の個別上限は総量にも制限されます。 | `FeedbackBudget`。計算した上限が許容範囲を外れると Schema の検証エラーをスローします。 | `apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })` |
-
-##### 容量の引数
-
-| 引数 | 型と既定値 | 用途 |
-| --- | --- | --- |
-| `maxTotalBytes` | 4–40 MiB の整数。既定値は 32 MiB。 | 添付、証拠、オフラインパッケージを合わせた総量。HTTP 本文の上限も決めます。 |
-| `maxAttachmentBytes` | 正の整数。既定値は 5 MiB。 | 添付 1 件の上限。添付の合計上限にも制限されます。 |
-| `maxEvidenceBytes` | 正の整数。既定値は 4 MiB。 | 証拠 1 件の上限。総量の 8 分の 1 までです。 |
-| `maxEvidenceCount` | 正の整数。既定値は 2,000。 | 証拠を最大 2,000 件保持します。 |
-
-#### 利用例：共通のフィードバック設定から通信上限を求める
-
-フィードバックサービスまたはオフラインパッケージの作成側で、総量 16 MiB の設定が得られたとします。フィードバックのエントリーから、個別の上限と HTTP リクエスト全体の上限を計算します。
+`@h-ai/api-contract/feedback` から `feedbackTransportRoutes(apiPrefix?)` を読み込みます。既定 `/api` の API プレフィックスを持つパスとバイト数を返します。ホストの `routePlaintextBytes` に結合します。
 
 ```ts
-import { apiContract } from '@h-ai/api-contract/feedback'
+import { feedbackTransportRoutes } from '@h-ai/api-contract/feedback'
 
-// 総量 16 MiB から、添付、証拠、HTTP 平文の上限を算出する。
-const budget = apiContract.resolveFeedbackBudget({ maxTotalBytes: 16 * 1024 * 1024 })
-console.info(budget.maxTransportBytes) // 22435160 バイト
+const routePlaintextBytes = feedbackTransportRoutes('/api')
+void routePlaintextBytes
 ```
-
-`maxTransportBytes` を使って、フィードバックの資料を送るルートの上限を設定します。実際の添付データのバイト列、サイズ、ダイジェストはサーバーで検証します。[フィードバック設定](../configuration/feedback.ja.md)
 
 <a id="http-contract-extensions"></a>
 

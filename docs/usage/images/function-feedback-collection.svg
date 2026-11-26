@@ -1,90 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" xml:lang="zh-CN" width="580" height="688" viewBox="0 0 580 688" role="img" aria-labelledby="title description">
-  <title id="title">反馈从草稿到处理与回收的流程</title>
-  <desc id="description">先启动服务，再准备并检查草稿。提交成功后立即获得编号，可以查询和处理。浏览器继续上传材料，服务端推进补采、通知和 Webhook。可以按需导出，报告到期后自动清理。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="466" viewBox="0 0 520 466" role="img" aria-labelledby="title desc">
+  <title id="title">反馈从提交、请求补充到处理的流程</title>
+  <desc id="desc">提交反馈。查看同一份反馈。处理人员发出补充请求。用户回复并补充材料。处理人员回复结果并标记</desc>
   <metadata id="diagram-source">flowchart TB
-  A["1. 启动反馈服务&lt;br/&gt;初始化数据库、私有存储和浏览器 SDK"]
-  B["2. 准备并检查草稿&lt;br/&gt;检查证据、遮挡截图，或保存本地 ZIP"]
-  C["3. 提交并取得反馈编号&lt;br/&gt;提交失败时保留草稿，使用原标识和内容重试"]
-  subgraph D["4. 受理后并行推进材料与任务"]
-    direction LR
-    Browser["浏览器续传&lt;br/&gt;上传附件和后续证据&lt;br/&gt;发送完成确认"]
-    Worker["服务端任务&lt;br/&gt;补采证据&lt;br/&gt;按配置通知和回调"]
-  end
-  E["5. 按编号查询和处理&lt;br/&gt;收到编号即可查询，材料可继续补齐"]
-  F["6. 按需导出 ZIP&lt;br/&gt;固定当前快照，生成后下载"]
-  G["所有报告到期后自动回收"]
-  A --&gt; B --&gt; C
-  C --&gt; D
-  C --&gt;|"拿到编号后"| E
-  D -.-&gt; E
-  E --&gt; F
-  C -.-&gt; G</metadata>
+  A["提交反馈&lt;br/&gt;填写说明或附上文件"]
+  B["查看同一份反馈&lt;br/&gt;待处理"]
+  C["处理人员发出补充请求&lt;br/&gt;待用户补充"]
+  D["用户回复并补充材料&lt;br/&gt;回到待处理"]
+  E["处理人员回复结果并标记&lt;br/&gt;已处理"]
+  A --&gt; B --&gt; C --&gt; D --&gt; E
+  B --&gt; E</metadata>
   <defs>
     <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M0 0 L8 4 L0 8 Z" fill="#557091"/>
+      <path d="M0 0 L8 4 L0 8 Z" fill="#526d90"/>
     </marker>
   </defs>
   <style>
     text { font-family: system-ui, "Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif; fill: #172b4d; }
-    .step rect { fill: #edf3ff; stroke: #a6bbdf; }
-    .accepted rect { fill: #e9f6ef; stroke: #79ac91; }
-    .step-title { font-size: 22px; font-weight: 700; }
-    .parallel-title { font-size: 18px; font-weight: 700; }
-    .lane rect { fill: #ffffff; stroke: #c7d3e4; }
-    .lane-title { font-size: 20px; font-weight: 700; }
-    .note { font-size: 17.5px; fill: #314968; }
-    .arrow { fill: none; stroke: #557091; stroke-width: 2; marker-end: url(#arrow); }
+    .title { font-weight: 700; font-size: 22px; }
+    .note { font-size: 18px; fill: #334d70; }
+    g rect { fill: #eef4ff; stroke: #a7bddc; }
+    .arrows path { fill: none; stroke: #526d90; stroke-width: 2; marker-end: url(#arrow); }
   </style>
-  <rect x="1" y="1" width="578" height="686" rx="16" fill="#ffffff" stroke="#dce3ef"/>
+  <rect x="1" y="1" width="518" height="464" rx="14" fill="#ffffff" stroke="#d9e3f1"/>
+  <g class="arrows">
+    <path d="M260 86 V108"/>
+    <path d="M260 176 V198"/>
+    <path d="M260 266 V288"/>
+    <path d="M260 356 V378"/>
+    <path d="M482 143 H500 V413 H485" stroke-dasharray="4 4"/>
+  </g>
   <g>
-    <path class="arrow" d="M305 86 V106"/>
-    <path class="arrow" d="M305 174 V194"/>
-    <path class="arrow" d="M305 262 V284"/>
-    <path class="arrow" d="M50 228 H24 V502 H48"/>
-    <path class="arrow" d="M305 432 V467" stroke-dasharray="4 4"/>
-    <path class="arrow" d="M305 535 V557"/>
-    <g class="step">
-      <rect x="50" y="20" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="49">1. 启动反馈服务</text>
-      <text class="note" x="69" y="73">初始化数据库、私有存储和浏览器 SDK</text>
-    </g>
-    <g class="step">
-      <rect x="50" y="108" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="137">2. 准备并检查草稿</text>
-      <text class="note" x="69" y="161">检查证据、遮挡截图，或保存本地 ZIP</text>
-    </g>
-    <g class="step accepted">
-      <rect x="50" y="196" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="225">3. 提交并取得反馈编号</text>
-      <text class="note" x="69" y="249">提交失败时保留草稿，使用原标识和内容重试</text>
-    </g>
-    <g class="step">
-      <rect x="50" y="469" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="498">5. 按编号查询和处理</text>
-      <text class="note" x="69" y="522">收到编号即可查询，材料可继续补齐</text>
-    </g>
-    <g class="step">
-      <rect x="50" y="559" width="510" height="66" rx="10"/>
-      <text class="step-title" x="69" y="588">6. 按需导出 ZIP</text>
-      <text class="note" x="69" y="612">固定当前快照，生成后下载</text>
-    </g>
-    <g>
-      <rect x="50" y="286" width="510" height="146" rx="10" fill="#f2f5fa" stroke="#c7d3e4"/>
-      <text class="parallel-title" x="69" y="314">4. 受理后并行推进材料与任务</text>
-      <g class="lane">
-        <rect x="65" y="331" width="235" height="85" rx="8"/>
-        <text class="lane-title" x="77" y="356">浏览器续传</text>
-        <text class="note" x="77" y="382">上传附件和后续证据</text>
-        <text class="note" x="77" y="403">发送完成确认</text>
-      </g>
-      <g class="lane">
-        <rect x="310" y="331" width="235" height="85" rx="8"/>
-        <text class="lane-title" x="322" y="356">服务端任务</text>
-        <text class="note" x="322" y="382">补采证据</text>
-        <text class="note" x="322" y="403">按配置通知和回调</text>
-      </g>
-    </g>
-    <rect x="50" y="642" width="510" height="29" rx="7" fill="#f2f5fa"/>
-    <text class="note" x="69" y="662">所有报告到期后自动回收</text>
+    <g><rect x="38" y="20" width="444" height="66" rx="9"/>
+      <text x="57" y="49" class="title">提交反馈</text>
+      <text x="57" y="72" class="note">填写说明或附上文件</text></g>
+    <g><rect x="38" y="110" width="444" height="66" rx="9"/>
+      <text x="57" y="139" class="title">查看同一份反馈</text>
+      <text x="57" y="162" class="note">待处理</text></g>
+    <g><rect x="38" y="200" width="444" height="66" rx="9"/>
+      <text x="57" y="229" class="title">处理人员发出补充请求</text>
+      <text x="57" y="252" class="note">待用户补充</text></g>
+    <g><rect x="38" y="290" width="444" height="66" rx="9"/>
+      <text x="57" y="319" class="title">用户回复并补充材料</text>
+      <text x="57" y="342" class="note">回到待处理</text></g>
+    <g><rect x="38" y="380" width="444" height="66" rx="9"/>
+      <text x="57" y="409" class="title">处理人员回复结果并标记</text>
+      <text x="57" y="432" class="note">已处理</text></g>
   </g>
 </svg>

@@ -1785,25 +1785,20 @@ import { DEFAULT_LOCALE, DEFAULT_LOCALES, ui } from '@h-ai/ui/i18n'
 
 <a id="feedback"></a>
 
-### 展示反馈与诊断材料：反馈组件
+### 提交、查看和处理反馈
 
-应用提供已脱敏的材料与受权回调，组件报告用户操作。
+宿主提供经过鉴权的反馈接口。用户明确选取要随表单发送的文件。列表用当前权限决定加载本人或管理记录，详情使用同一接口读取对话与附件。
 
 #### 接口清单
 
-| API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
-| --- | --- | --- | --- | --- |
-| [`<FeedbackModal>`](#component-feedbackmodal) | 反馈模态框 | `open` 控制组件是否打开；`onsubmit` 收到表单提交时调用。 | 提交内容给宿主；失败保留输入 | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
-| [`<FeedbackForm>`](#component-feedbackform) | 独立反馈表单 | `attachments` 提供要展示的附件或附件输入；`evidenceSummary` 显示将收集的诊断材料摘要；`onsubmit` 收到表单提交时调用；`onfileschange` 接收附件选择变化。 | 报告提交数据与附件变化 | `<FeedbackForm attachments={attachments} onsubmit={submitFeedback} />` |
-| [`<FeedbackList>`](#component-feedbacklist) | 服务端分页、筛选与处理操作 | `data` 传入组件要显示的数据；`query` 传入当前列表查询条件；`permissions` 提供界面判断操作权限用的信息；`onquerychange` 接收查询条件变化；`onstatus` 接收用户请求的报告状态变更。 | 查询/操作回调；不自行请求 | `<FeedbackList data={feedbackRows} onquerychange={queryFeedback} />` |
-| [`<FeedbackDetail>`](#component-feedbackdetail) | 诊断材料、处理历史与导出 | `report` 传入当前反馈报告；`evidence` 提供授权可见的诊断材料；`attachments` 提供要展示的附件或附件输入；`history` 提供处理历史；`webhook` 传入用于显示的 webhook 投递状态；`onretry` 处理当前投递重试；`onexport` 处理用户导出操作。 | 显示报告和已授权证据 | `<FeedbackDetail report={report} />` |
-| `FeedbackScreenshot` | 图片预览、圈选与遮挡 | `attachment`, `onannotate` | 把标注操作交给宿主 | `<FeedbackScreenshot attachment={attachment} onannotate={annotate} />` |
+| 组件 | 用途 | 调用示例 |
+| --- | --- | --- |
+| [`<FeedbackDetail>`](#component-feedbackdetail) | 传入反馈 ID 和鉴权回调，查看对话、回复和附件。开启 `canProcess` 可处理状态或请求补充。 | `<FeedbackDetail {id} {actions} />` |
+| [`<FeedbackForm>`](#component-feedbackform) | 在普通页面渲染正文、文件输入与提交按钮。调用方在 `onsubmit` 中发送本次输入。 | `<FeedbackForm onsubmit={submitFeedback} />` |
+| [`<FeedbackList>`](#component-feedbacklist) | 传入本人的或管理端的 `actions.list` 回调，以及详情所需操作。可用 `initialId` 打开指定报告。 | `<FeedbackList {actions} />` |
+| [`<FeedbackModal>`](#component-feedbackmodal) | 点击入口后用 `open` 打开提交弹窗。使用 `onsubmit` 连接宿主提交函数。 | `<FeedbackModal bind:open={open} onsubmit={submitFeedback} />` |
 
-#### 场景：反馈现场与交付检查
-
-反馈的 `evidence` 显示实际已脱敏材料；`oncapture(id?)` 支持隐藏弹窗后跨页补图或替换。接入 `onfileschange` 后提供浏览器原生无声短录屏，停止后作为 WebM/MP4 附件预览或删除（最多 60 秒 / 5 MiB，录屏不自动脱敏）。`FeedbackDetail.onreplay` 按需返回完整页面事件，在“页面回放”播放和定位；日志/环境仍分页读取。
-
-反馈表单的材料内容独立滚动，底部按钮始终可见，展开内容不会穿过操作栏。`FeedbackList` 保留无障碍名称，页面标题由应用的页面组件显示，避免管理页重复标题。
+[@h-ai/feedback](feedback.md#feedback-steps)
 
 <a id="utilities"></a>
 
@@ -3855,21 +3850,17 @@ import { ui } from '@h-ai/ui'
 
 #### FeedbackDetail
 
-在处理端查看反馈详情及已授权的材料。将宿主接口返回的 `report` 和分页 `evidencePage` 传入，并把 `queryEvidence` 接到材料查询回调。
-
-![FeedbackDetail 示例截图](../images/ui-component-feedbackdetail.png)
+传入反馈 ID 和鉴权回调，查看对话、回复和附件。开启 `canProcess` 可处理状态或请求补充。
 
 ```svelte
-<FeedbackDetail {report} evidence={evidencePage} onevidencequery={queryEvidence} />
+<FeedbackDetail {id} {actions} />
 ```
 
 <a id="component-feedbackform"></a>
 
 #### FeedbackForm
 
-在页面中收集问题描述和附件。宿主提供异步 `submitFeedback`，返回回执时可向用户显示反馈编号。
-
-![FeedbackForm 示例截图](../images/ui-component-feedbackform.png)
+在普通页面渲染正文、文件输入与提交按钮。调用方在 `onsubmit` 中发送本次输入。
 
 ```svelte
 <FeedbackForm onsubmit={submitFeedback} />
@@ -3879,25 +3870,20 @@ import { ui } from '@h-ai/ui'
 
 #### FeedbackList
 
-在管理页查看分页反馈、按条件筛选并打开详情。宿主提供分页结果 `feedbackPage`，并通过 `loadFeedback` 和 `openFeedback` 处理查询和查看。
-
-![FeedbackList 示例截图](../images/ui-component-feedbacklist.png)
+传入本人的或管理端的 `actions.list` 回调，以及详情所需操作。可用 `initialId` 打开指定报告。
 
 ```svelte
-<FeedbackList data={feedbackPage} onquerychange={loadFeedback} onview={openFeedback} />
+<FeedbackList {actions} />
 ```
 
 <a id="component-feedbackmodal"></a>
 
 #### FeedbackModal
 
-从页面触发按钮打开反馈弹窗。宿主用 `feedbackOpen` 控制开关并提供异步 `submitFeedback` 处理提交。
-
-![FeedbackModal 示例截图](../images/ui-component-feedbackmodal.png)
+点击入口后用 `open` 打开提交弹窗。使用 `onsubmit` 连接宿主提交函数。
 
 ```svelte
-<button type='button' onclick={() => feedbackOpen = true}>Report an issue</button>
-<FeedbackModal bind:open={feedbackOpen} onsubmit={submitFeedback} />
+<FeedbackModal bind:open={open} onsubmit={submitFeedback} />
 ```
 
 <a id="component-guidehost"></a>

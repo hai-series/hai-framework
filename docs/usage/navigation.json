@@ -99,7 +99,7 @@
       "path": "operations/README.md",
       "children": [
         { "id": "operations-deployment", "title": "全量、增量与发布后回退", "titles": { "en-US": "Full and incremental releases, rollback", "ja-JP": "全体・差分リリースとロールバック" }, "path": "operations/deployment.md" },
-        { "id": "operations-feedback", "title": "用户反馈、任务与故障排查", "titles": { "en-US": "User feedback, jobs and troubleshooting", "ja-JP": "ユーザーフィードバック・ジョブ・障害調査" }, "path": "operations/feedback.md" }
+        { "id": "operations-feedback", "title": "用户反馈与故障排查", "titles": { "en-US": "User feedback and troubleshooting", "ja-JP": "ユーザーフィードバックと障害調査" }, "path": "operations/feedback.md" }
       ]
     },
     {

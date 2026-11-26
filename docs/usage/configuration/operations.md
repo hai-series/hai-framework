@@ -2,58 +2,15 @@
 
 [配置手册](README.md) · [收到问题后的操作和排查](../operations/feedback.md)
 
-处理故障时先确定哪一步失败。反馈报告可能已保存，但截图还在上传。通知任务可能已入队，但接收方尚未收到。定时任务可能已经执行，也可能只是在保存执行日志时出错。
+## Feedback 接入与验证
 
-## Feedback通知、采集和保留
-
-位置：`config/_feedback.yml`。先初始化关系数据库（RelDB）和私有存储（Storage），再启动 Feedback。需要通过邮件或短信发送通知时，还要先准备 Reach 通道。
-
-服务端字段和默认值见 [Feedback 配置清单](feedback.md#配置清单)。CLI 模板用控制台通知方便本地启动。开启真实通知后要检查收件人及管理页访问，Webhook 接收方按 `eventId` 去重。
+在 `config/_feedback.yml` 填写固定的 `appId`。应用初始化 RelDB 后启动 Feedback。
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
-notification:
-  mode: console
-collection:
-  envAllowlist: [NODE_ENV]
 ```
 
-把 `notification.mode` 从 `console` 改为 `reach` 时，同时填写 `notification.recipients` 和 `notification.provider`，再发一条测试通知确认接收端收到。只改通知模式而不填收件人，会在初始化时校验失败。Webhook 单独配置，不依赖 Reach；系统等待材料采集结束后再投递通知载荷。
-
-验证时提交一条测试反馈，保存受理编号，再查看材料采集状态及通知、Webhook 任务结果。已经受理表示记录已保存，不代表所有材料和通知任务都已完成；重试时只选失败的任务。
-
-![反馈受理结果](../images/feedback-accepted.png)
-
-![管理员按编号查看状态](../images/feedback-list.png)
-
-### 预算与附件限制
-
-修改 Feedback 的总大小限制后，也检查加密路由和反向代理能否接受相应体量的请求。服务端分别限制一天的提交数、存储大小和历史导出的时间范围，字段含义见 [Feedback 配置清单](feedback.md#配置清单)。
-
-```yaml schema=@h-ai/feedback:FeedbackConfigSchema
-appId: orders
-notification:
-  mode: disabled
-limits:
-  maxTotalBytes: 16777216
-  maxAttachmentBytes: 2097152
-  maxEvidenceBytes: 2097152
-  maxEvidenceCount: 1000
-  maxReportsPerUserDay: 20
-  maxBytesPerUserDay: 1073741824
-  maxStoredBytesPerScope: 10737418240
-  maxExportsPerReport: 3
-retention:
-  exportHours: 12
-```
-
-以上是更小预算示例，不是框架默认。验证超限材料被明确拒绝，普通提交/导出仍成功；同步检查服务路由、加密和反向代理大小限制。隐私区域使用`data-feedback-private`，提交前允许删除不适合上传的材料。
-
-### 页面闲置、退出和重试
-
-页面闲置不会创建新的反馈任务。上传已有材料时，如断网或收到 5xx、408、429，客户端依次等待 1、2、4、8、16 秒再重试。连续 6 次失败或收到其他 4xx 时暂停，草稿仍保留。网络或登录恢复后，可调用客户端的 `flush()` 继续，也可重新打开反馈准备流程。这是客户端固定策略，不是`worker.maxAttempts`服务端持久任务预算。
-
-退出时先`await client.close({ discard: true })`，再切身份；等待已开始请求但不继续后续旧草稿操作，不能承诺撤销已经发出的请求。pause只暂停截图/DOM回放，不能替代身份清理。现场闲置错误仍需时间、失败请求和追踪编号确认根因。
+分别登录提交者和处理人员账号，验证首帖附件、补充请求、用户回复和状态变化。每次提交或消息原子保存正文和附件。遇到断网时，使用原操作 UUID 重试。传输加密和代理容量按反馈配置说明设置。 [Feedback 配置](feedback.md#configuration-fields) · [操作与排查](../operations/feedback.md)
 
 ## Reach通道、免打扰与失败队列
 

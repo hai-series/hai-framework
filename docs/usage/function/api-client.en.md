@@ -979,46 +979,33 @@ export async function closeUnpaidOrder(client: ProjectClient, order: PaymentClos
 
 <a id="feedback-requests"></a>
 
-### Submit and manage feedback with `client.feedback`
+### Submit and manage feedback `client.feedback`
 
-Mount `apiContract.feedback` on the service and use it in the [application contract](#http-contract-extensions) for both the feedback form and admin console. Authors typically call `submit` and `listMine`. The host authorizes management, retry, and export. Read `reports.policy` for evidence and attachment limits.
+Mount `apiContract.feedback` in the application contract. The signed-in client uses `client.feedback` for submissions, reads, and replies. The server resolves scope, author, and permissions from the trusted session.
 
-#### Interface list
+| API | Purpose | Example |
+| --- | --- | --- |
+| `client.feedback.reports.submit(input, options?)` | Submit text and files | `await client.feedback.reports.submit({ id, body, attachments })` |
+| `client.feedback.reports.listMine(input, options?)` | List the current user’s reports | `await client.feedback.reports.listMine({})` |
+| `client.feedback.reports.list(input, options?)` | List reports for staff | `await client.feedback.reports.list({ status: 'pending' })` |
+| `client.feedback.reports.get(input, options?)` | Open the report and original files | `await client.feedback.reports.get({ id })` |
+| `client.feedback.reports.listMessages(input, options?)` | Page through the latest replies | `await client.feedback.reports.listMessages({ id, page: 1 })` |
+| `client.feedback.reports.addMessage(input, options?)` | Send a reply or request information | `await client.feedback.reports.addMessage({ id, messageId, body, kind: 'reply' })` |
+| `client.feedback.reports.setStatus(input, options?)` | Mark Pending or Handled | `await client.feedback.reports.setStatus({ id, status: 'handled' })` |
+| `client.feedback.attachments.get(input, options?)` | Fetch the selected file | `await client.feedback.attachments.get({ id, attachmentId })` |
 
-| API | Purpose | Parameters and defaults | Return or failure | Example call |
-| --- | --- | --- | --- | --- |
-| `client.feedback.reports.policy(input, options?)` | Read feedback limits | Pass `{}`. | `HaiResult<FeedbackBudget>` | `await client.feedback.reports.policy({})` |
-| `client.feedback.reports.submit(input, options?)` | Submit a report | Required `submissionId` and `appId`. Optional description, contact, page, app version, error location, and evidence. Reuse the submission ID when retrying. | `HaiResult<FeedbackReport>` | `await client.feedback.reports.submit({ submissionId, appId, description })` |
-| `client.feedback.reports.listMine(input, options?)` | List the caller’s reports | Use `{}` for default pagination. Optional status, app, time, and other filters. | `HaiResult` with a page of reports. | `await client.feedback.reports.listMine({ page: 1 })` |
-| `client.feedback.reports.list(input, options?)` | List reports with administrative access | Pass `{}` or pagination, status, app, time, and other filters. | `HaiResult` with a page within the authorized scope. | `await client.feedback.reports.list({ page: 1, status: 'pending' })` |
-| `client.feedback.reports.get(input, options?)` | Read report details | Required report `id`. | `HaiResult<FeedbackDetail>` | `await client.feedback.reports.get({ id })` |
-| `client.feedback.reports.getEvidence(input, options?)` | Page through evidence | Required report `id`. Optional pagination, `source`, `kind`, `requestId`, `errorId`, and time range. | `HaiResult` with a page of evidence. | `await client.feedback.reports.getEvidence({ id, requestId })` |
-| `client.feedback.reports.setStatus(input, options?)` | Handle or reopen a report | Required `id`, `status` (`pending` or `handled`), and the last-read `expectedVersion`. Optional `note`. | `HaiResult<FeedbackReport>` | `await client.feedback.reports.setStatus({ id, status: 'handled', expectedVersion })` |
-| `client.feedback.reports.retry(input, options?)` | Retry a background job | Required `id` and `target` (`collect`, `notify`, `webhook`, `export`, or `attachment`). Optional `targetId`. | `HaiResult<void>` | `await client.feedback.reports.retry({ id, target: 'notify' })` |
-| `client.feedback.reports.appendEvidence(input, options?)` | Append collected evidence | Required `id` and an `evidence` array of up to 1000 items. | `HaiResult<FeedbackEvidenceAck>` | `await client.feedback.reports.appendEvidence({ id, evidence })` |
-| `client.feedback.reports.completeCollection(input, options?)` | Complete evidence collection | Required `id`; optional `missing` lists unavailable material. | `HaiResult<FeedbackReport>` | `await client.feedback.reports.completeCollection({ id, missing })` |
-| `client.feedback.reports.export(input, options?)` | Create an export job | Required `id`. Optional `evidenceRevision` pins the evidence revision. | `HaiResult<FeedbackJob>` | `await client.feedback.reports.export({ id })` |
-| `client.feedback.reports.getExport(input, options?)` | Read a completed export | Required report `id` and export `jobId`. | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.reports.getExport({ id, jobId })` |
-| `client.feedback.attachments.upload(input, options?)` | Upload a declared feedback attachment | Required report `id`, a declared `attachmentId`, and `dataBase64`. | `HaiResult<FeedbackAttachment>` | `await client.feedback.attachments.upload({ id, attachmentId, dataBase64 })` |
-| `client.feedback.attachments.get(input, options?)` | Read an authorized attachment | Required report `id` and `attachmentId`. | `HaiResult<FeedbackAttachmentData>` | `await client.feedback.attachments.get({ id, attachmentId })` |
+#### Scenario: Open the report after submitting
 
-#### Scenario: Open the report after submitting feedback
-
-Send the application’s `appId` and the form description. Generate and keep a `submissionId` for this submission, reusing it after a network failure. After acceptance, open the details using the returned report ID.
+In an async application function, use a `client` with the feedback contract. Open the report using the returned ID after submission succeeds.
 
 ```ts
-import type { ProjectClient } from './project-api'
-
-export async function submitAndReadFeedback(
-  client: ProjectClient,
-  input: { submissionId: string, appId: string, description: string },
-) {
-  const submitted = await client.feedback.reports.submit(input)
-  if (!submitted.success)
-    return submitted
-  return client.feedback.reports.get({ id: submitted.data.id })
-}
+const submitted = await client.feedback.reports.submit({ id, body, attachments })
+if (!submitted.success)
+  return submitted
+return client.feedback.reports.get({ id: submitted.data.id })
 ```
+
+[@h-ai/feedback](feedback.en.md#api-reference)
 
 <a id="encrypted-requests"></a>
 
