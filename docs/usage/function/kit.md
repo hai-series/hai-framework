@@ -550,7 +550,7 @@ function buildResource(resource: Parameters<typeof kit.crud.define>[0]) {
 | `enabled` / `crypto` / `serverKeyRing` / `keyStore` | 直接创建中间件时必填 | 从宿主传入启用状态、已初始化 Crypto、服务端密钥环与登记存储。生产应选共享存储。 |
 | `keyExchangePath` / `excludePaths` / `basePath` | 默认 `/api/_hai/key-exchange`、`[]`、空字符串 | 分别指定协商路由、排除的请求路径和构建挂载目录。只在运行时提供 `basePath`。 |
 | `maxPlaintextBytes` / `routePlaintextBytes` | 默认 1 MiB，无路由覆盖。上限值的整数范围为 1 KiB 至 64 MiB。 | 限制正文的 UTF-8 明文字节数，路由映射的 `*` 匹配一个完整路径段。公开设置允许 `"auto"`，运行时直接传数字。 |
-| `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | 默认 30 秒（0–300）与 300 秒（1–600） | 允许客户端时间领先服务端的秒数，以及从请求签发起的有效秒数。 |
+| `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | 默认 30 秒（0–1800）与 300 秒（1–3600） | 允许客户端时间领先服务端的秒数，以及从请求签发起的有效秒数。 |
 
 `kit.resolveTransportConfig({ excludePaths: ["/api/health"] })` 返回该排除列表和默认 `keyExchangePath`。
 

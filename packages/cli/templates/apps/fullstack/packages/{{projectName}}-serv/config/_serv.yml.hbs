@@ -62,7 +62,7 @@ transport:
 {{else}}
   maxPlaintextBytes: ${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}
 {{/if}}
-  # 传输时钟窗口，单位秒；允许领先 0～300 秒，请求有效期 1～600 秒。
+  # 允许客户端时间领先 0～1800 秒，请求有效期为 1～3600 秒。两项均为整数秒。
   maxFutureSkewSeconds: ${HAI_SERV_TRANSPORT_MAXFUTURESKEWSECONDS:30}
   maxRequestAgeSeconds: ${HAI_SERV_TRANSPORT_MAXREQUESTAGESECONDS:300}
   # HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES 可填 JSON，例如 {"/api/v1/uploads/*":8388608}。

@@ -41,7 +41,7 @@ it('真实 Redis 的双 Node 共享配额、有限 TTL 与重启恢复', async (
     for (const reply of registered.filter(reply => !reply.success)) expect(reply.code).toBe(HaiCryptoError.TRANSPORT_BUSY.code)
     const clientId = accepted[0].clientId!
     expect(await store.get(clientId)).toBe(key.data.publicKey)
-    const expiry = Date.now() + 660_000
+    const expiry = Date.now() + 3_660_000
     const requestId = 'a'.repeat(32)
     const claims = await Promise.all(Array.from({ length: 8 }, (_, index) => sendWorker(index % 2
       ? first

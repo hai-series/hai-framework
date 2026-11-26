@@ -5509,7 +5509,7 @@
     "path": "kit.transport.maxFutureSkewSeconds",
     "description": "允许客户端请求时间领先服务器的秒数",
     "value": "30",
-    "constraint": "整数；>= 0；<= 300"
+    "constraint": "整数；>= 0；<= 1800"
   },
   {
     "name": "HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES",
@@ -5525,7 +5525,7 @@
     "path": "kit.transport.maxRequestAgeSeconds",
     "description": "请求从签发起的有效秒数",
     "value": "300",
-    "constraint": "整数；>= 1；<= 600"
+    "constraint": "整数；>= 1；<= 3600"
   },
   {
     "name": "HAI_KIT_TRANSPORT_ROUTEPLAINTEXTBYTES",
@@ -7357,7 +7357,7 @@
     "path": "serv.transport.maxFutureSkewSeconds",
     "description": "允许客户端请求时间领先服务器的秒数",
     "value": "30",
-    "constraint": "整数；>= 0；<= 300"
+    "constraint": "整数；>= 0；<= 1800"
   },
   {
     "name": "HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES",
@@ -7373,7 +7373,7 @@
     "path": "serv.transport.maxRequestAgeSeconds",
     "description": "请求从签发起的有效秒数",
     "value": "300",
-    "constraint": "整数；>= 1；<= 600"
+    "constraint": "整数；>= 1；<= 3600"
   },
   {
     "name": "HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES",

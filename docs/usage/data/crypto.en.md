@@ -20,7 +20,7 @@ HTTP transport encryption uses the four cache families below. Client and request
 | Key or family | Purpose | Default expiry and cleanup |
 | --- | --- | --- |
 | [`hai:crypto:transport:cache:client:<clientId>`](#cache-crypto-client) | Find a public key to verify requests and encrypt replies. | Defaults to 3600 seconds. Reads leave expiry unchanged. Exchange keys again after expiry. |
-| [`hai:crypto:transport:cache:request:<clientId>:<requestId>`](#cache-crypto-request) | Mark a request ID as consumed. | Expires at `issuedAt + 660000` milliseconds. |
+| [`hai:crypto:transport:cache:request:<clientId>:<requestId>`](#cache-crypto-request) | Mark a request ID as consumed. | Expires at `issuedAt + 3660000` milliseconds. |
 | [`hai:crypto:transport:cache:quota:register`](#cache-crypto-registration) | Check remaining new-key registrations. | 60 seconds from the first write. Increments preserve expiry. |
 | [`hai:crypto:transport:cache:quota:request`](#cache-crypto-request-quota) | Check remaining admissions for new requests. | 60 seconds from the first write. Increments preserve expiry. |
 
@@ -64,7 +64,13 @@ The key is `hai:crypto:transport:cache:request:<clientId>:<requestId>`. Its valu
 
 This says client `c_example-42` has already used request `0123456789abcdef0123456789abcdef`. It must not execute again. `true` does not mean the business operation succeeded; a later business failure does not free the ID.
 
-A request issued at 00:00 keeps its marker until 00:11 (`issuedAt + 660000` ms). The marker covers the time during which that request could still be accepted. Afterwards the request itself is too old, so the marker can expire. Including permitted future clock skew, a new marker may live for at most another 16 minutes. Removing it early to free space could allow a used request through. A fresh submission with a new ID still needs business duplicate protection, such as an order idempotency key.
+A request issued at 00:00 keeps its marker until 01:01 (`issuedAt + 3660000` ms). The 61 minutes cover the longest request lifetime of 60 minutes and a one-minute margin for node clock differences. If the request timestamp is 30 minutes ahead of the server clock, the marker may live for 91 minutes after the write. Size Redis for that retention window and keep live markers until they expire. A fresh submission with a new ID still needs business duplicate protection, such as an order idempotency key.
+
+<a id="replay-window-upgrade"></a>
+
+#### Enable a longer request lifetime after upgrading
+
+To use a request lifetime above the previous 600-second limit, upgrade all nodes using the original settings first. Records created by the previous version have their own expiration times. After the last old node stops accepting requests, wait until requests accepted by old nodes would also expire under the new lifetime, then raise the setting on all nodes. For a new lifetime of 3600 seconds, wait 66 minutes to cover the previous maximum future skew of 300 seconds and a 60-second clock margin.
 
 <a id="cache-crypto-registration"></a>
 

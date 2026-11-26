@@ -469,8 +469,8 @@ These are code arguments, not `_crypto.yml` fields.
 | Server `serverKeyRing` | Required | Managed `{ activeKeyId, keys }`, injected by trusted server startup. |
 | Server `keyStore` | Required | Registry from `crypto.transport.createKeyStore({ cache })`; production uses Redis. |
 | Server `maxPlaintextBytes` | 1048576 | Request/response UTF-8 plaintext bytes, integer 1024–67108864; the host may forward Serv/Kit file settings. |
-| Server `maxFutureSkewSeconds` | 30 | Allowed future skew, integer 0–300 seconds. |
-| Server `maxRequestAgeSeconds` | 300 | Request age from issuance, integer 1–600 seconds. |
+| Server `maxFutureSkewSeconds` | 30 | Allowed future skew, integer 0–1800 seconds. |
+| Server `maxRequestAgeSeconds` | 300 | Request age from issuance, integer 1–3600 seconds. |
 | Client `keyExchangeUrl` | Required | Trusted server key-exchange URL. |
 | Client `maxPlaintextBytes` | Follow server | An explicit local limit selects the smaller local/exchanged value. |
 | Client `fetch` | Global fetch | Standard Fetch implementation preserving body and cancellation semantics. |
@@ -685,7 +685,7 @@ Registered keys let the server verify client signatures; remembered request IDs 
 These application-wide safeguards bound cache growth and do not replace per-IP/user/route rate limits. Defaults are 10000 registrations and 100000 new IDs per 60-second window starting at first reservation. Full windows return 503 and recover on expiry; live keys/markers remain. See [examples](../data/crypto.en.md#transport-state). Raising limits also requires a Redis memory review.
 
 
-Each quota window starts with its first write and expires through cache TTL. CAS consumes capacity atomically while preserving the original TTL; application clock differences do not reset the window. All nodes use identical limits. Exhaustion or sustained contention returns `hai:crypto:072`, mapped by Serv/Kit to 503 without automatic replay. Failed writes and concurrent duplicates may conservatively consume quota; ordinary replays of existing nonces consume none. Keys, nonces and the two fixed quota counters all expire. No full-key scan or eviction of live nonces is used. State is bounded approximately by minute quota times retained minutes: default public keys span at most 61 windows; nonces at most 17. Configure Redis memory, noeviction and reliable persistence as well.
+Each quota window starts with its first write and expires through cache TTL. CAS consumes capacity atomically while preserving the original TTL; application clock differences do not reset the window. All nodes use identical limits. Exhaustion or sustained contention returns `hai:crypto:072`, mapped by Serv/Kit to 503 without automatic replay. Failed writes and concurrent duplicates may conservatively consume quota; ordinary replays of existing nonces consume none. Keys, nonces and the two fixed quota counters all expire. No full-key scan or eviction of live nonces is used. State is bounded approximately by minute quota times retained minutes: default public keys span at most 61 windows; nonces at most 92. Configure Redis memory, noeviction and reliable persistence as well.
 
 #### Scenario: Observe registration and duplicate rejection with test IDs
 
@@ -741,7 +741,7 @@ Custom HTTP adapters use these root exports; Serv/Kit already integrates them. A
 | --- | --- | --- | --- | --- |
 | `crypto.transport.bodyLimits` | Read default handshake, header and body budgets | No arguments; UTF-8 bytes | `Readonly TransportBodyLimits` | `crypto.transport.bodyLimits.plaintextBytes // 1048576` |
 | `crypto.transport.plaintextRange` | Read the allowed plaintext budget range | No arguments; bytes | `Readonly { min: 1024, max: 67108864 }` | `crypto.transport.plaintextRange.max // 67108864` |
-| `crypto.transport.timeLimits` | Read allowed request ages and clock skew | No arguments; seconds | `Readonly time limits` | `crypto.transport.timeLimits.maxRequestAgeSeconds // 600` |
+| `crypto.transport.timeLimits` | Read allowed request ages and clock skew | No arguments; seconds | `Readonly time limits` | `crypto.transport.timeLimits.maxRequestAgeSeconds // 3600` |
 | `crypto.transport.resolveBodyLimits(maxPlaintextBytes?, options?)` | Derive transport limits from a plaintext budget | Optional `maxPlaintextBytes` and `options.requiredPlaintextBytes` set the limit and required capacity. See [body arguments](#body-options). | Immutable `TransportBodyLimits`; invalid/conflicting values throw RangeError | `crypto.transport.resolveBodyLimits(8388608)` |
 | `crypto.transport.createBodyPolicy(maxPlaintextBytes?, routes?)` | Create a per-path body policy | Optional `maxPlaintextBytes` sets the global limit and `routes` overrides specific paths. See [body arguments](#body-options). | Policy; invalid configuration throws RangeError | `crypto.transport.createBodyPolicy(undefined, { '/files/*': 8388608 })` |
 | `policy.acquire(pathname)` | Acquire request buffering capacity | Required `pathname` is the actual request path used to select a capacity rule. | `{ limits, release } / null` when busy | `policy.acquire('/files/report')` |
@@ -787,7 +787,7 @@ crypto.transport.plaintextRange.min // 1024; minimum plaintext bytes
 // Read the maximum plaintext limit of 67,108,864 bytes.
 crypto.transport.plaintextRange.max // 67108864; maximum plaintext bytes
 // Read the maximum request age of 600 seconds.
-crypto.transport.timeLimits.maxRequestAgeSeconds // 600; maximum request lifetime in seconds
+crypto.transport.timeLimits.maxRequestAgeSeconds // 3600; maximum request lifetime in seconds
 ```
 
 #### Scenario: Authenticate, encrypt the response and release capacity

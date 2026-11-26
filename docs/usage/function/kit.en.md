@@ -351,7 +351,7 @@ Prepare Crypto and shared Cache, give public policy to the client and a trusted 
 | `enabled` / `crypto` / `serverKeyRing` / `keyStore` | Required when constructing middleware directly | Pass the enable flag, initialized Crypto, server key ring, and registration store from the host. Share the store in production. |
 | `keyExchangePath` / `excludePaths` / `basePath` | Defaults to `/api/_hai/key-exchange`, `[]`, and the empty string | Sets the exchange route, excluded request paths, and build mount path. Supply `basePath` only at runtime. |
 | `maxPlaintextBytes` / `routePlaintextBytes` | Defaults to 1 MiB with no route overrides. Limits are integers from 1 KiB to 64 MiB. | Limits plaintext UTF-8 bytes. `*` in a route override matches one complete segment. The public config accepts `"auto"` and the middleware takes a number. |
-| `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | Defaults to 30 seconds (0–300) and 300 seconds (1–600) | Controls the permitted clock lead and the request lifetime from issuance, in seconds. |
+| `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | Defaults to 30 seconds (0–1800) and 300 seconds (1–3600) | Controls the permitted clock lead and the request lifetime from issuance, in seconds. |
 
 `kit.resolveTransportConfig({ excludePaths: ["/api/health"] })` returns that exclusion and the default `keyExchangePath`.
 

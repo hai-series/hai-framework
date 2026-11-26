@@ -471,8 +471,8 @@ Node サーバーは専用の Worker プールで封入と開封を行います�
 | サーバー `serverKeyRing` | 必須 | 信頼できる起動処理から渡す管理鍵 `{ activeKeyId, keys }`。 |
 | サーバー `keyStore` | 必須 | `crypto.transport.createKeyStore({ cache })` の registry。本番は Redis。 |
 | サーバー `maxPlaintextBytes` | 1048576 | 要求・応答の UTF-8 平文バイト数、整数 1024–67108864。宿主は Serv/Kit のファイル値を転送可能。 |
-| サーバー `maxFutureSkewSeconds` | 30 | 未来時刻の許容差、整数 0–300 秒。 |
-| サーバー `maxRequestAgeSeconds` | 300 | 発行からの有効期間、整数 1–600 秒。 |
+| サーバー `maxFutureSkewSeconds` | 30 | 未来時刻の許容差、整数 0–1800 秒。 |
+| サーバー `maxRequestAgeSeconds` | 300 | 発行からの有効期間、整数 1–3600 秒。 |
 | クライアント `keyExchangeUrl` | 必須 | 信頼するサーバーの鍵交換 URL。 |
 | クライアント `maxPlaintextBytes` | サーバーに追従 | 明示値があればローカル値と交換値の小さい方。 |
 | クライアント `fetch` | グローバル fetch | 本文・キャンセルの契約を守る標準 Fetch 実装。 |
@@ -687,7 +687,7 @@ interface Context {
 アプリ全体のキャッシュ増加を守る枠で、IP・利用者・経路別の制限とは別です。最初の確保から60秒ごとに登録10000本、新規番号100000件が既定で、上限時503、期限後復旧します。公開鍵や印は消しません。[具体例](../data/crypto.ja.md#transport-state)を参照し、上限を増やす際は Redis メモリも確認します。
 
 
-窓は最初の書き込みから cache TTL で計測します。CAS で原子的に消費し、元の TTL を保持するため、アプリの時刻差で窓をリセットしません。全ノードで上限を一致させます。満杯・継続的な競合は `hai:crypto:072`、Serv/Kit では 503 とし、自動再送しません。失敗書き込み・並行重複は保守的に枠を消費する場合がありますが、既存 nonce の通常の再送は消費しません。公開鍵・nonce・固定二つのカウンターは全て期限付きです。全キー走査や有効 nonce の追い出しはしません。件数は分単位上限と保持分数で有界となり、既定の公開鍵は最大 61 窓、nonce は最大 17 窓をまたぎます。Redis のメモリ、noeviction、信頼できる永続化も設定してください。
+窓は最初の書き込みから cache TTL で計測します。CAS で原子的に消費し、元の TTL を保持するため、アプリの時刻差で窓をリセットしません。全ノードで上限を一致させます。満杯・継続的な競合は `hai:crypto:072`、Serv/Kit では 503 とし、自動再送しません。失敗書き込み・並行重複は保守的に枠を消費する場合がありますが、既存 nonce の通常の再送は消費しません。公開鍵・nonce・固定二つのカウンターは全て期限付きです。全キー走査や有効 nonce の追い出しはしません。件数は分単位上限と保持分数で有界となり、既定の公開鍵は最大 61 窓、nonce は最大 92 窓をまたぎます。Redis のメモリ、noeviction、信頼できる永続化も設定してください。
 
 #### 利用例：テスト用 ID で登録と重複拒否を確認
 
@@ -743,7 +743,7 @@ await registry.get(clientId) // undefined
 | --- | --- | --- | --- | --- |
 | `crypto.transport.bodyLimits` | ハンドシェイク・ヘッダー・本文の既定上限を取得 | 引数なし。UTF-8 バイト数 | `読み取り専用 TransportBodyLimits` | `crypto.transport.bodyLimits.plaintextBytes // 1048576` |
 | `crypto.transport.plaintextRange` | 平文容量に設定できる範囲を取得 | 引数なし。バイト数 | `読み取り専用 { min: 1024, max: 67108864 }` | `crypto.transport.plaintextRange.max // 67108864` |
-| `crypto.transport.timeLimits` | リクエストの有効期間と時刻差の許容範囲を取得 | 引数なし。秒 | `読み取り専用の時間制約` | `crypto.transport.timeLimits.maxRequestAgeSeconds // 600` |
+| `crypto.transport.timeLimits` | リクエストの有効期間と時刻差の許容範囲を取得 | 引数なし。秒 | `読み取り専用の時間制約` | `crypto.transport.timeLimits.maxRequestAgeSeconds // 3600` |
 | `crypto.transport.resolveBodyLimits(maxPlaintextBytes?, options?)` | 平文予算から転送上限を計算 | 任意の `maxPlaintextBytes` と `options.requiredPlaintextBytes` で上限と必要容量を設定。[本文の引数](#body-options)を参照。 | `TransportBodyLimits` | `crypto.transport.resolveBodyLimits(8388608)` |
 | `crypto.transport.createBodyPolicy(maxPlaintextBytes?, routes?)` | パス別容量方針を作成 | 任意の `maxPlaintextBytes` は全体の上限、`routes` は個別経路の上書き。[本文の引数](#body-options)を参照。 | 策略实例，无效配置抛 RangeError | `crypto.transport.createBodyPolicy(undefined, { '/files/*': 8388608 })` |
 | `policy.acquire(pathname)` | リクエスト用バッファ枠を確保 | 容量ルールの選択に使う実際の要求パス `pathname` が必須。 | `{ limits, release } / null` | `policy.acquire('/files/report')` |
@@ -789,7 +789,7 @@ crypto.transport.plaintextRange.min // 1024；明文の最小バイト数
 // 平文の最大 67108864 バイトを読みます。
 crypto.transport.plaintextRange.max // 67108864；明文の最大バイト数
 // 最大要求有効期間の 600 秒を読みます。
-crypto.transport.timeLimits.maxRequestAgeSeconds // 600；要求の最長有効期間、秒
+crypto.transport.timeLimits.maxRequestAgeSeconds // 3600；要求の最長有効期間、秒
 ```
 
 #### 利用例：認証後に暗号化応答を返して枠を解放

@@ -355,7 +355,7 @@ Crypto と共有 Cache を準備し、公開方針をクライアント、信頼
 | `enabled` / `crypto` / `serverKeyRing` / `keyStore` | 直接ミドルウェアを作る場合は必須 | 有効フラグ、初期化済み Crypto、サーバー鍵リング、登録ストアをホストから渡す。本番では共有ストアを使う。 |
 | `keyExchangePath` / `excludePaths` / `basePath` | 既定は `/api/_hai/key-exchange`、`[]`、空文字列 | 鍵交換ルート、除外する要求パス、ビルドのマウント先。 `basePath` は実行時にのみ渡す。 |
 | `maxPlaintextBytes` / `routePlaintextBytes` | 既定は 1 MiB、ルートの上書きなし。上限は 1 KiB～64 MiB の整数。 | 平文の UTF-8 バイト数を制限。経路の `*` は完全な 1 セグメントに一致。公開設定は `"auto"` を許可し、ミドルウェアには数値を渡す。 |
-| `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | 既定は 30 秒（0–300）と 300 秒（1–600） | クライアント時計の進みの許容秒数と、発行からの要求の有効秒数。 |
+| `maxFutureSkewSeconds` / `maxRequestAgeSeconds` | 既定は 30 秒（0–1800）と 300 秒（1–3600） | クライアント時計の進みの許容秒数と、発行からの要求の有効秒数。 |
 
 `kit.resolveTransportConfig({ excludePaths: ["/api/health"] })` は指定の除外リストと既定の `keyExchangePath` を返します。
 

@@ -50,10 +50,20 @@ export const TRANSPORT_PROTOCOL = {
  * ```
  */
 export const TRANSPORT_TIME_LIMITS = Object.freeze({
-  maxFutureSkewSeconds: 300,
+  maxFutureSkewSeconds: 1800,
   minRequestAgeSeconds: 1,
-  maxRequestAgeSeconds: 600,
+  maxRequestAgeSeconds: 3600,
 })
+
+/**
+ * 防重放记录从签发时起的保留期，覆盖全节点允许的最长有效期及节点时钟偏差。
+ * @example 模块内部上下文
+ * ```ts
+ * const issuedAt = 1_800_000_000_000
+ * const expiresAt = issuedAt + TRANSPORT_NONCE_RETENTION_MS
+ * ```
+ */
+export const TRANSPORT_NONCE_RETENTION_MS = TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds * 1000 + 2 * TRANSPORT_PROTOCOL.CLOCK_SKEW_MS
 
 /**
  * 密钥协商请求；只发送客户端公钥，私钥始终留在客户端，注册仍验证曲线点。
@@ -505,9 +515,9 @@ export interface TransportKeyStore {
  * ```
  */
 export interface TransportCreateServerOptions {
-  /** 请求时间允许领先服务器的秒数，默认 30，整数范围 0～300。 */
+  /** 请求时间允许领先服务器的秒数，默认 30，整数范围 0～1800。 */
   readonly maxFutureSkewSeconds?: number
-  /** 请求从签发起的有效秒数，默认 300，整数范围 1～600。 */
+  /** 请求从签发起的有效秒数，默认 300，整数范围 1～3600。 */
   readonly maxRequestAgeSeconds?: number
   /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
   readonly maxPlaintextBytes?: number

@@ -23,8 +23,8 @@
 | `server.port`                          | 通用     | `3000`                     | HTTP 监听端口。可填整数，1–65535                                                                                    |
 | `transport`                            | 通用     | `false`                    | 传 `false` 关闭，传对象配置密钥协商和传输参数                                                                       |
 | `transport.maxPlaintextBytes`          | 对象形式 | `"auto"`（运行时推导）     | 普通业务双向明文上限，显式配置的范围为 1024–67108864 字节。无模块容量需求时使用 1 MiB                               |
-| `transport.maxFutureSkewSeconds`       | 对象形式 | `30`                       | 允许客户端请求时间领先服务器的秒数。可填整数，0–300                                                                 |
-| `transport.maxRequestAgeSeconds`       | 对象形式 | `300`                      | 请求从签发起的有效秒数。可填整数，1–600                                                                             |
+| `transport.maxFutureSkewSeconds`       | 对象形式 | `30`                       | 允许客户端请求时间领先服务器的秒数。可填整数，0–1800                                                                 |
+| `transport.maxRequestAgeSeconds`       | 对象形式 | `300`                      | 请求从签发起的有效秒数。可填整数，1–3600                                                                             |
 | `transport.routePlaintextBytes`        | 对象形式 | 可省略                     | 完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量                                              |
 | `transport.routePlaintextBytes.<名称>` | 对象形式 | 必填                       | 完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量。可填整数，1024–67108864                     |
 | `transport.keyExchangePath`            | 对象形式 | `"/api/_hai/key-exchange"` | 客户端与服务端约定的密钥交换端点                                                                                    |

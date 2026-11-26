@@ -135,9 +135,20 @@ describe('bounded transport cache state', () => {
     expect(await store.get(clientId)).toBeUndefined()
   })
 
-  it('rejects excessive nonce retention and invalid quota settings', async () => {
+  it('accepts 91 minutes of nonce retention and rejects any longer duration', async () => {
+    const now = 1_800_000_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(now)
     const store = crypto.transport.createKeyStore({ cache })
-    await expect(store.claimRequest('client', 'a'.repeat(32), Date.now() + 961_000)).rejects.toThrow(TypeError)
+    const requestId = 'a'.repeat(32)
+    expect(await store.claimRequest('client', requestId, now + 5_460_000)).toBe(true)
+    expect(await cache.kv.ttl(`hai:crypto:transport:cache:request:client:${requestId}`)).toMatchObject({
+      success: true,
+      data: 5460,
+    })
+    await expect(store.claimRequest('client', 'b'.repeat(32), now + 5_460_001)).rejects.toThrow(TypeError)
+  })
+
+  it('rejects invalid quota settings', () => {
     for (const value of [0, -1, 1.5, Number.POSITIVE_INFINITY]) {
       const registration = { cache, maxRegistrationsPerMinute: value }
       const requests = { cache, maxRequestsPerMinute: value }

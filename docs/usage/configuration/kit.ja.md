@@ -18,8 +18,8 @@ SvelteKit サーバーの起動時に `config/_kit.yml` を読み込みます。
 | `access` | `false` | リクエストごとにパス、IP、時刻を確認する。インラインのルールか別の YAML ファイルを指定。詳細は[アクセスルール](core.ja.md#request-access)を参照。 |
 | `transport` | `false` | オブジェクトを渡すとアプリ層の暗号化を有効にする。サーバーとクライアントの両方に設定する。 |
 | `transport.maxPlaintextBytes` | `auto` | 送受信する平文のサイズ上限。追加の容量指定がなければ 1 MiB。整数で指定するときは 1024～67108864 バイト。 |
-| `transport.maxFutureSkewSeconds` | `30` | リクエストの時刻がサーバーより進んでいても許容する秒数（0～300）。 |
-| `transport.maxRequestAgeSeconds` | `300` | リクエストの時刻から有効とみなす秒数（1～600）。 |
+| `transport.maxFutureSkewSeconds` | `30` | リクエストの時刻がサーバーより進んでいても許容する秒数（0～1800）。 |
+| `transport.maxRequestAgeSeconds` | `300` | リクエストの時刻から有効とみなす秒数（1～3600）。 |
 | `transport.routePlaintextBytes` | 省略可 | パスごとの送受信上限（各 1024～67108864 バイト）。キーは `/` で始め、`*` はパスの 1 区間に一致する。 |
 | `transport.excludePaths` | `[]` | アプリ層の暗号化を通さないパス。 |
 | `transport.keyExchangePath` | `/api/_hai/key-exchange` | 鍵交換のパス。クライアントに設定する URL でアクセスできるようにする。 |

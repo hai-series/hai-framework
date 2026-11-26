@@ -5941,14 +5941,14 @@
                 "default": 30,
                 "type": "integer",
                 "minimum": 0,
-                "maximum": 300
+                "maximum": 1800
               },
               "maxRequestAgeSeconds": {
                 "description": "请求从签发起的有效秒数",
                 "default": 300,
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 600
+                "maximum": 3600
               },
               "routePlaintextBytes": {
                 "description": "完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量",
@@ -6022,14 +6022,14 @@
                 "default": 30,
                 "type": "integer",
                 "minimum": 0,
-                "maximum": 300
+                "maximum": 1800
               },
               "maxRequestAgeSeconds": {
                 "description": "请求从签发起的有效秒数",
                 "default": 300,
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 600
+                "maximum": 3600
               },
               "routePlaintextBytes": {
                 "description": "完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量",

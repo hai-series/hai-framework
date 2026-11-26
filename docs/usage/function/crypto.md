@@ -471,8 +471,8 @@ Node 服务端通过独立的 Worker 池封包和解包。池满时可返回 `TR
 | 服务端 `serverKeyRing` | 必填 | 服务端受管 `{ activeKeyId, keys }`；私钥仅由可信启动代码注入。 |
 | 服务端 `keyStore` | 必填 | 传入 `crypto.transport.createKeyStore({ cache })` 创建的 registry；生产使用 Redis。 |
 | 服务端 `maxPlaintextBytes` | 1048576 | 请求/响应明文 UTF-8 字节上限，整数 1024–67108864；宿主可从 Serv/Kit 文件配置转交。 |
-| 服务端 `maxFutureSkewSeconds` | 30 | 允许的未来时间偏差，整数 0–300 秒。 |
-| 服务端 `maxRequestAgeSeconds` | 300 | 从签发起的有效期，整数 1–600 秒。 |
+| 服务端 `maxFutureSkewSeconds` | 30 | 允许的未来时间偏差，整数 0–1800 秒。 |
+| 服务端 `maxRequestAgeSeconds` | 300 | 从签发起的有效期，整数 1–3600 秒。 |
 | 客户端 `keyExchangeUrl` | 必填 | 可信服务端的密钥协商 URL。 |
 | 客户端 `maxPlaintextBytes` | 跟随服务端 | 显式传入时取本地与握手值的较小值。 |
 | 客户端 `fetch` | 全局 fetch | 可注入遵守取消及正文契约的标准 Fetch 实现。 |
@@ -681,7 +681,7 @@ interface Context {
 这两项是全应用共享的缓存容量保底，不是按 IP、用户或接口的业务限流。默认每60秒10000次登记、100000个新请求编号；首次写入开始计时，满额503，到期后恢复。公钥/已用编号自身的保留期不会随计数清零而结束，见[周期、满额与限流的例子](../data/crypto.md#transport-state)。调大上限时同步核对 Redis 内存预算。
 
 
-两个配额窗口在首次写入时启动，由 cache TTL 统一计时；CAS 原子扣额，更新保留原 TTL，应用节点时钟偏差不会重置窗口。不同节点必须使用相同配额。用尽或持续争用时返回 `hai:crypto:072`，Serv/Kit 映射为 503，客户端不自动重放。失败写入和并发重复可能保守占额；已存在 nonce 的普通重放不占新额度。公钥、nonce 和固定两条配额键均过期，不扫描全量键、不驱逐有效 nonce。状态数量约受“每分钟配额 × 保留分钟数”限制；公钥默认最多覆盖 61 个窗口，nonce 最长覆盖 17 个窗口。部署仍须设置 Redis 内存预算、noeviction 和可靠持久化。
+两个配额窗口在首次写入时启动，由 cache TTL 统一计时；CAS 原子扣额，更新保留原 TTL，应用节点时钟偏差不会重置窗口。不同节点必须使用相同配额。用尽或持续争用时返回 `hai:crypto:072`，Serv/Kit 映射为 503，客户端不自动重放。失败写入和并发重复可能保守占额；已存在 nonce 的普通重放不占新额度。公钥、nonce 和固定两条配额键均过期，不扫描全量键、不驱逐有效 nonce。状态数量约受“每分钟配额 × 保留分钟数”限制；公钥默认最多覆盖 61 个窗口，nonce 最长覆盖 92 个窗口。部署仍须设置 Redis 内存预算、noeviction 和可靠持久化。
 
 #### 场景：用一次性测试编号观察登记与重复拒绝
 
@@ -737,7 +737,7 @@ await registry.get(clientId) // undefined
 | --- | --- | --- | --- | --- |
 | `crypto.transport.bodyLimits` | 读取默认的握手、认证头和正文预算 | 无参数；各字段单位为 UTF-8 字节 | `只读 TransportBodyLimits` | `crypto.transport.bodyLimits.plaintextBytes // 1048576` |
 | `crypto.transport.plaintextRange` | 检查允许设置的明文容量范围 | 无参数；字节 | `只读 { min: 1024, max: 67108864 }` | `crypto.transport.plaintextRange.max // 67108864` |
-| `crypto.transport.timeLimits` | 读取请求时效与时钟偏差的允许范围 | 无参数；秒 | `只读时间限制对象` | `crypto.transport.timeLimits.maxRequestAgeSeconds // 600` |
+| `crypto.transport.timeLimits` | 读取请求时效与时钟偏差的允许范围 | 无参数；秒 | `只读时间限制对象` | `crypto.transport.timeLimits.maxRequestAgeSeconds // 3600` |
 | `crypto.transport.resolveBodyLimits(maxPlaintextBytes?, options?)` | 从明文预算计算传输上限 | 可选 `maxPlaintextBytes` 与 `options.requiredPlaintextBytes` 决定上限及所需容量。见[正文读取参数](#body-options)。 | 不可变 `TransportBodyLimits`，无效/冲突抛 RangeError | `crypto.transport.resolveBodyLimits(8388608)` |
 | `crypto.transport.createBodyPolicy(maxPlaintextBytes?, routes?)` | 创建按路径分配容量的策略 | 可选 `maxPlaintextBytes` 设置通用上限，`routes` 覆盖指定路径。见[正文读取参数](#body-options)。 | 策略实例，无效配置抛 RangeError | `crypto.transport.createBodyPolicy(undefined, { '/files/*': 8388608 })` |
 | `policy.acquire(pathname)` | 为请求申请缓冲名额 | 必填 `pathname` 为当前请求的实际路径，决定采用哪条容量规则。 | `{ limits, release } / null`，并发满返回 null | `policy.acquire('/files/report')` |
@@ -783,7 +783,7 @@ crypto.transport.plaintextRange.min // 1024；最小明文字节数
 // 读取协议允许的最大明文字节数 67108864。
 crypto.transport.plaintextRange.max // 67108864；最大明文字节数
 // 读取最长请求有效期，单位为秒，当前为 600。
-crypto.transport.timeLimits.maxRequestAgeSeconds // 600；最长请求有效期，秒
+crypto.transport.timeLimits.maxRequestAgeSeconds // 3600；最长请求有效期，秒
 ```
 
 #### 场景：认证请求、加密回应并释放名额

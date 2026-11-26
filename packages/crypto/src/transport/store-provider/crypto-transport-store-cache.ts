@@ -10,13 +10,13 @@ import { cryptoM } from '../../crypto-i18n.js'
 import { isValidSM2PublicKey } from '../../crypto-public-key.js'
 import { HaiCryptoError } from '../../crypto-types.js'
 import { isValidTransportKeyTtlSeconds } from '../crypto-transport-codec.js'
-import { TRANSPORT_TIME_LIMITS } from '../crypto-transport-types.js'
+import { TRANSPORT_NONCE_RETENTION_MS, TRANSPORT_TIME_LIMITS } from '../crypto-transport-types.js'
 
 const CACHE_PREFIX = 'hai:crypto:transport:cache'
 const MINUTE_MS = 60_000
 const MAX_QUOTA_ATTEMPTS = 32
-// 11 分钟防重放保留期，加上允许的最大 5 分钟未来时间偏差。
-const MAX_NONCE_TTL_MS = 660_000 + TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds * 1000
+// 请求签发时间可能在未来，从写入时起的 TTL 还需覆盖允许的最大未来偏差。
+const MAX_NONCE_TTL_MS = TRANSPORT_NONCE_RETENTION_MS + TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds * 1000
 
 /**
  * 缓存传输状态配置；配额用于全应用缓存容量保底，不代替按 IP/用户/接口的业务限流。
@@ -160,8 +160,11 @@ export function createCacheTransportKeyStore(options: CreateCacheTransportKeySto
       const remaining = expiresAt - Date.now()
       if (remaining <= 0)
         return false
-      if (remaining > MAX_NONCE_TTL_MS)
-        throw new TypeError(cryptoM('crypto_transportNonceExpiryInvalid'))
+      if (remaining > MAX_NONCE_TTL_MS) {
+        throw new TypeError(cryptoM('crypto_transportNonceExpiryInvalid', {
+          params: { maxMinutes: MAX_NONCE_TTL_MS / MINUTE_MS },
+        }))
+      }
       const key = `${CACHE_PREFIX}:request:${clientId}:${requestId}`
       // 常见重放不消耗新额度；并发重复最终仍由该 nonce 的单键 CAS 决定唯一胜者。
       if (unwrap('cache.kv.get', await cache.kv.get<boolean>(key)) !== null)
@@ -170,8 +173,11 @@ export function createCacheTransportKeyStore(options: CreateCacheTransportKeySto
       const ttl = expiresAt - Date.now()
       if (ttl <= 0)
         return false
-      if (ttl > MAX_NONCE_TTL_MS)
-        throw new TypeError(cryptoM('crypto_transportNonceExpiryInvalid'))
+      if (ttl > MAX_NONCE_TTL_MS) {
+        throw new TypeError(cryptoM('crypto_transportNonceExpiryInvalid', {
+          params: { maxMinutes: MAX_NONCE_TTL_MS / MINUTE_MS },
+        }))
+      }
       return unwrap('cache.kv.compareAndSwap', await cache.kv.compareAndSwap(key, undefined, true, { px: ttl }))
     },
     async delete(clientId) {

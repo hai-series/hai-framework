@@ -21,7 +21,7 @@ import { resolveTransportBodyLimits } from './crypto-transport-body.js'
 import { hashTransportPath, isValidEncryptedPayload, isValidTransportKeyTtlSeconds, openTransportPayload, sealTransportPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
 import { TransportTimeError } from './crypto-transport-error.js'
 import { parseTransportServerKeyRing } from './crypto-transport-keyring.js'
-import { TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-types.js'
+import { TRANSPORT_NONCE_RETENTION_MS, TRANSPORT_PROTOCOL, TRANSPORT_TIME_LIMITS } from './crypto-transport-types.js'
 
 /**
  * 服务端报文计算。Node 入口使用线程池，浏览器保留同步实现。
@@ -79,12 +79,10 @@ export function createTransportEncryption(
   } = options ?? {}
   if (!Number.isInteger(maxFutureSkewSeconds) || maxFutureSkewSeconds < 0 || maxFutureSkewSeconds > TRANSPORT_TIME_LIMITS.maxFutureSkewSeconds
     || !Number.isInteger(maxRequestAgeSeconds) || maxRequestAgeSeconds < TRANSPORT_TIME_LIMITS.minRequestAgeSeconds || maxRequestAgeSeconds > TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds) {
-    return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportTimeConfigInvalid'))
+    return core.err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportTimeConfigInvalid', { params: TRANSPORT_TIME_LIMITS }))
   }
   const futureSkewMs = maxFutureSkewSeconds * 1000
   const requestAgeMs = maxRequestAgeSeconds * 1000
-  // 共享 registry 的保留期覆盖配置允许的最长窗口及节点偏差，避免配置不同时在长窗口节点重放。
-  const nonceRetentionMs = TRANSPORT_TIME_LIMITS.maxRequestAgeSeconds * 1000 + 2 * TRANSPORT_PROTOCOL.CLOCK_SKEW_MS
   let bodyLimits
   try {
     bodyLimits = resolveTransportBodyLimits(options?.maxPlaintextBytes)
@@ -189,7 +187,7 @@ export function createTransportEncryption(
         if (c.issuedAt > now + futureSkewMs || now >= expiresAt)
           return timeFailure(now)
         // 只有完整认证成功后才占用 nonce；原子 claim 失败或存储故障均不向业务返回明文。
-        if (!await keyStore.claimRequest(c.clientId, c.requestId, c.issuedAt + nonceRetentionMs)) {
+        if (!await keyStore.claimRequest(c.clientId, c.requestId, c.issuedAt + TRANSPORT_NONCE_RETENTION_MS)) {
           return transportAuthenticationFailure()
         }
         const claimedAt = Date.now()

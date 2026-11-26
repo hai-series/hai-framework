@@ -16,7 +16,9 @@
 | `server.host`, `server.port` | `127.0.0.1`, `3000` | 待ち受けアドレスとポート。 |
 | `http.trustedProxies`, `http.access` | `auto`, `false` | 信頼するプロキシと任意のリクエストポリシー。信頼できるインフラのアドレスだけを指定。 |
 | `transport` | `false` | オブジェクトにするとアプリ層の暗号化が有効。クライアントとサーバーで一致させる。 |
-| `transport.maxPlaintextBytes`, `maxFutureSkewSeconds`, `maxRequestAgeSeconds` | `auto`, `30`, `300` | 平文の上限バイト数とリクエスト時刻の上限秒数。 |
+| `transport.maxPlaintextBytes` | `auto` | 平文の上限バイト数。 |
+| `transport.maxFutureSkewSeconds` | `30` | リクエストの時刻がサーバーより進んでいても許容する秒数。0～1800 の整数。 |
+| `transport.maxRequestAgeSeconds` | `300` | リクエストの発行から有効とみなす秒数。1～3600 の整数。 |
 | `transport.routePlaintextBytes`, `excludePaths`, `keyExchangePath` | `undefined`, `[]`, `/_hai/key-exchange` | ルート別の上限、暗号化しないパス、鍵交換エンドポイント。 |
 | `http.apiPrefix` | `/api/v1` | API ルートを配置するプレフィックス。 |
 | `http.openapi`, `http.docs` | `false`, `false` | 必要時に OpenAPI またはドキュメントを公開。オブジェクト形式の既定は `/openapi.json` と `/docs`。`requireAuth` で保護可能。 |
@@ -24,7 +26,7 @@
 | `cors.origin`, `cors.nativeOrigins` | 省略可 | アクセスを必要とするアプリのオリジンだけ許可。 |
 | `cors.allowedHeaders`, `exposedHeaders`, `credentials` | Built-in headers, `[]`, `false` | CORS で受理するヘッダー、クライアントに公開するレスポンスヘッダー、認証情報の扱いを設定。 |
 
-未翻訳：CORS の個別項目、API 仕様とヘルスチェックの切替、通信の制限。[中国語の該当節](serv.md#configuration-fields)を参照してください。
+未翻訳：CORS の個別項目、API 仕様とヘルスチェックの切替、その他の通信制限。[中国語の該当節](serv.md#configuration-fields)を参照してください。
 
 ## 設定例
 

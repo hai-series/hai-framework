@@ -22,7 +22,7 @@
 | 键或类别 | 用途 | 默认有效期与清理 |
 | --- | --- | --- |
 | [`hai:crypto:transport:cache:client:<clientId>`](#cache-crypto-client) | 按编号找公钥，验证请求并加密响应。 | 默认 3600 秒。读取不续期，到期后重新协商。 |
-| [`hai:crypto:transport:cache:request:<clientId>:<requestId>`](#cache-crypto-request) | 标记已经使用过的请求编号。 | 保留到 `issuedAt + 660000` 毫秒，到期删除。 |
+| [`hai:crypto:transport:cache:request:<clientId>:<requestId>`](#cache-crypto-request) | 标记已经使用过的请求编号。 | 保留到 `issuedAt + 3660000` 毫秒，到期删除。 |
 | [`hai:crypto:transport:cache:quota:register`](#cache-crypto-registration) | 核对本周期新增公钥还能登记多少。 | 首次写入起 60 秒。更新计数不续期。 |
 | [`hai:crypto:transport:cache:quota:request`](#cache-crypto-request-quota) | 核对本周期还能登记多少个新请求。 | 首次写入起 60 秒。更新计数不续期。 |
 
@@ -66,7 +66,13 @@
 
 这表示客户端 `c_example-42` 的请求 `0123456789abcdef0123456789abcdef` 已经用过，不能再执行。这里的 `true` 不表示业务成功：即使业务后来报错，这个请求编号也不能重新使用。
 
-假设请求的签发时间为 00:00，这条记录保留到 00:11，即 `issuedAt + 660000` 毫秒。保留时间覆盖请求可能仍被接受的时间，之后再收到旧请求会因过期而被拒绝，标记才可以删除。考虑允许的未来时间偏差，一次写入最多还能保存 16 分钟。不能为了腾空间提前删除标记，否则已用请求可能再次进入业务。这个机制只阻止同一加密请求重复使用；用户重新提交、生成了新编号时，订单等业务仍需要自己的防重复规则。
+签发时间为 00:00 的请求，记录保留到 01:01，即 `issuedAt + 3660000` 毫秒。61 分钟覆盖最长 60 分钟的请求有效期和 1 分钟的节点时钟余量。若请求时间领先服务端 30 分钟，记录写入后可保留 91 分钟。Redis 的内存预算应覆盖这个保留窗口，并保护有效标记直到到期。用户重新提交并生成新编号时，订单等业务仍需自己的防重复规则。
+
+<a id="replay-window-upgrade"></a>
+
+#### 升级后启用更长有效期
+
+若计划使用超过旧版上限 600 秒的有效期，先按原配置升级所有节点。旧版写入的防重放记录有各自的过期时间。最后一个旧节点停止受理请求后，等旧节点受理的请求按新有效期也全部到期，再统一调大配置。新有效期设为 3600 秒时，按旧版最大未来容差 300 秒和 60 秒时钟余量计算，可在等待 66 分钟后启用。
 
 <a id="cache-crypto-registration"></a>
 

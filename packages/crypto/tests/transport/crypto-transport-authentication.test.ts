@@ -7,7 +7,7 @@ import { openTransportPayload, sealTransportPayload } from '../../src/transport/
 let serverKey: TransportKeyPair
 let clientKey: TransportKeyPair
 
-async function fixture(timing?: Pick<TransportCreateServerOptions, 'maxFutureSkewSeconds' | 'maxRequestAgeSeconds'>) {
+async function fixture(timing?: Pick<TransportCreateServerOptions, 'maxFutureSkewSeconds' | 'maxRequestAgeSeconds'>, issuedAt?: number) {
   const keyStore = crypto.transport.createKeyStore({ cache })
   const ring = {
     activeKeyId: 'v1',
@@ -26,7 +26,7 @@ async function fixture(timing?: Pick<TransportCreateServerOptions, 'maxFutureSke
     serverKeyId: 'v1',
     clientId,
     requestId: crypto.symmetric.generateKey(),
-    issuedAt: Date.now(),
+    issuedAt: issuedAt ?? Date.now(),
     method: 'POST',
     pathHash: digest.data,
   }
@@ -116,15 +116,14 @@ describe('authenticated transport protocol', () => {
   })
 
   it.each([
-    [60_000, true],
-    [60_001, false],
-    [-599_999, true],
-    [-600_000, false],
-  ] as const)('可配置的请求时间边界 %s：%s', async (offset, success) => {
+    [1_800_000, true],
+    [1_800_001, false],
+    [-3_599_999, true],
+    [-3_600_000, false],
+  ] as const)('最大配置下的请求时间边界 %s：%s', async (offset, success) => {
     const now = Date.now()
-    vi.spyOn(Date, 'now').mockReturnValue(now + offset)
-    const f = await fixture({ maxFutureSkewSeconds: 60, maxRequestAgeSeconds: 600 })
-    vi.mocked(Date.now).mockReturnValue(now)
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    const f = await fixture({ maxFutureSkewSeconds: 1800, maxRequestAgeSeconds: 3600 }, now + offset)
     const result = await f.b.decryptRequest(f.payload, f.expected)
     expect(result.success).toBe(success)
     if (!result.success)
@@ -132,9 +131,9 @@ describe('authenticated transport protocol', () => {
   })
 
   it('短窗口节点接受的 nonce 在长窗口节点仍不可重放', async () => {
-    const f = await fixture({ maxRequestAgeSeconds: 600 })
+    const f = await fixture({ maxRequestAgeSeconds: 3600 })
     expect((await f.a.decryptRequest(f.payload, f.expected)).success).toBe(true)
-    vi.spyOn(Date, 'now').mockReturnValue(f.payload.context.issuedAt + 400_000)
+    vi.spyOn(Date, 'now').mockReturnValue(f.payload.context.issuedAt + 3_500_000)
     const replay = await f.b.decryptRequest(f.payload, f.expected)
     expect(replay).toMatchObject({
       success: false,
@@ -162,10 +161,10 @@ describe('authenticated transport protocol', () => {
 
   it.each([
     { maxFutureSkewSeconds: -1 },
-    { maxFutureSkewSeconds: 301 },
+    { maxFutureSkewSeconds: 1801 },
     { maxFutureSkewSeconds: 0.5 },
     { maxRequestAgeSeconds: 0 },
-    { maxRequestAgeSeconds: 601 },
+    { maxRequestAgeSeconds: 3601 },
   ])('工厂拒绝无效的时间配置 %j', (timing) => {
     const result = crypto.transport.createServer({
       serverKeyRing: {

@@ -65,12 +65,14 @@ describe('kit transport config', () => {
     })
   })
 
-  it('支持自定义 transport 配置', () => {
+  it.each([
+    { maxFutureSkewSeconds: 0, maxRequestAgeSeconds: 1 },
+    { maxFutureSkewSeconds: 1800, maxRequestAgeSeconds: 3600 },
+  ])('支持传输时间配置的边界值 %j', (timing) => {
     expect(KitConfigSchema.parse({
       transport: {
         keyExchangePath: '/custom/key-exchange',
-        maxFutureSkewSeconds: 0,
-        maxRequestAgeSeconds: 600,
+        ...timing,
       },
     })).toEqual({
       server: DEFAULT_SERVER,
@@ -78,16 +80,17 @@ describe('kit transport config', () => {
       access: false,
       transport: {
         keyExchangePath: '/custom/key-exchange',
-        maxFutureSkewSeconds: 0,
-        maxRequestAgeSeconds: 600,
+        ...timing,
         excludePaths: [],
       },
     })
   })
 
   it.each([
-    { maxFutureSkewSeconds: 301 },
+    { maxFutureSkewSeconds: -1 },
+    { maxFutureSkewSeconds: 1801 },
     { maxRequestAgeSeconds: 0 },
+    { maxRequestAgeSeconds: 3601 },
   ])('拒绝非法传输时间范围 %j', (transport) => {
     expect(KitConfigSchema.safeParse({ transport }).success).toBe(false)
   })
