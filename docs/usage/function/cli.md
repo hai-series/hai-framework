@@ -301,14 +301,13 @@ HTTPS支持已有普通PEM文件或Let’s Encrypt。证书/私钥每份最多1M
 
 ### 查看帮助、升级与诊断：`hai`
 
-先确认正在运行的 CLI 与选项；升级前检查已发布精确版本，诊断包在本地读取。
+先确认正在运行的 CLI 与选项。升级前检查已发布精确版本。
 
 #### 接口清单
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `hai upgrade <version> [options]` | 预检完整发布和迁移差异 | 填写已发布的精确版本，目录默认当前工程 · [参数表](#cli-diagnostics-arguments) | 依赖、配置及 Skills 差异报告 | `hai upgrade TARGET_VERSION` |
-| `hai feedback <action> <bundle> [options]` | 查看离线诊断包 | 操作和 ZIP 路径必填，`evidence` 可按请求、错误及时间范围过滤 · [参数表](#cli-diagnostics-arguments) | 摘要、清单、证据或本机查看器地址 | `hai feedback summary feedback.zip` |
 | `hai --version`、`hai --help` | 查看版本或选项 | 也可用 `hai <command> --help` | 已安装版本或命令用法 | `hai deploy --help` |
 
 <a id="cli-diagnostics-arguments"></a>
@@ -318,11 +317,6 @@ HTTPS支持已有普通PEM文件或Let’s Encrypt。证书/私钥每份最多1M
 | 实参 | 命令或生效条件 | 用途与默认行为 |
 | --- | --- | --- |
 | `<version> / --cwd <path>` | `upgrade` | 必填已发布精确版本，--cwd 指定预检哪个工程，省略为当前目录 |
-| `<action> / <bundle>` | `feedback` | 必填操作 summary、inspect、evidence、view 和诊断 ZIP 路径 |
-| `--page <number> / --page-size <number>` | `feedback evidence` | 默认第 1 页、每页 20 条。每页最多 100 条 |
-| `--kind / --request-id / --error-id` | `feedback evidence` | 按种类、请求编号或错误编号筛选。错误编号可定位关联日志上下文 |
-| `--from <timestamp> / --to <timestamp>` | `feedback evidence` | 毫秒级 Unix 时间戳，限定证据时间范围 |
-| `--port <number>` | `feedback view` | 查看器端口，默认 0 由系统分配 |
 
 <a id="command-options"></a>
 
@@ -341,24 +335,16 @@ hai --version
 hai --help
 # Prints the deployment command's arguments and switches.
 hai deploy --help
-# Reads the existing feedback.zip and prints its summary. An invalid or unreadable archive fails.
-hai feedback summary feedback.zip
 ```
 
-帮助与版本输出文本，summary 输入现有 ZIP 输出摘要；upgrade 需用注册表查到的精确版本替换示例占位，输出依赖、配置与 Skills 的差异报告。
+帮助与版本输出文本。upgrade 用注册表查到的精确版本生成依赖、配置与 Skills 的差异报告。
 
-#### 场景：读取证据与预检升级
+#### 场景：预检升级
 
 ```sh
-# Reads the first 20 matching entries. Invalid bundles or filters fail with a diagnostic.
-hai feedback evidence feedback.zip --request-id request-42 --page 1 --page-size 20 # 以请求编号过滤指定 ZIP，输出证据首页。
-# Starts a loopback viewer for the supplied ZIP. An invalid or unreadable archive stops startup.
-hai feedback view feedback.zip # 打开指定 ZIP，输出本机查看器地址。
 # Replace TARGET_VERSION with an exact published version. Unsupported versions or incompatible projects fail preflight.
 hai upgrade TARGET_VERSION # 输入已发布精确版本，输出当前工程的升级预检结果。
 ```
-
-离线包必须是普通单链接文件，最多64MiB；view仅监听loopback，使用随机访问路径。浏览器只运行框架内置查看器，不执行包内同名脚本。过滤结果不代表证据完整，继续按请求/错误编号检查上下文。
 
 `hai upgrade` 只读核对实际消费包、CLI/deploy 制品、catalog、锁文件、安装状态和技能差异。
 

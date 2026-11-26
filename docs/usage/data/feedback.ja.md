@@ -20,12 +20,12 @@
 
 | 列 | 型 | NULL | 用途 |
 | --- | --- | --- | --- |
-| `id` | `TEXT` | 不可 | 呼び出し側が生成する提出 UUID 兼主キー。 |
-| `app_id` | `TEXT` | 不可 | 問題票を受理したアプリの ID。 |
-| `scope_id` | `TEXT` | 不可 | 信頼できるコンテキストが指定する業務範囲。 |
-| `user_id` | `TEXT` | 不可 | 提出者の ID。 |
+| `id` | `VARCHAR(36)` | 不可 | 呼び出し側が生成する提出 UUID 兼主キー。 |
+| `app_id` | `VARCHAR(128)` | 不可 | 問題票を受理したアプリの ID。 |
+| `scope_id` | `VARCHAR(128)` | 不可 | 信頼できるコンテキストが指定する業務範囲。 |
+| `user_id` | `VARCHAR(128)` | 不可 | 提出者の ID。 |
 | `body` | `TEXT` | 不可 | 最初の本文。ファイルのみの場合は空文字列。 |
-| `status` | `TEXT` | 不可 | `pending` 未処理、`awaiting_user` 利用者の補足待ち、`handled` 処理済み。 |
+| `status` | `VARCHAR(24)` | 不可 | `pending` 未処理、`awaiting_user` 利用者の補足待ち、`handled` 処理済み。 |
 | `created_at` | `BIGINT` | 不可 | 提出時刻。 |
 | `updated_at` | `BIGINT` | 不可 | 最後の返信または状態変更の時刻。 |
 
@@ -37,11 +37,11 @@
 
 | 列 | 型 | NULL | 用途 |
 | --- | --- | --- | --- |
-| `id` | `TEXT` | 不可 | 呼び出し側が生成するメッセージ UUID 兼主キー。 |
-| `report_id` | `TEXT` | 不可 | 問題票の ID。 |
-| `author_id` | `TEXT` | 不可 | 送信者の ID。 |
-| `author_role` | `TEXT` | 不可 | `author` は提出者、`staff` は担当者。 |
-| `kind` | `TEXT` | 不可 | `reply` は返信、`request_info` は担当者による追加情報の依頼。 |
+| `id` | `VARCHAR(36)` | 不可 | 呼び出し側が生成するメッセージ UUID 兼主キー。 |
+| `report_id` | `VARCHAR(36)` | 不可 | 問題票の ID。 |
+| `author_id` | `VARCHAR(128)` | 不可 | 送信者の ID。 |
+| `author_role` | `VARCHAR(16)` | 不可 | `author` は提出者、`staff` は担当者。 |
+| `kind` | `VARCHAR(16)` | 不可 | `reply` は返信、`request_info` は担当者による追加情報の依頼。 |
 | `body` | `TEXT` | 不可 | 本文。ファイルのみの場合は空文字列。 |
 | `created_at` | `BIGINT` | 不可 | 送信時刻。 |
 
@@ -53,16 +53,15 @@
 
 | 列 | 型 | NULL | 用途 |
 | --- | --- | --- | --- |
-| `id` | `TEXT` | 不可 | サーバーが生成した添付の UUID。 |
-| `report_id` | `TEXT` | 不可 | 問題票の ID。 |
-| `message_id` | `TEXT` | 可 | メッセージの ID。最初の投稿の添付は NULL。 |
-| `name` | `TEXT` | 不可 | 表示用ファイル名。 |
-| `content_type` | `TEXT` | 不可 | 取得時のメディアタイプ。 |
+| `id` | `VARCHAR(36)` | 不可 | サーバーが生成した添付の UUID。 |
+| `report_id` | `VARCHAR(36)` | 不可 | 問題票の ID。 |
+| `message_id` | `VARCHAR(36)` | 可 | メッセージの ID。最初の投稿の添付は NULL。 |
+| `name` | `VARCHAR(255)` | 不可 | 表示用ファイル名。 |
+| `content_type` | `VARCHAR(128)` | 不可 | 取得時のメディアタイプ。 |
 | `size` | `INTEGER` | 不可 | 元のファイルサイズ（バイト）。 |
 | `content` | `BLOB` | 不可 | 元のバイナリーデータ。 |
 
 `(report_id, message_id, id)` でメタデータを読みます。ファイルの取得時は問題票の権限を先に確認します。
-
 
 問題票 `a5f59b38-ef92-47bb-b0a0-b0f9c07f7f93` の最初の添付 `screen.png` の `message_id` は NULL です。担当者が添付した `steps.txt` は追加依頼のメッセージを参照します。両方のファイルに問題票と同じ権限を適用します。
 

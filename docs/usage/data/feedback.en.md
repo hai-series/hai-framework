@@ -20,12 +20,12 @@ Each report has a conversation shared by its author and staff. A submission or m
 
 | Column | Type | Nullable | Purpose |
 | --- | --- | --- | --- |
-| `id` | `TEXT` | No | Caller-generated submission UUID and primary key. |
-| `app_id` | `TEXT` | No | Application that accepted the report. |
-| `scope_id` | `TEXT` | No | Business scope resolved from trusted context. |
-| `user_id` | `TEXT` | No | ID of the person who submitted the report. |
+| `id` | `VARCHAR(36)` | No | Caller-generated submission UUID and primary key. |
+| `app_id` | `VARCHAR(128)` | No | Application that accepted the report. |
+| `scope_id` | `VARCHAR(128)` | No | Business scope resolved from trusted context. |
+| `user_id` | `VARCHAR(128)` | No | ID of the person who submitted the report. |
 | `body` | `TEXT` | No | Original text. Empty if submitted with files only. |
-| `status` | `TEXT` | No | `pending`, `awaiting_user`, or `handled`. |
+| `status` | `VARCHAR(24)` | No | `pending`, `awaiting_user`, or `handled`. |
 | `created_at` | `BIGINT` | No | Submission time. |
 | `updated_at` | `BIGINT` | No | Time of the latest message or status change. |
 
@@ -37,11 +37,11 @@ The primary key is `id`. List pages use app, scope, and activity time. My Feedba
 
 | Column | Type | Nullable | Purpose |
 | --- | --- | --- | --- |
-| `id` | `TEXT` | No | Caller-generated UUID and primary key. |
-| `report_id` | `TEXT` | No | ID of the enclosing report. |
-| `author_id` | `TEXT` | No | ID of the person sending the message. |
-| `author_role` | `TEXT` | No | `author` for the report’s author or `staff` for authorized staff. |
-| `kind` | `TEXT` | No | `reply` for a reply or `request_info` for a staff request. |
+| `id` | `VARCHAR(36)` | No | Caller-generated UUID and primary key. |
+| `report_id` | `VARCHAR(36)` | No | ID of the enclosing report. |
+| `author_id` | `VARCHAR(128)` | No | ID of the person sending the message. |
+| `author_role` | `VARCHAR(16)` | No | `author` for the report’s author or `staff` for authorized staff. |
+| `kind` | `VARCHAR(16)` | No | `reply` for a reply or `request_info` for a staff request. |
 | `body` | `TEXT` | No | Message text. Empty if it contains only files. |
 | `created_at` | `BIGINT` | No | Time the message was sent. |
 
@@ -53,16 +53,15 @@ The primary key is `id`. List pages use app, scope, and activity time. My Feedba
 
 | Column | Type | Nullable | Purpose |
 | --- | --- | --- | --- |
-| `id` | `TEXT` | No | Server-generated attachment UUID. |
-| `report_id` | `TEXT` | No | ID of the enclosing report. |
-| `message_id` | `TEXT` | Yes | ID of the message. Null for a file submitted with the original report. |
-| `name` | `TEXT` | No | File name shown to the reader. |
-| `content_type` | `TEXT` | No | Media type returned to the reader. |
+| `id` | `VARCHAR(36)` | No | Server-generated attachment UUID. |
+| `report_id` | `VARCHAR(36)` | No | ID of the enclosing report. |
+| `message_id` | `VARCHAR(36)` | Yes | ID of the message. Null for a file submitted with the original report. |
+| `name` | `VARCHAR(255)` | No | File name shown to the reader. |
+| `content_type` | `VARCHAR(128)` | No | Media type returned to the reader. |
 | `size` | `INTEGER` | No | Original size in bytes. |
 | `content` | `BLOB` | No | Original binary content. |
 
 Read metadata by `(report_id, message_id, id)`. File retrieval checks access to the report first.
-
 
 Suppose report `a5f59b38-ef92-47bb-b0a0-b0f9c07f7f93` starts with `screen.png`. Its `message_id` is null. If a staff request later includes `steps.txt`, that file references the request message. Both files use the same report permission check.
 

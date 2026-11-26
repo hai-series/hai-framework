@@ -244,7 +244,6 @@ prod を入力し計画 JSON を得ます。--plan は実際に配置しませ�
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
 | `hai upgrade <version> [options]` | 指定版の更新を事前確認 | `version` は確認する公開済みの正確なバージョンです。`--cwd` でプロジェクトを選び、既定は現在のプロジェクトです。 · [引数表](#cli-diagnostics-arguments) | 依存・設定・スキルの差分報告 | `hai upgrade TARGET_VERSION` |
-| `hai feedback <action> <bundle> [options]` | オフライン診断 ZIP を読む | `action` は、`bundle` で指定した診断 ZIP から何を読み取るかを選びます。`evidence` の `options` では、要求 ID、エラー ID、期間で絞れます。 · [引数表](#cli-diagnostics-arguments) | 要約・証拠ページ・ローカル URL | `hai feedback summary feedback.zip` |
 | `hai --version` または `hai --help` | バージョンとヘルプを表示 | コマンド名の後に `--help` を指定すると、そのコマンドの引数とオプションが表示されます。 | バージョン・選択肢のテキスト | `hai deploy --help` |
 
 <a id="cli-diagnostics-arguments"></a>
@@ -254,11 +253,6 @@ prod を入力し計画 JSON を得ます。--plan は実際に配置しませ�
 | 引数 | コマンドまたは条件 | 用途と既定値 |
 | --- | --- | --- |
 | `<version> / --cwd <path>` | `upgrade` | 公開済みの完全なバージョンが必須。--cwd で事前確認対象を指定し、既定は現在のディレクトリ |
-| `<action> / <bundle>` | `feedback` | 操作（summary、inspect、evidence、view）と診断 ZIP のパスが必須 |
-| `--page <number> / --page-size <number>` | `feedback evidence` | 既定で 1 ページ目、1 ページ 20 件。最大 100 件 |
-| `--kind / --request-id / --error-id` | `feedback evidence` | 種類、リクエスト ID、エラー ID で絞り込み。エラー ID で関連ログを特定 |
-| `--from <timestamp> / --to <timestamp>` | `feedback evidence` | 証拠の時間範囲を Unix ミリ秒で指定 |
-| `--port <number>` | `feedback view` | ビューアーのポート。既定の 0 は OS が割り当て |
 
 #### 利用例：ヘルプ・更新・診断の確認
 
@@ -269,8 +263,6 @@ hai --version
 hai --help
 # Prints the deployment command's arguments and switches.
 hai deploy --help
-# Reads the existing feedback.zip and prints its summary. An invalid or unreadable archive fails.
-hai feedback summary feedback.zip
 ```
 
 ヘルプと版はテキスト、summary は既存 ZIP の概要です。upgrade の例は登録済みの正確な版に置き換え、依存・設定・skill の差分を確認します。

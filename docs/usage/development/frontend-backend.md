@@ -54,4 +54,4 @@ if (!initialized.success) throw new Error(initialized.error.message)
 
 Storage procedures提供authorize，覆盖列表/批删等全部`key`；AI默认当前用户`objectId`，跨主体访问需显式`authorizeObject`。模型输出、工具参数和客户端资源ID不赋予权限。
 
-409/422/429合法HaiResult保留业务原因和`traceId`，5xx隐藏内部原因。用真实反馈冲突验证[提示与恢复](../operations/feedback.md#用户提示与诊断关联)，失败不重复写入。Kit限流store需共享原子后端，依赖失败明确返回失败，不静默放行。
+409/422/429合法HaiResult保留业务原因和`traceId`，5xx隐藏内部原因。用真实请求验证错误提示、失败恢复和重复写入的边界。Kit限流store需共享原子后端，依赖失败明确返回失败，不静默放行。

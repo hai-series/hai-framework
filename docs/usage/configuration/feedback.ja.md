@@ -14,7 +14,7 @@
 | --- | --- | --- | --- | --- |
 | `appId` | 1〜128 文字の文字列 | はい | なし | 共有 DB 内でアプリを区別する固定 ID。 |
 
-契約では 1 回に 5 ファイル、各 5 MiB、合計 10 MiB まで受け付けます。暗号化転送を使う場合、ホストの `routePlaintextBytes` に `feedbackTransportRoutes(apiPrefix)` を結合し、対象パスで平文 16 MiB を許可します。他のルートの容量はホストで設定します。 [API リファレンス](../function/feedback.ja.md)
+契約では 1 回に 5 ファイル、各 5 MiB、合計 10 MiB まで受け付けます。暗号化転送を使う場合、ホストの `routePlaintextBytes` に `apiContract.feedbackTransportRoutes(apiPrefix)` を結合し、対象パスで平文 16 MiB を許可します。他のルートの容量はホストで設定します。 [API リファレンス](../function/feedback.ja.md)
 
 ## 設定例
 

@@ -404,7 +404,7 @@ console.info(parsed.data.data.total) // 1
 | `apiContract.storage` | 预签名地址、对象列表、元数据和删除。 | 属性，无参数。 | Storage 路由组。 | `apiContract.storage.presignedUrls.createUpload` |
 | `apiContract.ai` | JSON 聊天补全、消息、记忆与会话。 | 属性，无参数。 | AI 路由组。 | `apiContract.ai.chats.createCompletion` |
 | `apiContract.payment` | 订单与渠道通知。 | 属性，无参数。 | Payment 路由组。 | `apiContract.payment.orders.create` |
-| `apiContract.feedback` | 提交、查询、采集证据、附件和导出反馈。 | 属性，无参数。 | Feedback 路由组。 | `apiContract.feedback.reports.listMine` |
+| `apiContract.feedback` | 提交、查询、回复、处理和附件。 | 属性，无参数。 | Feedback 路由组。 | `apiContract.feedback.reports.listMine` |
 
 #### 场景：选择领域与处理方式
 
@@ -418,12 +418,12 @@ console.info(parsed.data.data.total) // 1
 
 ### 声明反馈传输容量
 
-从 `@h-ai/api-contract/feedback` 导入 `feedbackTransportRoutes(apiPrefix?)`。路径以 API 前缀为起点，默认 `/api`，返回供宿主合并到 `routePlaintextBytes` 的字节数映射。
+从 `@h-ai/api-contract/feedback` 导入 `apiContract.feedbackTransportRoutes(apiPrefix?)`。路径以 API 前缀为起点，默认 `/api`，返回供宿主合并到 `routePlaintextBytes` 的字节数映射。
 
 ```ts
-import { feedbackTransportRoutes } from '@h-ai/api-contract/feedback'
+import { apiContract } from '@h-ai/api-contract/feedback'
 
-const routePlaintextBytes = feedbackTransportRoutes('/api')
+const routePlaintextBytes = apiContract.feedbackTransportRoutes('/api')
 void routePlaintextBytes
 ```
 

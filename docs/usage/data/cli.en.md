@@ -16,7 +16,6 @@ The CLI generates project files and builds artifacts. The modules enabled in the
 | --- | --- |
 | Project files | Source, workspace manifests, feature settings and resources under the chosen target directory. |
 | `manifest.json` | Generated after a successful build. Records source identity and artifacts alongside the output. |
-| Diagnostic bundle | Caller-selected file. See [Feedback](feedback.en.md) for evidence and export shape. |
 | Deployment files | Archives and server release state belong to [Deploy](deploy.en.md). |
 
 <a id="example-data"></a>

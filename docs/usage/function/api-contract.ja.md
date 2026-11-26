@@ -404,7 +404,7 @@ console.info(parsed.data.data.total) // 1
 | `apiContract.storage` | 署名付き URL、オブジェクト一覧、メタデータ、削除。 | プロパティ。引数なし。 | Storage ルートグループ。 | `apiContract.storage.presignedUrls.createUpload` |
 | `apiContract.ai` | JSON のチャット補完、メッセージ、メモリ、セッション。 | プロパティ。引数なし。 | AI ルートグループ。 | `apiContract.ai.chats.createCompletion` |
 | `apiContract.payment` | 注文と決済サービスからの通知。 | プロパティ。引数なし。 | Payment ルートグループ。 | `apiContract.payment.orders.create` |
-| `apiContract.feedback` | フィードバックの送信、取得、証拠収集、添付、エクスポート。 | プロパティ。引数なし。 | Feedback ルートグループ。 | `apiContract.feedback.reports.listMine` |
+| `apiContract.feedback` | フィードバックの提出、参照、会話、状態、添付。 | プロパティ。引数なし。 | Feedback ルートグループ。 | `apiContract.feedback.reports.listMine` |
 
 #### 利用例：ドメインと処理を選ぶ
 
@@ -418,12 +418,12 @@ console.info(parsed.data.data.total) // 1
 
 ### フィードバックの転送容量を宣言する
 
-`@h-ai/api-contract/feedback` から `feedbackTransportRoutes(apiPrefix?)` を読み込みます。既定 `/api` の API プレフィックスを持つパスとバイト数を返します。ホストの `routePlaintextBytes` に結合します。
+`@h-ai/api-contract/feedback` から `apiContract.feedbackTransportRoutes(apiPrefix?)` を読み込みます。既定 `/api` の API プレフィックスを持つパスとバイト数を返します。ホストの `routePlaintextBytes` に結合します。
 
 ```ts
-import { feedbackTransportRoutes } from '@h-ai/api-contract/feedback'
+import { apiContract } from '@h-ai/api-contract/feedback'
 
-const routePlaintextBytes = feedbackTransportRoutes('/api')
+const routePlaintextBytes = apiContract.feedbackTransportRoutes('/api')
 void routePlaintextBytes
 ```
 

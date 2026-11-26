@@ -240,7 +240,6 @@ Confirm the active CLI and options, use an exact published version for upgrade c
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `hai upgrade <version> [options]` | Inspect an exact release | `version` selects an exact published release to inspect. `--cwd` selects the project, defaulting to the current project. · [argument table](#cli-diagnostics-arguments) | Dependency/configuration/skill difference report | `hai upgrade TARGET_VERSION` |
-| `hai feedback <action> <bundle> [options]` | Read an offline diagnostic bundle | `action` selects what to read from the diagnostic ZIP at `bundle`. For `evidence`, `options` filter by request ID, error ID or time range. · [argument table](#cli-diagnostics-arguments) | Summary, evidence page or local viewer URL | `hai feedback summary feedback.zip` |
 | `hai --version` or `hai --help` | Show version or help | Pass a command before `--help` for its arguments and options. | Version/options text | `hai deploy --help` |
 
 <a id="cli-diagnostics-arguments"></a>
@@ -250,11 +249,6 @@ Confirm the active CLI and options, use an exact published version for upgrade c
 | Argument | Command or condition | Purpose and defaults |
 | --- | --- | --- |
 | `<version> / --cwd <path>` | `upgrade` | Pass a published exact version. --cwd selects the project to check, defaulting to the current directory |
-| `<action> / <bundle>` | `feedback` | Required action (summary, inspect, evidence, or view) and path to the diagnostic ZIP |
-| `--page <number> / --page-size <number>` | `feedback evidence` | Defaults to page 1 and 20 rows per page. Maximum page size is 100 |
-| `--kind / --request-id / --error-id` | `feedback evidence` | Filter by evidence kind, request ID or error ID. An error ID anchors related logs |
-| `--from <timestamp> / --to <timestamp>` | `feedback evidence` | Unix milliseconds bounding the evidence time range |
-| `--port <number>` | `feedback view` | Viewer port. Defaults to 0 for OS assignment |
 
 #### Scenario: Inspect help, upgrades and diagnostics
 
@@ -265,8 +259,6 @@ hai --version
 hai --help
 # Prints the deployment command's arguments and switches.
 hai deploy --help
-# Reads the existing feedback.zip and prints its summary. An invalid or unreadable archive fails.
-hai feedback summary feedback.zip
 ```
 
 Help and version print text; summary reads an existing ZIP and prints a digest. Replace upgrade’s placeholder with an exact registry version to produce dependency, configuration and skill differences.

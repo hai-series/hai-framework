@@ -20,12 +20,12 @@
 
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
-| `id` | `TEXT` | 否 | 调用方生成的提交 UUID，也是反馈主键。 |
-| `app_id` | `TEXT` | 否 | 发起反馈的应用 ID。 |
-| `scope_id` | `TEXT` | 否 | 从可信上下文取得的业务范围。 |
-| `user_id` | `TEXT` | 否 | 提交人的用户 ID。 |
+| `id` | `VARCHAR(36)` | 否 | 调用方生成的提交 UUID，也是反馈主键。 |
+| `app_id` | `VARCHAR(128)` | 否 | 发起反馈的应用 ID。 |
+| `scope_id` | `VARCHAR(128)` | 否 | 从可信上下文取得的业务范围。 |
+| `user_id` | `VARCHAR(128)` | 否 | 提交人的用户 ID。 |
 | `body` | `TEXT` | 否 | 首帖正文。纯附件提交时为空字符串。 |
-| `status` | `TEXT` | 否 | `pending` 待处理、`awaiting_user` 待用户补充、`handled` 已处理。 |
+| `status` | `VARCHAR(24)` | 否 | `pending` 待处理、`awaiting_user` 待用户补充、`handled` 已处理。 |
 | `created_at` | `BIGINT` | 否 | 提交时间。 |
 | `updated_at` | `BIGINT` | 否 | 最近一次状态变更或消息的时间。 |
 
@@ -37,11 +37,11 @@
 
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
-| `id` | `TEXT` | 否 | 调用方生成的消息 UUID，也是消息主键。 |
-| `report_id` | `TEXT` | 否 | 所属反馈 ID。 |
-| `author_id` | `TEXT` | 否 | 发消息者的用户 ID。 |
-| `author_role` | `TEXT` | 否 | `author` 表示反馈作者，`staff` 表示处理人员。 |
-| `kind` | `TEXT` | 否 | `reply` 是普通回复，`request_info` 是处理人员要求补充信息。 |
+| `id` | `VARCHAR(36)` | 否 | 调用方生成的消息 UUID，也是消息主键。 |
+| `report_id` | `VARCHAR(36)` | 否 | 所属反馈 ID。 |
+| `author_id` | `VARCHAR(128)` | 否 | 发消息者的用户 ID。 |
+| `author_role` | `VARCHAR(16)` | 否 | `author` 表示反馈作者，`staff` 表示处理人员。 |
+| `kind` | `VARCHAR(16)` | 否 | `reply` 是普通回复，`request_info` 是处理人员要求补充信息。 |
 | `body` | `TEXT` | 否 | 消息正文。纯附件消息时为空字符串。 |
 | `created_at` | `BIGINT` | 否 | 发送时间。 |
 
@@ -53,16 +53,15 @@
 
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
-| `id` | `TEXT` | 否 | 服务端生成的附件 UUID。 |
-| `report_id` | `TEXT` | 否 | 所属反馈 ID。 |
-| `message_id` | `TEXT` | 是 | 所属消息 ID。为空表示附件随首帖提交。 |
-| `name` | `TEXT` | 否 | 显示用文件名。 |
-| `content_type` | `TEXT` | 否 | 响应中的媒体类型。 |
+| `id` | `VARCHAR(36)` | 否 | 服务端生成的附件 UUID。 |
+| `report_id` | `VARCHAR(36)` | 否 | 所属反馈 ID。 |
+| `message_id` | `VARCHAR(36)` | 是 | 所属消息 ID。为空表示附件随首帖提交。 |
+| `name` | `VARCHAR(255)` | 否 | 显示用文件名。 |
+| `content_type` | `VARCHAR(128)` | 否 | 响应中的媒体类型。 |
 | `size` | `INTEGER` | 否 | 原始文件字节数。 |
 | `content` | `BLOB` | 否 | 数据库内的原始二进制内容。 |
 
 按 `(report_id, message_id, id)` 查元数据。读取文件时先鉴权反馈，再读取对应附件。
-
 
 例如反馈 `a5f59b38-ef92-47bb-b0a0-b0f9c07f7f93` 的首帖带有 `screen.png`，该附件的 `message_id` 为空。人员随后发出一条补充请求并附 `steps.txt`，该文件的 `message_id` 指向补充请求。两份文件通过同一个反馈权限检查。
 

@@ -47,11 +47,7 @@ const browsers = new Map([
   ],
   [
     'api-contract',
-    ['.'],
-  ],
-  [
-    'feedback',
-    ['./client', './bundle'],
+    ['.', './feedback'],
   ],
   [
     'capacitor',
@@ -120,8 +116,6 @@ const hidden = new Map([
     'feedback',
     [
       'FeedbackReportRepository',
-      'FeedbackRuntime',
-      'FeedbackCapture',
       'createFeedbackOperations',
     ],
   ],
@@ -216,11 +210,6 @@ function typeSmoke(directories, suffix, browser, generated, nodeWithoutDom = fal
         source.push('// @ts-expect-error 浏览器没有 Node 访问策略执行能力', 'api.core.access', 'api.core.worker.createPool(() => new Worker(new URL("/worker.js", "https://example.test"), { type: "module" }), { maxWorkers: 1, maxQueuedJobs: 0 })')
       else
         source.push('export const access: api.AccessFunctions = api.core.access', 'export const decision = access.createRequestCheck(policy)(\'/api/example\', \'GET\')')
-    }
-    if (directory === 'feedback') {
-      source.push('import { feedback as clientFeedback } from \'@h-ai/feedback/client\'', 'import { feedback as bundleFeedback } from \'@h-ai/feedback/bundle\'', 'export const factories = [clientFeedback.createClient, bundleFeedback.createBundle, bundleFeedback.readBundle]')
-      source.push('// @ts-expect-error Browser collector does not provide the Node lifecycle', 'clientFeedback.init({})')
-      source.push('// @ts-expect-error Offline bundles do not provide the Node lifecycle', 'bundleFeedback.init({})')
     }
     if (directory === 'kit') {
       source.push('export const publicKit: api.KitPublicConfig = { transport: false }')

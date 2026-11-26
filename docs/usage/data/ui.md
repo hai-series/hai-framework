@@ -72,7 +72,7 @@ JSON 脚本与读写主题 ID 字符串的工具应使用不同的键。`ui.getT
 | `CrudData<T>` | 宿主查询或 `ui.createCrudController()` 提供给 `CrudPage`，包括记录、总数、页码、页面大小和已提交筛选。 | 组件或控制器实例存续期间。宿主决定服务端记录的保存和授权。 |
 | `ArtifactDocument` 与 `ArtifactSaveRequest` | 宿主提供基准版本和内容，UI 把 `id`、`baseVersion` 和草稿交回宿主保存。 | 草稿和冲突提示留在工作区实例。持久内容、历史和版本冲突由宿主维护。 |
 | `ToolRun` | 宿主给出执行回执并响应状态查询。组件按状态显示进度、结果和产物。 | UI 在工作区实例保存当前回执、计时器和取消信号。持久任务、授权和重试由执行服务负责。 |
-| `FeedbackReceipt` | 宿主受理反馈后返回 `number` 和 `collectionStatus`，UI 用于显示回执。 | 证据同步、权限和保留策略由反馈服务管理，见[反馈数据结构](feedback.md)。 |
+| `FeedbackViewActions` | 宿主为反馈界面提供列表、对话和附件操作。 | 界面在当前打开的反馈中保存展示状态，业务数据由服务端管理。 |
 
 例如，`{ "id": "report-42", "baseVersion": 3, "content": "# Updated report" }` 表示用户要在第 3 版上保存草稿。如果服务器上已经是第 4 版，宿主应返回冲突，工作区保留草稿。工具回执 `{ "id": "run-42", "status": "running", "progress": 0.5 }` 表示仍在运行且完成了一半。比例范围为 0 到 1，省略时显示不定进度。[工具与产物工作台](../function/ui.md#tool-workspaces)
 
@@ -91,10 +91,4 @@ JSON 脚本与读写主题 ID 字符串的工具应使用不同的键。`ui.getT
   "pageSize": 10,
   "filters": { "status": "packed" }
 }
-```
-
-提交反馈成功后，以下回执表示已受理，附件或诊断材料仍在收集。可用编号打开反馈详情并查询后续状态。
-
-```json
-{ "number": "FB-104", "collectionStatus": "collecting" }
 ```

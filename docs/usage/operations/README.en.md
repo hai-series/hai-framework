@@ -14,7 +14,7 @@ Read the deployment result, the remote `current` record, and the running contain
 
 ## Investigate feedback and background jobs
 
-Start with the user-facing reference number. [Feedback, jobs and troubleshooting](feedback.md) explains how to trace collection, notifications, webhooks, audit, and scheduling in logs. [Operational settings](../configuration/operations.md) covers time budgets, acknowledgements, and retention.
+Review reports and replies through My Feedback or the staff list. [Feedback troubleshooting](feedback.md) · [Operational settings](../configuration/operations.md)
 
 ## Record what was verified
 

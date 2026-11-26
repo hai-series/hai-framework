@@ -14,7 +14,7 @@
 
 ## 日常问题与后台任务
 
-[反馈、任务与排错](feedback.md)从用户受理编号开始，区分采集、通知、Webhook、审计和调度结果，再把追踪编号关联到日志。配置预算、回执与保留集中见[运行配置](../configuration/operations.md)。
+从本人列表和管理列表使用反馈、回复和附件。 [反馈操作与故障排查](feedback.md) · [运行配置](../configuration/operations.md)
 
 ## 验证边界
 

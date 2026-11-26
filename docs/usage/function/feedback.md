@@ -16,7 +16,7 @@
 
 1. **提交。** 在「反馈问题」中填写说明或选择图片、文件，确认后提交。成功时整份反馈和所有附件同时保存，初始状态为「待处理」。
 2. **查看。** 在「我的反馈」中按状态筛选，打开自己的反馈读正文、附件和对话。处理人员从管理列表打开同一份反馈。
-3. **回复或请求补充。** 两边都可以发送带图片或文件的回复。处理人员选择「要求补充信息」并发送材料后，状态变为「待用户补充」。
+3. **回复或请求补充。** 两边都可以发送带图片或文件的回复。处理人员发送「要求补充信息」时，可以一并附上图片或文件。发送成功后，状态变为「待用户补充」。
 4. **补充。** 用户在同一对话里回复，可以只提交截图或文件。反馈原为「待用户补充」时，回复成功会把状态改回「待处理」。
 5. **给出处理结果。** 处理人员在对话里回复结果，再按需要标记「已处理」。普通回复保留当前状态，用户在已处理后仍可继续回复。处理人员可把已处理的反馈改回「待处理」。
 
@@ -26,7 +26,7 @@
 
 | 事项 | 行为 |
 | --- | --- |
-| 上传时机 | 用户或处理人员按「提交」「回复」或「要求补充信息」后，服务端才接收本次明确选择的文件。初始化只连接关系库，日志和页面现场由应用自己的机制管理。 |
+| 上传时机 | 用户或处理人员按「提交」「回复」或「要求补充信息」后，服务端才接收本次明确选择的文件。初始化只准备关系库中的反馈表。应用日志留在应用自己的日志系统中，反馈中的截图和文件都由当事人主动选择。 |
 | 单次提交 | 正文最多 5000 字符。每次提交或发送消息最多 5 个文件，单个 5 MiB，合计 10 MiB。正文和文件至少提供一项。 |
 | 附件访问 | 正文和消息列表只返回附件元数据。有权查看该反馈的人才能预览可安全显示的栅格图片或下载文件。 |
 | 权限 | 已登录且有 `feedback:create` 的用户可以提交，作者可以查询和回复自己的反馈。`feedback:read` 可查看同范围的反馈，`feedback:process` 在具备读取权限时允许处理、回复和请求补充。应用在服务端从可信会话解析身份、业务范围与权限。 |
@@ -62,7 +62,7 @@ export async function submitIssue(author: FeedbackContext, id: string) {
 }
 ```
 
-SvelteKit 用 `kit.createFeedbackHandler({ feedback, resolveContext })` 挂载 GET、POST、PATCH。独立服务用 `serv.createFeedbackProcedures({ feedback, resolveContext })` 装配 `apiContract.feedback`。在传输加密配置中合并 `feedbackTransportRoutes(apiPrefix)` 返回的路由预算，提交、消息和附件路径允许最多 16 MiB 明文。应用关闭时先调用 `await feedback.close()`，再关闭 RelDB。 [Kit 接入](kit.md#protocol-integrations) · [配置说明](../configuration/feedback.md)
+SvelteKit 用 `kit.createFeedbackHandler({ feedback, resolveContext })` 挂载 GET、POST、PATCH。独立服务用 `serv.createFeedbackProcedures({ feedback, resolveContext })` 装配 `apiContract.feedback`。在传输加密配置中合并 `apiContract.feedbackTransportRoutes(apiPrefix)` 返回的路由预算，提交、消息和附件路径允许最多 16 MiB 明文。应用关闭时先调用 `await feedback.close()`，再关闭 RelDB。 [Kit 接入](kit.md#protocol-integrations) · [配置说明](../configuration/feedback.md)
 
 <a id="api-reference"></a>
 

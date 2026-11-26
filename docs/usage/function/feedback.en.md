@@ -16,7 +16,7 @@ Signed-in users and authorized staff exchange messages on the same report. Users
 
 1. **Submit.** Enter a description or choose images and files, review them, then submit. The report and its files are saved together as Pending.
 2. **View.** Use My Feedback to open your reports and read the original material and conversation. Staff open them from the management list.
-3. **Reply or request information.** Both sides can attach images and files to replies. When staff send a request for more information, the status moves to Awaiting user.
+3. **Reply or request information.** Both sides can attach images and files to replies. Staff can also attach them to a request for more information. Sending the request moves the status to Awaiting user.
 4. **Provide information.** Reply to the same report. A screenshot or file is sufficient. A reply from the author moves a report that is Awaiting user back to Pending.
 5. **Record the outcome.** Staff can reply with the outcome and mark the report Handled. Ordinary replies preserve the current status. Authors can reply after handling, and staff can return a report to Pending.
 
@@ -26,7 +26,7 @@ Signed-in users and authorized staff exchange messages on the same report. Users
 
 | Topic | Behavior |
 | --- | --- |
-| Upload timing | The server receives selected files when a user or staff member submits or sends a message. Initialization prepares the relational database. Logging and session capture belong to the host application's own systems. |
+| Upload timing | The server receives selected files when a user or staff member submits or sends a message. Initialization prepares the feedback tables. Application logs stay in the application's logging system. Screenshots and files in feedback are selected by the people sending them. |
 | Per submission or message | Up to 5,000 characters and five files, with a maximum of 5 MiB per file and 10 MiB total. Supply text, a file, or both. |
 | File access | Report and message lists carry file metadata. Anyone authorized to view the report can preview supported raster images or download attached files. |
 | Permissions | Signed-in users with `feedback:create` can submit. Authors can view and reply to their own reports. `feedback:read` grants in-scope access to others' reports. Staff with read and `feedback:process` can act, reply, and request information. Resolve identity, scope, and permissions from a trusted server-side session. |
@@ -60,7 +60,7 @@ export async function submitIssue(author: FeedbackContext, id: string) {
 }
 ```
 
-In SvelteKit, mount `kit.createFeedbackHandler({ feedback, resolveContext })` as GET, POST, and PATCH. In Serv, mount `apiContract.feedback` with `serv.createFeedbackProcedures({ feedback, resolveContext })`. Merge `feedbackTransportRoutes(apiPrefix)` into the encrypted transport configuration to allow up to 16 MiB of plaintext on submission, message, and attachment paths. Call `await feedback.close()` before closing RelDB. [Kit integration](kit.en.md#protocol-integrations) · [Configuration](../configuration/feedback.en.md)
+In SvelteKit, mount `kit.createFeedbackHandler({ feedback, resolveContext })` as GET, POST, and PATCH. In Serv, mount `apiContract.feedback` with `serv.createFeedbackProcedures({ feedback, resolveContext })`. Merge `apiContract.feedbackTransportRoutes(apiPrefix)` into the encrypted transport configuration to allow up to 16 MiB of plaintext on submission, message, and attachment paths. Call `await feedback.close()` before closing RelDB. [Kit integration](kit.en.md#protocol-integrations) · [Configuration](../configuration/feedback.en.md)
 
 <a id="api-reference"></a>
 

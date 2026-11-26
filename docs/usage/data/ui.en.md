@@ -68,7 +68,7 @@ After the order edit drawer is set to 480 pixels, `hai-ui:crud:orders:drawer-wid
 | `CrudData<T>` | The host query or `ui.createCrudController()` provides `CrudPage` with items, total, page, page size and submitted filters. | Component or controller lifetime. The host owns the server records and authorization. |
 | `ArtifactDocument` and `ArtifactSaveRequest` | The host supplies a version and content, and the UI sends `id`, `baseVersion` and the draft back to save. | Drafts and conflict indicators live in the workspace. The host persists content and history and detects version conflicts. |
 | `ToolRun` | The host returns the run receipt and answers status requests. The UI displays progress, results and artifacts. | The current receipt, timer and cancellation signal belong to the workspace. The execution service owns persistent jobs, authorization and retry. |
-| `FeedbackReceipt` | After accepting feedback, the host returns `number` and `collectionStatus` for the UI to display. | Evidence collection, authorization and retention belong to the feedback service. [Feedback data structures](feedback.en.md) |
+| `FeedbackViewActions` | The host provides list, conversation, and file actions. | The view holds the currently displayed data, and the service persists reports and messages. |
 
 For example, `{ "id": "report-42", "baseVersion": 3, "content": "# Updated report" }` asks to save a draft on version 3. If the server already has version 4, the host returns a conflict and the workspace keeps the draft. A receipt of `{ "id": "run-42", "status": "running", "progress": 0.5 }` describes a run halfway complete. The progress fraction ranges from 0 to 1. Omit it for an indeterminate indicator. [Tool and artifact workspaces](../function/ui.en.md#tool-workspaces)
 
@@ -87,10 +87,4 @@ The host supplies the order list data. This sample shows one record on page 2, t
   "pageSize": 10,
   "filters": { "status": "packed" }
 }
-```
-
-After feedback submission succeeds, this receipt means the report was accepted and its attachments or diagnostic evidence are still being collected. Open the details by number to check the latest status.
-
-```json
-{ "number": "FB-104", "collectionStatus": "collecting" }
 ```

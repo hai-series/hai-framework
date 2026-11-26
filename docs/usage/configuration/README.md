@@ -50,7 +50,7 @@
 | [身份、密码、会话和权限](identity.md)    | 登录方式、锁定、会话配额、改密和登录页                 | `_iam.yml`、公开认证策略、服务端守卫                                                 |
 | [HTTP、客户端和传输](http.md)            | 监听地址、跨域、可信代理、Cookie、加密和超时           | `_serv.yml`、`_kit.yml`、[按路径配置 IP、时段与加密](request-access.md) |
 | [AI、知识与向量](ai.md)                  | 模型路由、令牌预算、检索、音频/图片和持久化            | `_ai.yml`、`_vecdb.yml`、显式 Store                                                  |
-| [反馈、通知、审计和任务](operations.md)  | 材料保留、通知回执、审计保护和任务恢复                 | `_feedback.yml`、`_reach.yml`、`_audit.yml`、`_scheduler.yml`                        |
+| [反馈、通知、审计和任务](operations.md)  | 反馈接入、通知回执、审计保护和任务恢复                 | `_feedback.yml`、`_reach.yml`、`_audit.yml`、`_scheduler.yml`                        |
 | [页面、支付与设备](experience.md)        | 支付验签、原生标识、权限与构建                     | `_payment.yml`、`capacitor.config.ts`、原生工程                                         |
 | [构建、部署、增量和恢复](delivery.md)    | 交付什么、网站挂在哪个目录、更新哪些服务、失败如何恢复 | 根 `hai.json.build/deploy`、构建进程`PUBLIC_BASE_PATH`、环境文件、服务器成功基线     |
 

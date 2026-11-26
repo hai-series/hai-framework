@@ -11506,15 +11506,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInput",
+              "name": "FeedbackAddMessageInput",
               "kind": "type",
-              "declaration": "FeedbackAppendEvidenceInput",
+              "declaration": "FeedbackAddMessageInput",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInputSchema",
+              "name": "FeedbackAddMessageInputSchema",
               "kind": "value",
-              "declaration": "FeedbackAppendEvidenceInputSchema",
+              "declaration": "FeedbackAddMessageInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -11548,6 +11548,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentQuery",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuerySchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentQuerySchema",
@@ -11560,40 +11566,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackBudget",
+              "name": "FeedbackContext",
               "kind": "type",
-              "declaration": "FeedbackBudget",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBudgetSchema",
-              "kind": "value",
-              "declaration": "FeedbackBudgetSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatus",
-              "kind": "type",
-              "declaration": "FeedbackCollectionStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatusSchema",
-              "kind": "value",
-              "declaration": "FeedbackCollectionStatusSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInput",
-              "kind": "type",
-              "declaration": "FeedbackCompleteInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackCompleteInputSchema",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackContext",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackContract",
@@ -11614,82 +11590,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackEvidence",
+              "name": "FeedbackHttpOperations",
               "kind": "type",
-              "declaration": "FeedbackEvidence",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAck",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceAck",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAckSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceAckSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInput",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportInput",
-              "kind": "type",
-              "declaration": "FeedbackExportInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackExportInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackExportInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackExportQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackHistory",
-              "kind": "type",
-              "declaration": "FeedbackHistory",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackHistorySchema",
-              "kind": "value",
-              "declaration": "FeedbackHistorySchema",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackHttpOperations",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackIdInputSchema",
@@ -11698,15 +11602,9 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackJob",
-              "kind": "type",
-              "declaration": "FeedbackJob",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackJobSchema",
+              "name": "feedbackLimits",
               "kind": "value",
-              "declaration": "FeedbackJobSchema",
+              "declaration": "feedbackLimits",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -11722,15 +11620,33 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatus",
+              "name": "FeedbackMessage",
               "kind": "type",
-              "declaration": "FeedbackNotificationStatus",
+              "declaration": "FeedbackMessage",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatusSchema",
+              "name": "FeedbackMessageKindSchema",
               "kind": "value",
-              "declaration": "FeedbackNotificationStatusSchema",
+              "declaration": "FeedbackMessageKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuery",
+              "kind": "type",
+              "declaration": "FeedbackMessageQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuerySchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageQuerySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageSchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -11743,18 +11659,6 @@
               "name": "FeedbackReportSchema",
               "kind": "value",
               "declaration": "FeedbackReportSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInput",
-              "kind": "type",
-              "declaration": "FeedbackRetryInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackRetryInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -11791,18 +11695,6 @@
               "name": "FeedbackSubmitInputSchema",
               "kind": "value",
               "declaration": "FeedbackSubmitInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInput",
-              "kind": "type",
-              "declaration": "FeedbackUploadInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackUploadInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -12848,15 +12740,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInput",
+              "name": "FeedbackAddMessageInput",
               "kind": "type",
-              "declaration": "FeedbackAppendEvidenceInput",
+              "declaration": "FeedbackAddMessageInput",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInputSchema",
+              "name": "FeedbackAddMessageInputSchema",
               "kind": "value",
-              "declaration": "FeedbackAppendEvidenceInputSchema",
+              "declaration": "FeedbackAddMessageInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -12890,6 +12782,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentQuery",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuerySchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentQuerySchema",
@@ -12902,40 +12800,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackBudget",
+              "name": "FeedbackContext",
               "kind": "type",
-              "declaration": "FeedbackBudget",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBudgetSchema",
-              "kind": "value",
-              "declaration": "FeedbackBudgetSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatus",
-              "kind": "type",
-              "declaration": "FeedbackCollectionStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatusSchema",
-              "kind": "value",
-              "declaration": "FeedbackCollectionStatusSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInput",
-              "kind": "type",
-              "declaration": "FeedbackCompleteInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackCompleteInputSchema",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackContext",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackContract",
@@ -12956,82 +12824,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackEvidence",
+              "name": "FeedbackHttpOperations",
               "kind": "type",
-              "declaration": "FeedbackEvidence",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAck",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceAck",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAckSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceAckSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInput",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportInput",
-              "kind": "type",
-              "declaration": "FeedbackExportInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackExportInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackExportInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackExportQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackHistory",
-              "kind": "type",
-              "declaration": "FeedbackHistory",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackHistorySchema",
-              "kind": "value",
-              "declaration": "FeedbackHistorySchema",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackHttpOperations",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackIdInputSchema",
@@ -13040,15 +12836,9 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackJob",
-              "kind": "type",
-              "declaration": "FeedbackJob",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackJobSchema",
+              "name": "feedbackLimits",
               "kind": "value",
-              "declaration": "FeedbackJobSchema",
+              "declaration": "feedbackLimits",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -13064,15 +12854,33 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatus",
+              "name": "FeedbackMessage",
               "kind": "type",
-              "declaration": "FeedbackNotificationStatus",
+              "declaration": "FeedbackMessage",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatusSchema",
+              "name": "FeedbackMessageKindSchema",
               "kind": "value",
-              "declaration": "FeedbackNotificationStatusSchema",
+              "declaration": "FeedbackMessageKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuery",
+              "kind": "type",
+              "declaration": "FeedbackMessageQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuerySchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageQuerySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageSchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -13085,18 +12893,6 @@
               "name": "FeedbackReportSchema",
               "kind": "value",
               "declaration": "FeedbackReportSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInput",
-              "kind": "type",
-              "declaration": "FeedbackRetryInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackRetryInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -13133,18 +12929,6 @@
               "name": "FeedbackSubmitInputSchema",
               "kind": "value",
               "declaration": "FeedbackSubmitInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInput",
-              "kind": "type",
-              "declaration": "FeedbackUploadInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackUploadInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -14190,15 +13974,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInput",
+              "name": "FeedbackAddMessageInput",
               "kind": "type",
-              "declaration": "FeedbackAppendEvidenceInput",
+              "declaration": "FeedbackAddMessageInput",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInputSchema",
+              "name": "FeedbackAddMessageInputSchema",
               "kind": "value",
-              "declaration": "FeedbackAppendEvidenceInputSchema",
+              "declaration": "FeedbackAddMessageInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -14232,6 +14016,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentQuery",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuerySchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentQuerySchema",
@@ -14244,40 +14034,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackBudget",
+              "name": "FeedbackContext",
               "kind": "type",
-              "declaration": "FeedbackBudget",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBudgetSchema",
-              "kind": "value",
-              "declaration": "FeedbackBudgetSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatus",
-              "kind": "type",
-              "declaration": "FeedbackCollectionStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatusSchema",
-              "kind": "value",
-              "declaration": "FeedbackCollectionStatusSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInput",
-              "kind": "type",
-              "declaration": "FeedbackCompleteInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackCompleteInputSchema",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackContext",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackContract",
@@ -14298,82 +14058,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackEvidence",
+              "name": "FeedbackHttpOperations",
               "kind": "type",
-              "declaration": "FeedbackEvidence",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAck",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceAck",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAckSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceAckSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInput",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportInput",
-              "kind": "type",
-              "declaration": "FeedbackExportInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackExportInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackExportInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackExportQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackHistory",
-              "kind": "type",
-              "declaration": "FeedbackHistory",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackHistorySchema",
-              "kind": "value",
-              "declaration": "FeedbackHistorySchema",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackHttpOperations",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackIdInputSchema",
@@ -14382,15 +14070,9 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackJob",
-              "kind": "type",
-              "declaration": "FeedbackJob",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackJobSchema",
+              "name": "feedbackLimits",
               "kind": "value",
-              "declaration": "FeedbackJobSchema",
+              "declaration": "feedbackLimits",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -14406,15 +14088,33 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatus",
+              "name": "FeedbackMessage",
               "kind": "type",
-              "declaration": "FeedbackNotificationStatus",
+              "declaration": "FeedbackMessage",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatusSchema",
+              "name": "FeedbackMessageKindSchema",
               "kind": "value",
-              "declaration": "FeedbackNotificationStatusSchema",
+              "declaration": "FeedbackMessageKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuery",
+              "kind": "type",
+              "declaration": "FeedbackMessageQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuerySchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageQuerySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageSchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -14427,18 +14127,6 @@
               "name": "FeedbackReportSchema",
               "kind": "value",
               "declaration": "FeedbackReportSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInput",
-              "kind": "type",
-              "declaration": "FeedbackRetryInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackRetryInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -14475,18 +14163,6 @@
               "name": "FeedbackSubmitInputSchema",
               "kind": "value",
               "declaration": "FeedbackSubmitInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInput",
-              "kind": "type",
-              "declaration": "FeedbackUploadInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackUploadInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15750,15 +15426,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInput",
+              "name": "FeedbackAddMessageInput",
               "kind": "type",
-              "declaration": "FeedbackAppendEvidenceInput",
+              "declaration": "FeedbackAddMessageInput",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInputSchema",
+              "name": "FeedbackAddMessageInputSchema",
               "kind": "value",
-              "declaration": "FeedbackAppendEvidenceInputSchema",
+              "declaration": "FeedbackAddMessageInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15792,6 +15468,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentQuery",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuerySchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentQuerySchema",
@@ -15804,46 +15486,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackBudget",
+              "name": "FeedbackContext",
               "kind": "type",
-              "declaration": "FeedbackBudget",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBudgetSchema",
-              "kind": "value",
-              "declaration": "FeedbackBudgetSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatus",
-              "kind": "type",
-              "declaration": "FeedbackCollectionStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatusSchema",
-              "kind": "value",
-              "declaration": "FeedbackCollectionStatusSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInput",
-              "kind": "type",
-              "declaration": "FeedbackCompleteInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackCompleteInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "feedbackContract",
-              "kind": "value",
-              "declaration": "feedbackContract",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackContext",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackContract",
@@ -15864,82 +15510,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackEvidence",
+              "name": "FeedbackHttpOperations",
               "kind": "type",
-              "declaration": "FeedbackEvidence",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAck",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceAck",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAckSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceAckSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInput",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportInput",
-              "kind": "type",
-              "declaration": "FeedbackExportInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackExportInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackExportInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackExportQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackHistory",
-              "kind": "type",
-              "declaration": "FeedbackHistory",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackHistorySchema",
-              "kind": "value",
-              "declaration": "FeedbackHistorySchema",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackHttpOperations",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackIdInputSchema",
@@ -15948,15 +15522,9 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackJob",
-              "kind": "type",
-              "declaration": "FeedbackJob",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackJobSchema",
+              "name": "feedbackLimits",
               "kind": "value",
-              "declaration": "FeedbackJobSchema",
+              "declaration": "feedbackLimits",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15972,15 +15540,33 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatus",
+              "name": "FeedbackMessage",
               "kind": "type",
-              "declaration": "FeedbackNotificationStatus",
+              "declaration": "FeedbackMessage",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatusSchema",
+              "name": "FeedbackMessageKindSchema",
               "kind": "value",
-              "declaration": "FeedbackNotificationStatusSchema",
+              "declaration": "FeedbackMessageKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuery",
+              "kind": "type",
+              "declaration": "FeedbackMessageQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuerySchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageQuerySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageSchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15993,18 +15579,6 @@
               "name": "FeedbackReportSchema",
               "kind": "value",
               "declaration": "FeedbackReportSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInput",
-              "kind": "type",
-              "declaration": "FeedbackRetryInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackRetryInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -16041,18 +15615,6 @@
               "name": "FeedbackSubmitInputSchema",
               "kind": "value",
               "declaration": "FeedbackSubmitInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInput",
-              "kind": "type",
-              "declaration": "FeedbackUploadInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackUploadInputSchema",
               "declarationKind": "VariableDeclaration"
             }
           ]
@@ -16072,15 +15634,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInput",
+              "name": "FeedbackAddMessageInput",
               "kind": "type",
-              "declaration": "FeedbackAppendEvidenceInput",
+              "declaration": "FeedbackAddMessageInput",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInputSchema",
+              "name": "FeedbackAddMessageInputSchema",
               "kind": "value",
-              "declaration": "FeedbackAppendEvidenceInputSchema",
+              "declaration": "FeedbackAddMessageInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -16114,6 +15676,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackAttachmentQuery",
+              "kind": "type",
+              "declaration": "FeedbackAttachmentQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackAttachmentQuerySchema",
               "kind": "value",
               "declaration": "FeedbackAttachmentQuerySchema",
@@ -16126,46 +15694,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackBudget",
+              "name": "FeedbackContext",
               "kind": "type",
-              "declaration": "FeedbackBudget",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBudgetSchema",
-              "kind": "value",
-              "declaration": "FeedbackBudgetSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatus",
-              "kind": "type",
-              "declaration": "FeedbackCollectionStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCollectionStatusSchema",
-              "kind": "value",
-              "declaration": "FeedbackCollectionStatusSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInput",
-              "kind": "type",
-              "declaration": "FeedbackCompleteInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackCompleteInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "feedbackContract",
-              "kind": "value",
-              "declaration": "feedbackContract",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackContext",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackContract",
@@ -16186,82 +15718,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackEvidence",
+              "name": "FeedbackHttpOperations",
               "kind": "type",
-              "declaration": "FeedbackEvidence",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAck",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceAck",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceAckSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceAckSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInput",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSchema",
-              "kind": "value",
-              "declaration": "FeedbackEvidenceSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportInput",
-              "kind": "type",
-              "declaration": "FeedbackExportInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackExportInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackExportInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackExportQuerySchema",
-              "kind": "value",
-              "declaration": "FeedbackExportQuerySchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackHistory",
-              "kind": "type",
-              "declaration": "FeedbackHistory",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackHistorySchema",
-              "kind": "value",
-              "declaration": "FeedbackHistorySchema",
-              "declarationKind": "VariableDeclaration"
+              "declaration": "FeedbackHttpOperations",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackIdInputSchema",
@@ -16270,15 +15730,9 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackJob",
-              "kind": "type",
-              "declaration": "FeedbackJob",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackJobSchema",
+              "name": "feedbackLimits",
               "kind": "value",
-              "declaration": "FeedbackJobSchema",
+              "declaration": "feedbackLimits",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -16294,15 +15748,33 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatus",
+              "name": "FeedbackMessage",
               "kind": "type",
-              "declaration": "FeedbackNotificationStatus",
+              "declaration": "FeedbackMessage",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackNotificationStatusSchema",
+              "name": "FeedbackMessageKindSchema",
               "kind": "value",
-              "declaration": "FeedbackNotificationStatusSchema",
+              "declaration": "FeedbackMessageKindSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuery",
+              "kind": "type",
+              "declaration": "FeedbackMessageQuery",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuerySchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageQuerySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackMessageSchema",
+              "kind": "value",
+              "declaration": "FeedbackMessageSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -16315,18 +15787,6 @@
               "name": "FeedbackReportSchema",
               "kind": "value",
               "declaration": "FeedbackReportSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInput",
-              "kind": "type",
-              "declaration": "FeedbackRetryInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackRetryInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackRetryInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -16363,18 +15823,6 @@
               "name": "FeedbackSubmitInputSchema",
               "kind": "value",
               "declaration": "FeedbackSubmitInputSchema",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInput",
-              "kind": "type",
-              "declaration": "FeedbackUploadInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInputSchema",
-              "kind": "value",
-              "declaration": "FeedbackUploadInputSchema",
               "declarationKind": "VariableDeclaration"
             }
           ]
@@ -23687,9 +23135,9 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInput",
+              "name": "FeedbackAddMessageInput",
               "kind": "type",
-              "declaration": "FeedbackAppendEvidenceInput",
+              "declaration": "FeedbackAddMessageInput",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -23705,21 +23153,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackCollectedAttachment",
+              "name": "FeedbackAttachmentInput",
               "kind": "type",
-              "declaration": "FeedbackCollectedAttachment",
-              "declarationKind": "InterfaceDeclaration"
+              "declaration": "FeedbackAttachmentInput",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackCollectedEvidence",
+              "name": "FeedbackAttachmentQuery",
               "kind": "type",
-              "declaration": "FeedbackCollectedEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInput",
-              "kind": "type",
-              "declaration": "FeedbackCompleteInput",
+              "declaration": "FeedbackAttachmentQuery",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -23753,45 +23195,27 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackEvidence",
-              "kind": "type",
-              "declaration": "FeedbackEvidence",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackExportInput",
-              "kind": "type",
-              "declaration": "FeedbackExportInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "FeedbackFunctions",
               "kind": "type",
               "declaration": "FeedbackFunctions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackInitOptions",
-              "kind": "type",
-              "declaration": "FeedbackInitOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackJob",
-              "kind": "type",
-              "declaration": "FeedbackJob",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "FeedbackListInput",
               "kind": "type",
               "declaration": "FeedbackListInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackMessage",
+              "kind": "type",
+              "declaration": "FeedbackMessage",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuery",
+              "kind": "type",
+              "declaration": "FeedbackMessageQuery",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -23801,15 +23225,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackRetryInput",
-              "kind": "type",
-              "declaration": "FeedbackRetryInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "FeedbackSetStatusInput",
               "kind": "type",
               "declaration": "FeedbackSetStatusInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackStatus",
+              "kind": "type",
+              "declaration": "FeedbackStatus",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -23817,18 +23241,6 @@
               "kind": "type",
               "declaration": "FeedbackSubmitInput",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackUploadInput",
-              "kind": "type",
-              "declaration": "FeedbackUploadInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackWebhookEvent",
-              "kind": "type",
-              "declaration": "FeedbackWebhookEvent",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "HaiFeedbackError",
@@ -23853,9 +23265,9 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackAppendEvidenceInput",
+              "name": "FeedbackAddMessageInput",
               "kind": "type",
-              "declaration": "FeedbackAppendEvidenceInput",
+              "declaration": "FeedbackAddMessageInput",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -23871,21 +23283,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackCollectedAttachment",
+              "name": "FeedbackAttachmentInput",
               "kind": "type",
-              "declaration": "FeedbackCollectedAttachment",
-              "declarationKind": "InterfaceDeclaration"
+              "declaration": "FeedbackAttachmentInput",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackCollectedEvidence",
+              "name": "FeedbackAttachmentQuery",
               "kind": "type",
-              "declaration": "FeedbackCollectedEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackCompleteInput",
-              "kind": "type",
-              "declaration": "FeedbackCompleteInput",
+              "declaration": "FeedbackAttachmentQuery",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -23919,45 +23325,27 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackEvidence",
-              "kind": "type",
-              "declaration": "FeedbackEvidence",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackExportInput",
-              "kind": "type",
-              "declaration": "FeedbackExportInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "FeedbackFunctions",
               "kind": "type",
               "declaration": "FeedbackFunctions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackInitOptions",
-              "kind": "type",
-              "declaration": "FeedbackInitOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackJob",
-              "kind": "type",
-              "declaration": "FeedbackJob",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "FeedbackListInput",
               "kind": "type",
               "declaration": "FeedbackListInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackMessage",
+              "kind": "type",
+              "declaration": "FeedbackMessage",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackMessageQuery",
+              "kind": "type",
+              "declaration": "FeedbackMessageQuery",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -23967,15 +23355,15 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackRetryInput",
-              "kind": "type",
-              "declaration": "FeedbackRetryInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "FeedbackSetStatusInput",
               "kind": "type",
               "declaration": "FeedbackSetStatusInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackStatus",
+              "kind": "type",
+              "declaration": "FeedbackStatus",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -23985,978 +23373,10 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackUploadInput",
-              "kind": "type",
-              "declaration": "FeedbackUploadInput",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackWebhookEvent",
-              "kind": "type",
-              "declaration": "FeedbackWebhookEvent",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "HaiFeedbackError",
               "kind": "value",
               "declaration": "HaiFeedbackError",
               "declarationKind": "VariableDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./bundle",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/bundle/index.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "feedback",
-              "kind": "value",
-              "declaration": "feedback",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackBundle",
-              "kind": "type",
-              "declaration": "FeedbackBundle",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleAttachment",
-              "kind": "type",
-              "declaration": "FeedbackBundleAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidence",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidencePage",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidencePage",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBundleFile",
-              "kind": "type",
-              "declaration": "FeedbackBundleFile",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleInput",
-              "kind": "type",
-              "declaration": "FeedbackBundleInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleManifest",
-              "kind": "type",
-              "declaration": "FeedbackBundleManifest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleQuery",
-              "kind": "type",
-              "declaration": "FeedbackBundleQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleReadOptions",
-              "kind": "type",
-              "declaration": "FeedbackBundleReadOptions",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./bundle",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/bundle/index.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "feedback",
-              "kind": "value",
-              "declaration": "feedback",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackBundle",
-              "kind": "type",
-              "declaration": "FeedbackBundle",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleAttachment",
-              "kind": "type",
-              "declaration": "FeedbackBundleAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidence",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidencePage",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidencePage",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBundleFile",
-              "kind": "type",
-              "declaration": "FeedbackBundleFile",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleInput",
-              "kind": "type",
-              "declaration": "FeedbackBundleInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleManifest",
-              "kind": "type",
-              "declaration": "FeedbackBundleManifest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleQuery",
-              "kind": "type",
-              "declaration": "FeedbackBundleQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleReadOptions",
-              "kind": "type",
-              "declaration": "FeedbackBundleReadOptions",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./capacitor",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/capacitor.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "feedback",
-              "kind": "value",
-              "declaration": "feedback",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackBrowserClient",
-              "kind": "type",
-              "declaration": "FeedbackBrowserClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundle",
-              "kind": "type",
-              "declaration": "FeedbackBundle",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleAttachment",
-              "kind": "type",
-              "declaration": "FeedbackBundleAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidence",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidencePage",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidencePage",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBundleFile",
-              "kind": "type",
-              "declaration": "FeedbackBundleFile",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleInput",
-              "kind": "type",
-              "declaration": "FeedbackBundleInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleManifest",
-              "kind": "type",
-              "declaration": "FeedbackBundleManifest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleQuery",
-              "kind": "type",
-              "declaration": "FeedbackBundleQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleReadOptions",
-              "kind": "type",
-              "declaration": "FeedbackBundleReadOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientActions",
-              "kind": "type",
-              "declaration": "FeedbackClientActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientAttachment",
-              "kind": "type",
-              "declaration": "FeedbackClientAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientConfig",
-              "kind": "type",
-              "declaration": "FeedbackClientConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientSubmitInput",
-              "kind": "type",
-              "declaration": "FeedbackClientSubmitInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraft",
-              "kind": "type",
-              "declaration": "FeedbackDraft",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraftView",
-              "kind": "type",
-              "declaration": "FeedbackDraftView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackFileSaver",
-              "kind": "type",
-              "declaration": "FeedbackFileSaver",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackImageAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackImageAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReviewActions",
-              "kind": "type",
-              "declaration": "FeedbackReviewActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackSaveResult",
-              "kind": "type",
-              "declaration": "FeedbackSaveResult",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./capacitor",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/capacitor.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "feedback",
-              "kind": "value",
-              "declaration": "feedback",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackBrowserClient",
-              "kind": "type",
-              "declaration": "FeedbackBrowserClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundle",
-              "kind": "type",
-              "declaration": "FeedbackBundle",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleAttachment",
-              "kind": "type",
-              "declaration": "FeedbackBundleAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidence",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidencePage",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidencePage",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBundleFile",
-              "kind": "type",
-              "declaration": "FeedbackBundleFile",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleInput",
-              "kind": "type",
-              "declaration": "FeedbackBundleInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleManifest",
-              "kind": "type",
-              "declaration": "FeedbackBundleManifest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleQuery",
-              "kind": "type",
-              "declaration": "FeedbackBundleQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleReadOptions",
-              "kind": "type",
-              "declaration": "FeedbackBundleReadOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientActions",
-              "kind": "type",
-              "declaration": "FeedbackClientActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientAttachment",
-              "kind": "type",
-              "declaration": "FeedbackClientAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientConfig",
-              "kind": "type",
-              "declaration": "FeedbackClientConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientSubmitInput",
-              "kind": "type",
-              "declaration": "FeedbackClientSubmitInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraft",
-              "kind": "type",
-              "declaration": "FeedbackDraft",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraftView",
-              "kind": "type",
-              "declaration": "FeedbackDraftView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackFileSaver",
-              "kind": "type",
-              "declaration": "FeedbackFileSaver",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackImageAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackImageAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReviewActions",
-              "kind": "type",
-              "declaration": "FeedbackReviewActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackSaveResult",
-              "kind": "type",
-              "declaration": "FeedbackSaveResult",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./client",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/client/index.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "feedback",
-              "kind": "value",
-              "declaration": "feedback",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackBrowserClient",
-              "kind": "type",
-              "declaration": "FeedbackBrowserClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundle",
-              "kind": "type",
-              "declaration": "FeedbackBundle",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleAttachment",
-              "kind": "type",
-              "declaration": "FeedbackBundleAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidence",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidencePage",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidencePage",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBundleFile",
-              "kind": "type",
-              "declaration": "FeedbackBundleFile",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleInput",
-              "kind": "type",
-              "declaration": "FeedbackBundleInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleManifest",
-              "kind": "type",
-              "declaration": "FeedbackBundleManifest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleQuery",
-              "kind": "type",
-              "declaration": "FeedbackBundleQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleReadOptions",
-              "kind": "type",
-              "declaration": "FeedbackBundleReadOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientActions",
-              "kind": "type",
-              "declaration": "FeedbackClientActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientAttachment",
-              "kind": "type",
-              "declaration": "FeedbackClientAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientConfig",
-              "kind": "type",
-              "declaration": "FeedbackClientConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientSubmitInput",
-              "kind": "type",
-              "declaration": "FeedbackClientSubmitInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraft",
-              "kind": "type",
-              "declaration": "FeedbackDraft",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraftView",
-              "kind": "type",
-              "declaration": "FeedbackDraftView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackFileSaver",
-              "kind": "type",
-              "declaration": "FeedbackFileSaver",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackImageAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackImageAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReviewActions",
-              "kind": "type",
-              "declaration": "FeedbackReviewActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackSaveResult",
-              "kind": "type",
-              "declaration": "FeedbackSaveResult",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./client",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/client/index.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "feedback",
-              "kind": "value",
-              "declaration": "feedback",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackBrowserClient",
-              "kind": "type",
-              "declaration": "FeedbackBrowserClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundle",
-              "kind": "type",
-              "declaration": "FeedbackBundle",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleAttachment",
-              "kind": "type",
-              "declaration": "FeedbackBundleAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidence",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidencePage",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidencePage",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBundleFile",
-              "kind": "type",
-              "declaration": "FeedbackBundleFile",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleInput",
-              "kind": "type",
-              "declaration": "FeedbackBundleInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleManifest",
-              "kind": "type",
-              "declaration": "FeedbackBundleManifest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleQuery",
-              "kind": "type",
-              "declaration": "FeedbackBundleQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleReadOptions",
-              "kind": "type",
-              "declaration": "FeedbackBundleReadOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientActions",
-              "kind": "type",
-              "declaration": "FeedbackClientActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientAttachment",
-              "kind": "type",
-              "declaration": "FeedbackClientAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientConfig",
-              "kind": "type",
-              "declaration": "FeedbackClientConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientSubmitInput",
-              "kind": "type",
-              "declaration": "FeedbackClientSubmitInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraft",
-              "kind": "type",
-              "declaration": "FeedbackDraft",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraftView",
-              "kind": "type",
-              "declaration": "FeedbackDraftView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackFileSaver",
-              "kind": "type",
-              "declaration": "FeedbackFileSaver",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackImageAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackImageAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReviewActions",
-              "kind": "type",
-              "declaration": "FeedbackReviewActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackSaveResult",
-              "kind": "type",
-              "declaration": "FeedbackSaveResult",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./tauri",
-          "conditions": [
-            "import"
-          ],
-          "target": "./dist/tauri.js",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "feedback",
-              "kind": "value",
-              "declaration": "feedback",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackBrowserClient",
-              "kind": "type",
-              "declaration": "FeedbackBrowserClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundle",
-              "kind": "type",
-              "declaration": "FeedbackBundle",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleAttachment",
-              "kind": "type",
-              "declaration": "FeedbackBundleAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidence",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidencePage",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidencePage",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBundleFile",
-              "kind": "type",
-              "declaration": "FeedbackBundleFile",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleInput",
-              "kind": "type",
-              "declaration": "FeedbackBundleInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleManifest",
-              "kind": "type",
-              "declaration": "FeedbackBundleManifest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleQuery",
-              "kind": "type",
-              "declaration": "FeedbackBundleQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleReadOptions",
-              "kind": "type",
-              "declaration": "FeedbackBundleReadOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientActions",
-              "kind": "type",
-              "declaration": "FeedbackClientActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientAttachment",
-              "kind": "type",
-              "declaration": "FeedbackClientAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientConfig",
-              "kind": "type",
-              "declaration": "FeedbackClientConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientSubmitInput",
-              "kind": "type",
-              "declaration": "FeedbackClientSubmitInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraft",
-              "kind": "type",
-              "declaration": "FeedbackDraft",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraftView",
-              "kind": "type",
-              "declaration": "FeedbackDraftView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackFileSaver",
-              "kind": "type",
-              "declaration": "FeedbackFileSaver",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackImageAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackImageAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReviewActions",
-              "kind": "type",
-              "declaration": "FeedbackReviewActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackSaveResult",
-              "kind": "type",
-              "declaration": "FeedbackSaveResult",
-              "declarationKind": "InterfaceDeclaration"
-            }
-          ]
-        },
-        {
-          "subpath": "./tauri",
-          "conditions": [
-            "types"
-          ],
-          "target": "./dist/tauri.d.ts",
-          "exists": true,
-          "symbols": [
-            {
-              "name": "feedback",
-              "kind": "value",
-              "declaration": "feedback",
-              "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackBrowserClient",
-              "kind": "type",
-              "declaration": "FeedbackBrowserClient",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundle",
-              "kind": "type",
-              "declaration": "FeedbackBundle",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleAttachment",
-              "kind": "type",
-              "declaration": "FeedbackBundleAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidence",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidence",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleEvidencePage",
-              "kind": "type",
-              "declaration": "FeedbackBundleEvidencePage",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackBundleFile",
-              "kind": "type",
-              "declaration": "FeedbackBundleFile",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleInput",
-              "kind": "type",
-              "declaration": "FeedbackBundleInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleManifest",
-              "kind": "type",
-              "declaration": "FeedbackBundleManifest",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleQuery",
-              "kind": "type",
-              "declaration": "FeedbackBundleQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackBundleReadOptions",
-              "kind": "type",
-              "declaration": "FeedbackBundleReadOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientActions",
-              "kind": "type",
-              "declaration": "FeedbackClientActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientAttachment",
-              "kind": "type",
-              "declaration": "FeedbackClientAttachment",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientConfig",
-              "kind": "type",
-              "declaration": "FeedbackClientConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackClientSubmitInput",
-              "kind": "type",
-              "declaration": "FeedbackClientSubmitInput",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraft",
-              "kind": "type",
-              "declaration": "FeedbackDraft",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackDraftView",
-              "kind": "type",
-              "declaration": "FeedbackDraftView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackFileSaver",
-              "kind": "type",
-              "declaration": "FeedbackFileSaver",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackImageAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackImageAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReviewActions",
-              "kind": "type",
-              "declaration": "FeedbackReviewActions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackSaveResult",
-              "kind": "type",
-              "declaration": "FeedbackSaveResult",
-              "declarationKind": "InterfaceDeclaration"
             }
           ]
         }
@@ -38204,40 +36624,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -38246,28 +36636,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -38276,39 +36648,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -40500,40 +38848,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -40542,28 +38860,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -40572,39 +38872,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -42796,40 +41072,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -42838,28 +41084,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -42868,39 +41096,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -46072,40 +44276,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -46114,28 +44288,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -46144,39 +44300,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -47816,40 +45948,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -47858,28 +45960,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -47888,39 +45972,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -49560,40 +47620,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -49602,28 +47632,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -49632,39 +47644,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -51664,40 +49652,10 @@
           "exists": true,
           "symbols": [
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -51706,28 +49664,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -51736,39 +49676,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -51824,40 +49740,10 @@
           "exists": true,
           "symbols": [
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -51866,28 +49752,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -51896,39 +49764,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -51984,40 +49828,10 @@
           "exists": true,
           "symbols": [
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -52026,28 +49840,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -52056,39 +49852,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -54616,40 +52388,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -54658,28 +52400,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -54688,39 +52412,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -55910,40 +53610,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -55952,28 +53622,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -55982,39 +53634,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -57204,40 +54832,10 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "FeedbackAnnotation",
-              "kind": "type",
-              "declaration": "FeedbackAnnotation",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackAttachmentView",
-              "kind": "type",
-              "declaration": "FeedbackAttachmentView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackDetail",
               "kind": "value+type",
               "declaration": "FeedbackDetail",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceQuery",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceQuery",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceSummary",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceSummary",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackEvidenceView",
-              "kind": "type",
-              "declaration": "FeedbackEvidenceView",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackForm",
@@ -57246,28 +54844,10 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackFormData",
-              "kind": "type",
-              "declaration": "FeedbackFormData",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackHistoryView",
-              "kind": "type",
-              "declaration": "FeedbackHistoryView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "FeedbackList",
               "kind": "value+type",
               "declaration": "FeedbackList",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "FeedbackListQuery",
-              "kind": "type",
-              "declaration": "FeedbackListQuery",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "FeedbackModal",
@@ -57276,39 +54856,15 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "FeedbackPage",
+              "name": "FeedbackSubmitAction",
               "kind": "type",
-              "declaration": "FeedbackPage",
+              "declaration": "FeedbackSubmitAction",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "FeedbackPermissions",
+              "name": "FeedbackViewActions",
               "kind": "type",
-              "declaration": "FeedbackPermissions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReceipt",
-              "kind": "type",
-              "declaration": "FeedbackReceipt",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackReportView",
-              "kind": "type",
-              "declaration": "FeedbackReportView",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "FeedbackStatus",
-              "kind": "type",
-              "declaration": "FeedbackStatus",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "FeedbackStatusChange",
-              "kind": "type",
-              "declaration": "FeedbackStatusChange",
+              "declaration": "FeedbackViewActions",
               "declarationKind": "InterfaceDeclaration"
             },
             {

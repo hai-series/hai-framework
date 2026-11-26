@@ -14,7 +14,7 @@ The application reads its server-side `_feedback.yml`, initializes RelDB, and pa
 | --- | --- | --- | --- | --- |
 | `appId` | String with 1–128 characters | Yes | None | Stable ID separating applications in a shared database. |
 
-The contract allows five files per operation, up to 5 MiB each and 10 MiB combined. With encrypted transport, merge `feedbackTransportRoutes(apiPrefix)` into the host’s `routePlaintextBytes` to allow 16 MiB of plaintext on those feedback paths. The host sets capacity for its other routes. [API reference](../function/feedback.en.md)
+The contract allows five files per operation, up to 5 MiB each and 10 MiB combined. With encrypted transport, merge `apiContract.feedbackTransportRoutes(apiPrefix)` into the host’s `routePlaintextBytes` to allow 16 MiB of plaintext on those feedback paths. The host sets capacity for its other routes. [API reference](../function/feedback.en.md)
 
 ## Example
 

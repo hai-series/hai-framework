@@ -404,7 +404,7 @@ Select existing route groups from the root module. Each domain owns its business
 | `apiContract.storage` | Presigned URLs, file lists, metadata, and deletion. | Property with no parameters. | Storage router. | `apiContract.storage.presignedUrls.createUpload` |
 | `apiContract.ai` | JSON chat completions, messages, memory, and sessions. | Property with no parameters. | AI router. | `apiContract.ai.chats.createCompletion` |
 | `apiContract.payment` | Orders and payment-channel notifications. | Property with no parameters. | Payment router. | `apiContract.payment.orders.create` |
-| `apiContract.feedback` | Reports, evidence, attachments, and exports. | Property with no parameters. | Feedback router. | `apiContract.feedback.reports.listMine` |
+| `apiContract.feedback` | Reports, conversations, status, and attachments. | Property with no parameters. | Feedback router. | `apiContract.feedback.reports.listMine` |
 
 #### Scenario: Select domains and their implementations
 
@@ -418,12 +418,12 @@ Select existing route groups from the root module. Each domain owns its business
 
 ### Declare feedback transport limits
 
-Import `feedbackTransportRoutes(apiPrefix?)` from `@h-ai/api-contract/feedback`. It returns a route-to-byte mapping under the API prefix, which defaults to `/api`. Merge it into the host’s `routePlaintextBytes`.
+Import `apiContract.feedbackTransportRoutes(apiPrefix?)` from `@h-ai/api-contract/feedback`. It returns a route-to-byte mapping under the API prefix, which defaults to `/api`. Merge it into the host’s `routePlaintextBytes`.
 
 ```ts
-import { feedbackTransportRoutes } from '@h-ai/api-contract/feedback'
+import { apiContract } from '@h-ai/api-contract/feedback'
 
-const routePlaintextBytes = feedbackTransportRoutes('/api')
+const routePlaintextBytes = apiContract.feedbackTransportRoutes('/api')
 void routePlaintextBytes
 ```
 

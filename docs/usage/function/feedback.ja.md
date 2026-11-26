@@ -16,7 +16,7 @@
 
 1. **提出。** 説明を入力するか画像やファイルを選択し、確認して送信します。問題票と添付が一緒に保存され、状態は「未処理」になります。
 2. **確認。** 「自分のフィードバック」で問題票を開き、本文、添付、会話を確認します。担当者は管理一覧から同じ問題票を開きます。
-3. **返信と追加情報の依頼。** 双方の返信に画像やファイルを添付できます。担当者が追加情報を依頼すると「利用者の補足待ち」になります。
+3. **返信と追加情報の依頼。** 双方の返信に画像やファイルを添付できます。担当者は追加情報の依頼にも添付できます。依頼を送ると「利用者の補足待ち」になります。
 4. **補足。** 同じ問題票で返信します。画像やファイルだけでも送信できます。「利用者の補足待ち」の問題票に提出者が返信すると「未処理」に戻ります。
 5. **処理結果を記録。** 担当者は結果を返信し、必要に応じて「処理済み」にします。通常の返信では状態を維持します。処理済みの問題票にも返信でき、担当者は「未処理」に戻せます。
 
@@ -26,7 +26,7 @@
 
 | 項目 | 動作 |
 | --- | --- |
-| アップロード | 利用者または担当者が送信すると、その操作で選択したファイルをサーバーに送ります。初期化はリレーショナル DB を準備します。ログや操作記録はアプリ側で管理します。 |
+| アップロード | 利用者または担当者が送信すると、その操作で選択したファイルをサーバーに送ります。初期化はフィードバック用のテーブルを準備します。アプリのログはアプリのログシステムに残ります。フィードバックの画像やファイルは送信者が選択します。 |
 | 1 回あたり | 本文は 5000 文字まで、ファイルは 5 個まで、各 5 MiB、合計 10 MiB までです。本文とファイルの少なくとも一方を指定します。 |
 | ファイルへのアクセス | 一覧では添付のメタデータを返します。問題票を閲覧できる利用者は、対応するラスター画像をプレビューし、ファイルをダウンロードできます。 |
 | 権限 | ログイン済みで `feedback:create` を持つ利用者が提出できます。提出者は自分の問題票を確認・返信できます。`feedback:read` は同じ範囲の問題票の閲覧権限です。閲覧権限と `feedback:process` を持つ担当者が処理、返信、追加情報の依頼を行えます。利用者、範囲、権限は信頼できるサーバー側セッションで決定します。 |
@@ -62,7 +62,7 @@ export async function submitIssue(author: FeedbackContext, id: string) {
 }
 ```
 
-SvelteKit は `kit.createFeedbackHandler({ feedback, resolveContext })` を GET、POST、PATCH に割り当てます。Serv は `serv.createFeedbackProcedures({ feedback, resolveContext })` で `apiContract.feedback` を公開します。暗号化転送では `feedbackTransportRoutes(apiPrefix)` の各ルート設定を結合すると、提出、会話、添付のパスに最大 16 MiB の平文を許可します。RelDB の終了前に `await feedback.close()` を呼びます。 [Kit の接続](kit.ja.md#protocol-integrations) · [設定](../configuration/feedback.ja.md)
+SvelteKit は `kit.createFeedbackHandler({ feedback, resolveContext })` を GET、POST、PATCH に割り当てます。Serv は `serv.createFeedbackProcedures({ feedback, resolveContext })` で `apiContract.feedback` を公開します。暗号化転送では `apiContract.feedbackTransportRoutes(apiPrefix)` の各ルート設定を結合すると、提出、会話、添付のパスに最大 16 MiB の平文を許可します。RelDB の終了前に `await feedback.close()` を呼びます。 [Kit の接続](kit.ja.md#protocol-integrations) · [設定](../configuration/feedback.ja.md)
 
 <a id="api-reference"></a>
 
