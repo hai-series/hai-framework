@@ -1108,5 +1108,25 @@ function generatePaymentConfig(): string {
 function generateFeedbackConfig(): string {
   return `# 固定标识在同一数据库内区分应用。
 appId: \${HAI_FEEDBACK_APPID:my-app}
+
+# 单次发送容量，按 Base64 编码前的原始字节计算。
+# limits:
+#   maxBodyLength: 5000
+#   maxFiles: 5
+#   maxFileBytes: 5242880
+#   maxTotalFileBytes: 10485760
+
+# 首帖现场采集容量。
+# capture:
+#   windowSeconds: 300
+#   maxLogEntries: 1000
+#   maxLogBytes: 524288
+#   maxReplayBytes: 2097152
+#   maxReplayEvents: 2000
+#   maxRecordingSeconds: 60
+
+# 最近一次活动起保留的天数，0 为长期保留。
+# retention:
+#   days: 0
 `
 }

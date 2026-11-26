@@ -78,7 +78,7 @@ LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IA
 
 ## 用户反馈
 
-启用反馈时，在 `config/_feedback.yml` 设置固定的 `appId`。服务端初始化 RelDB 后挂载反馈契约。反馈正文、回复、补充请求与附件通过关系库事务保存。详情从本人列表或处理列表查看。权限、容量和验证步骤见生成应用的 `.agents/skills/hai-feedback/SKILL.md`。
+启用反馈时，在 `config/_feedback.yml` 设置 `appId`，并按需填写 `limits`、`capture` 和 `retention.days`。服务端初始化 RelDB 后挂载反馈契约。反馈正文、回复、补充请求与附件通过关系库事务保存。详情从本人列表或处理列表查看。权限、容量和验证步骤见生成应用的 `.agents/skills/hai-feedback/SKILL.md`。
 
 ## 开发测试
 

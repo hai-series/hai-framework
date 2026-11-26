@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createECDH, createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { parseEnv } from 'node:util'
@@ -150,9 +150,12 @@ it.each([false, true])('公开离线包保留较大的显式上限并一致推�
   }
 })
 
-it('代理用固定的反馈路由容量保护较大附件请求', async () => {
-  const { root, artifactDir } = fixture()
+it.each([false, true])('代理和 Kit 读取目标环境的反馈文件上限，Kit=%s', async (kit) => {
+  const { root, artifactDir } = fixture(kit)
   writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 1048576\nhttp:\n  apiPrefix: /api/v1\n')
+  if (kit)
+    writeFileSync(join(root, 'config/_kit.yml'), 'transport:\n  maxPlaintextBytes: 1048576\n')
+  appendFileSync(join(root, '.env.test'), 'HAI_FEEDBACK_LIMITS_MAXTOTALFILEBYTES=25165824\n')
   expect((await deploy.init({
     provider: {
       type: 'docker-ssh',
@@ -171,8 +174,12 @@ it('代理用固定的反馈路由容量保护较大附件请求', async () => {
   if (!result.success || !result.data.bundlePath)
     return
   const proxy = execFileSync('tar', ['-xOf', result.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
-  const budget = crypto.transport.resolveBodyLimits(feedbackLimits.maxPlaintextBytes).encryptedPayloadBytes
+  const budget = crypto.transport.resolveBodyLimits(33 * 1024 * 1024).encryptedPayloadBytes
   expect(proxy).toContain(`client_max_body_size ${budget};`)
+  if (kit) {
+    const env = parseEnv(execFileSync('tar', ['-xOf', result.data.bundlePath, './config/.env.runtime'], { encoding: 'utf8', windowsHide: true }))
+    expect(env.BODY_SIZE_LIMIT).toBe(String(budget))
+  }
 })
 
 it('计划保持远端 Docker，与本地打包 Podman 分离', async () => {

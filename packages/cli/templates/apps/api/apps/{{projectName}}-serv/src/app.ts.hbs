@@ -2,9 +2,9 @@ import type { CoreConfig } from '@h-ai/core'
 import type { ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
 {{#if features.crypto}}
 import process from 'node:process'
-{{/if}}
 {{#if features.feedback}}
 import { apiContract } from '@h-ai/api-contract/feedback'
+{{/if}}
 {{/if}}
 {{#if features.crypto}}
 import { cache } from '@h-ai/cache'
@@ -12,6 +12,9 @@ import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 {{#if features.crypto}}
 import { crypto } from '@h-ai/crypto'
+{{#if features.feedback}}
+import { feedback } from '@h-ai/feedback'
+{{/if}}
 {{/if}}
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
@@ -56,7 +59,7 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
       maxRequestAgeSeconds: servConfig.transport.maxRequestAgeSeconds,
 {{#if features.feedback}}
       routePlaintextBytes: {
-        ...apiContract.feedbackTransportRoutes(servConfig.http.apiPrefix),
+        ...apiContract.feedbackTransportRoutes(servConfig.http.apiPrefix, feedback.config?.limits.maxTotalFileBytes),
         ...servConfig.transport.routePlaintextBytes,
       },
 {{else}}

@@ -7,6 +7,9 @@ import { apiContract } from '@h-ai/api-contract/feedback'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
+{{#if features.feedback}}
+import { feedback } from '@h-ai/feedback'
+{{/if}}
 import { iam } from '@h-ai/iam'
 import { serv, ServConfigSchema } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
@@ -78,7 +81,7 @@ export function createServerApp(): ServHttpApp {
       ...servConfig.transport,
 {{#if features.feedback}}
       routePlaintextBytes: {
-        ...apiContract.feedbackTransportRoutes(servConfig.http.apiPrefix),
+        ...apiContract.feedbackTransportRoutes(servConfig.http.apiPrefix, feedback.config?.limits.maxTotalFileBytes),
         ...servConfig.transport.routePlaintextBytes,
       },
 {{/if}}

@@ -330,7 +330,7 @@ alerts:
 
 ## 传输容量、通知隐私与升级预检
 
-普通业务使用 `transport.maxPlaintextBytes`，设为 `auto` 或省略时为 1 MiB。启用反馈时，模板在 `routePlaintextBytes` 合并 `apiContract.feedbackTransportRoutes(apiPrefix)`，为提交、会话和附件请求设置 16 MiB 的双向明文上限。路径中的 `*` 匹配一个完整路径段，宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量。HTTP 适配器为单独声明且大于 1 MiB 的路由保留最多 2 个槽，普通业务有 16 个槽，完整响应或失败后释放。忙碌时返回 503 / `hai:crypto:072`。
+普通业务使用 `transport.maxPlaintextBytes`，设为 `auto` 或省略时为 1 MiB。启用反馈时，模板在 `routePlaintextBytes` 合并 `apiContract.feedbackTransportRoutes(apiPrefix, maxTotalFileBytes)`。提交和会话容量随有效的 `limits.maxTotalFileBytes` 增大，附件读取使用 16 MiB。路径中的 `*` 匹配一个完整路径段，宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量。HTTP 适配器为单独声明且大于 1 MiB 的路由保留最多 2 个槽，普通业务有 16 个槽，完整响应或失败后释放。忙碌时返回 503 / `hai:crypto:072`。
 
 反馈的 Console 通知默认打印编号、应用版本等元数据。`summary` 模式可能包含业务信息。Reach API 渠道默认拒绝重定向。配置 `requireHttps: true` 时，渠道只接受 HTTPS 地址并保持 `redirect: error`。
 

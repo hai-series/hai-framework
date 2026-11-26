@@ -3,8 +3,10 @@
 import type { FeedbackViewActions } from '@h-ai/ui'
 import { managementApi } from './api-client.js'
 
-const { reports, attachments } = managementApi.feedback
+const { reports, attachments, limits } = managementApi.feedback
+export const getFeedbackLimits = () => limits()
 const detail = {
+  getLimits: getFeedbackLimits,
   get: reports.get,
   listMessages: reports.listMessages,
   addMessage: reports.addMessage,

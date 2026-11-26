@@ -4295,6 +4295,107 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 128
+      },
+      "limits": {
+        "description": "首帖、回复和补充请求的发送上限",
+        "default": {},
+        "type": "object",
+        "properties": {
+          "maxBodyLength": {
+            "default": 5000,
+            "description": "每次发送正文的 UTF-16 代码单元上限",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20000
+          },
+          "maxFiles": {
+            "default": 5,
+            "description": "每次发送时手动附件的数量上限",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "maxFileBytes": {
+            "default": 5242880,
+            "description": "单个文件原始字节的上限",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10485760
+          },
+          "maxTotalFileBytes": {
+            "default": 10485760,
+            "description": "单次发送的手动附件与首帖现场合计原始字节上限",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25165824
+          }
+        },
+        "additionalProperties": false
+      },
+      "capture": {
+        "description": "首帖现场的采集上限",
+        "default": {},
+        "type": "object",
+        "properties": {
+          "windowSeconds": {
+            "default": 300,
+            "description": "日志与操作回放的回看秒数",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1800
+          },
+          "maxLogEntries": {
+            "default": 1000,
+            "description": "每份浏览器或服务端日志的条数上限",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000
+          },
+          "maxLogBytes": {
+            "default": 524288,
+            "description": "每份日志的字节上限",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2097152
+          },
+          "maxReplayBytes": {
+            "default": 2097152,
+            "description": "页面回放文件的字节上限",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8388608
+          },
+          "maxReplayEvents": {
+            "default": 2000,
+            "description": "单份页面回放的事件数量上限",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "maxRecordingSeconds": {
+            "default": 60,
+            "description": "浏览器录屏的最长秒数",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300
+          }
+        },
+        "additionalProperties": false
+      },
+      "retention": {
+        "description": "反馈、消息和附件的保留设置",
+        "default": {},
+        "type": "object",
+        "properties": {
+          "days": {
+            "default": 0,
+            "description": "从最近一次活动起算的保留天数，0 表示长期保留",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650
+          }
+        },
+        "additionalProperties": false
       }
     },
     "required": [

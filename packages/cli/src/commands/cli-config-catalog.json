@@ -4000,6 +4000,118 @@
     "constraint": "字符串；最小字符数 1；最大字符数 128"
   },
   {
+    "name": "HAI_FEEDBACK_CAPTURE",
+    "module": "feedback",
+    "path": "feedback.capture",
+    "description": "首帖现场的采集上限",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_FEEDBACK_CAPTURE_MAXLOGBYTES",
+    "module": "feedback",
+    "path": "feedback.capture.maxLogBytes",
+    "description": "每份日志的字节上限",
+    "value": "524288",
+    "constraint": "整数；>= 1；<= 2097152"
+  },
+  {
+    "name": "HAI_FEEDBACK_CAPTURE_MAXLOGENTRIES",
+    "module": "feedback",
+    "path": "feedback.capture.maxLogEntries",
+    "description": "每份浏览器或服务端日志的条数上限",
+    "value": "1000",
+    "constraint": "整数；>= 1；<= 5000"
+  },
+  {
+    "name": "HAI_FEEDBACK_CAPTURE_MAXRECORDINGSECONDS",
+    "module": "feedback",
+    "path": "feedback.capture.maxRecordingSeconds",
+    "description": "浏览器录屏的最长秒数",
+    "value": "60",
+    "constraint": "整数；>= 1；<= 300"
+  },
+  {
+    "name": "HAI_FEEDBACK_CAPTURE_MAXREPLAYBYTES",
+    "module": "feedback",
+    "path": "feedback.capture.maxReplayBytes",
+    "description": "页面回放文件的字节上限",
+    "value": "2097152",
+    "constraint": "整数；>= 1；<= 8388608"
+  },
+  {
+    "name": "HAI_FEEDBACK_CAPTURE_MAXREPLAYEVENTS",
+    "module": "feedback",
+    "path": "feedback.capture.maxReplayEvents",
+    "description": "单份页面回放的事件数量上限",
+    "value": "2000",
+    "constraint": "整数；>= 1；<= 10000"
+  },
+  {
+    "name": "HAI_FEEDBACK_CAPTURE_WINDOWSECONDS",
+    "module": "feedback",
+    "path": "feedback.capture.windowSeconds",
+    "description": "日志与操作回放的回看秒数",
+    "value": "300",
+    "constraint": "整数；>= 1；<= 1800"
+  },
+  {
+    "name": "HAI_FEEDBACK_LIMITS",
+    "module": "feedback",
+    "path": "feedback.limits",
+    "description": "首帖、回复和补充请求的发送上限",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_FEEDBACK_LIMITS_MAXBODYLENGTH",
+    "module": "feedback",
+    "path": "feedback.limits.maxBodyLength",
+    "description": "每次发送正文的 UTF-16 代码单元上限",
+    "value": "5000",
+    "constraint": "整数；>= 1；<= 20000"
+  },
+  {
+    "name": "HAI_FEEDBACK_LIMITS_MAXFILEBYTES",
+    "module": "feedback",
+    "path": "feedback.limits.maxFileBytes",
+    "description": "单个文件原始字节的上限",
+    "value": "5242880",
+    "constraint": "整数；>= 1；<= 10485760"
+  },
+  {
+    "name": "HAI_FEEDBACK_LIMITS_MAXFILES",
+    "module": "feedback",
+    "path": "feedback.limits.maxFiles",
+    "description": "每次发送时手动附件的数量上限",
+    "value": "5",
+    "constraint": "整数；>= 1；<= 20"
+  },
+  {
+    "name": "HAI_FEEDBACK_LIMITS_MAXTOTALFILEBYTES",
+    "module": "feedback",
+    "path": "feedback.limits.maxTotalFileBytes",
+    "description": "单次发送的手动附件与首帖现场合计原始字节上限",
+    "value": "10485760",
+    "constraint": "整数；>= 1；<= 25165824"
+  },
+  {
+    "name": "HAI_FEEDBACK_RETENTION",
+    "module": "feedback",
+    "path": "feedback.retention",
+    "description": "反馈、消息和附件的保留设置",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_FEEDBACK_RETENTION_DAYS",
+    "module": "feedback",
+    "path": "feedback.retention.days",
+    "description": "从最近一次活动起算的保留天数，0 表示长期保留",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 3650"
+  },
+  {
     "name": "HAI_IAM",
     "module": "iam",
     "path": "iam",

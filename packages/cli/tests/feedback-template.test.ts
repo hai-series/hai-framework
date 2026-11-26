@@ -39,7 +39,7 @@ describe('feedback 生成工程', () => {
       expect(await readFile(path.join(shared, 'src/lib/components/FeedbackEntry.svelte'), 'utf8')).toContain('actions={myFeedbackActions}')
       expect(await readFile(path.join(shared, 'src/lib/api/feedback-client.ts'), 'utf8')).toContain('reports.addMessage')
       expect(await readFile(path.join(shared, 'src/lib/pages/feedback.svelte'), 'utf8')).toContain('actions={staffFeedbackActions}')
-      expect(await readFile(path.join(service, 'src/app-server.ts'), 'utf8')).toContain('apiContract.feedbackTransportRoutes(servConfig.http.apiPrefix)')
+      expect(await readFile(path.join(service, 'src/app-server.ts'), 'utf8')).toContain('apiContract.feedbackTransportRoutes(servConfig.http.apiPrefix, feedback.config?.limits.maxTotalFileBytes)')
       expect(await readFile(path.join(service, 'src/server/procedures/index.ts'), 'utf8')).toContain('scopeId: \'feedback-sample\'')
       expect(await readFile(path.join(service, 'config/_feedback.yml'), 'utf8')).toContain('HAI_FEEDBACK_APPID:feedback-sample')
     }

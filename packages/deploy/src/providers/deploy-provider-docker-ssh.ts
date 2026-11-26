@@ -20,7 +20,7 @@ import { request as requestHttps } from 'node:https'
 import { basename, dirname, join, resolve } from 'node:path'
 import { rootCertificates } from 'node:tls'
 import { parseEnv } from 'node:util'
-import { feedbackLimits } from '@h-ai/api-contract/feedback'
+import { apiContract, FeedbackSubmissionLimitsSchema } from '@h-ai/api-contract/feedback'
 import { core, CoreConfigSchema, RequestAccessConfigSchema } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { stringify } from 'yaml'
@@ -406,9 +406,21 @@ export function createDockerSshProvider(
         ])
       }
     }
-    const feedbackTransportBytes = scan.haiModules?.includes('@h-ai/feedback')
-      ? feedbackLimits.maxPlaintextBytes
-      : 0
+    let feedbackTransportBytes = 0
+    if (scan.haiModules?.includes('@h-ai/feedback')) {
+      const path = join(appDir, 'config', '_feedback.yml')
+      const settings = existsSync(path)
+        ? loadDeploymentConfig('feedback', path, env)
+        : core.ok<Record<string, unknown>>({})
+      if (!settings.success)
+        return settings
+      const limits = FeedbackSubmissionLimitsSchema.safeParse(settings.data.limits === undefined
+        ? {}
+        : settings.data.limits)
+      if (!limits.success)
+        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
+      feedbackTransportBytes = apiContract.feedbackRequestBytes(limits.data.maxTotalFileBytes)
+    }
     let protectedTransport = !!server.data.transport
     let applicationPlaintextBytes: number | undefined
     if (scan.isSvelteKit) {
