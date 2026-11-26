@@ -4,6 +4,7 @@ import type {
   FeedbackAttachmentData,
   FeedbackAttachmentQuery,
   FeedbackDetail,
+  FeedbackLimits,
   FeedbackListInput,
   FeedbackMessage,
   FeedbackMessageQuery,
@@ -22,6 +23,7 @@ export interface FeedbackContext {
 /** HTTP 反馈适配器使用的服务状态及会话操作。 */
 export interface FeedbackHttpOperations {
   readonly isInitialized: boolean
+  getLimits: (context: FeedbackContext) => Promise<HaiResult<FeedbackLimits>>
   submit: (input: FeedbackSubmitInput, context: FeedbackContext) => Promise<HaiResult<FeedbackReport>>
   listMine: (input: FeedbackListInput, context: FeedbackContext) => Promise<HaiResult<PaginatedResult<FeedbackReport>>>
   list: (input: FeedbackListInput, context: FeedbackContext) => Promise<HaiResult<PaginatedResult<FeedbackReport>>>

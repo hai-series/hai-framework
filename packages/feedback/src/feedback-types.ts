@@ -34,6 +34,7 @@ export type {
   FeedbackCaptureInput,
   FeedbackContext,
   FeedbackDetail,
+  FeedbackLimits,
   FeedbackListInput,
   FeedbackMessage,
   FeedbackMessageQuery,

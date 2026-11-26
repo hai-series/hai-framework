@@ -1,6 +1,7 @@
 import type { FeedbackAddMessageInput, FeedbackAttachment, FeedbackAttachmentData, FeedbackAttachmentKind, FeedbackListInput, FeedbackMessage, FeedbackMessageQuery, FeedbackReport } from '@h-ai/api-contract/feedback'
 import type { HaiResult } from '@h-ai/core'
 import type { DmlOperations, DmlWithTxOperations } from '@h-ai/reldb'
+import type { FeedbackConfig } from './feedback-config.js'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { FeedbackAttachmentSchema, FeedbackMessageSchema, FeedbackReportSchema } from '@h-ai/api-contract/feedback'
@@ -25,7 +26,7 @@ const reportColumns = [
 const messageColumns = 'id, report_id, author_id, author_role, kind, body, created_at'
 const attachmentColumns = 'id, message_id, kind, name, content_type, size'
 
-interface ReportRow {
+export interface ReportRow {
   id: string
   app_id: string
   scope_id: string
@@ -87,6 +88,11 @@ const indexes = [
     ],
   },
   {
+    table: reports,
+    name: 'hai_feedback_reports_retention',
+    columns: ['app_id', 'updated_at', 'id'],
+  },
+  {
     table: messages,
     name: 'hai_feedback_messages_report',
     columns: ['report_id', 'created_at', 'id'],
@@ -141,7 +147,7 @@ function publicAttachment(row: AttachmentRow): FeedbackAttachment {
 
 /** 反馈、对话和附件共用一个关系库事务。 */
 export class FeedbackReportRepository extends BaseReldbCrudRepository<ReportRow> {
-  constructor() {
+  constructor(private readonly settings: FeedbackConfig) {
     super(reldb, {
       table: reports,
       createTableIfNotExists: false,
@@ -158,6 +164,46 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<ReportRow>
         update: false,
       })),
     })
+  }
+
+  private retentionCutoff() {
+    const { days } = this.settings.retention
+    return days > 0
+      ? Date.now() - days * 86_400_000
+      : undefined
+  }
+
+  isExpired(updatedAt: ReportRow['updated_at']) {
+    const cutoff = this.retentionCutoff()
+    return cutoff !== undefined && Number(updatedAt) <= cutoff
+  }
+
+  async deleteExpired(limit: number): Promise<HaiResult<boolean>> {
+    const cutoff = this.retentionCutoff()
+    if (cutoff === undefined)
+      return core.ok(false)
+    const params: unknown[] = []
+    const where = `${identityEquals('app_id', this.settings.appId, params)} AND updated_at <= ?`
+    params.push(cutoff)
+    const batch = await reldb.sql.query<Pick<ReportRow, 'id'>>(
+      `SELECT id FROM ${reports} WHERE ${where} ORDER BY updated_at, id LIMIT ?`,
+      [...params, limit],
+    )
+    if (!batch.success)
+      return batch
+    if (!batch.data.length)
+      return core.ok(false)
+    // 删除时重新检查活动时间和应用归属，允许多个实例清理同一批记录。
+    const result = await reldb.sql.execute(
+      `DELETE FROM ${reports} WHERE ${where} AND id IN (${batch.data.map(() => '?').join(', ')})`,
+      [
+        ...params,
+        ...batch.data.map(row => row.id),
+      ],
+    )
+    return result.success
+      ? core.ok(batch.data.length === limit)
+      : result
   }
 
   async ready(): Promise<HaiResult<void>> {
@@ -265,6 +311,11 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<ReportRow>
     ]
     if (userId !== undefined)
       conditions.push(identityEquals('user_id', userId, params))
+    const cutoff = this.retentionCutoff()
+    if (cutoff !== undefined) {
+      conditions.push('updated_at > ?')
+      params.push(cutoff)
+    }
     if (query.status) {
       params.push(query.status)
       conditions.push('status = ?')
@@ -328,7 +379,7 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<ReportRow>
     for (const file of files) {
       const content = Buffer.from(file.dataBase64, 'base64')
       const kind = file.kind ?? 'file'
-      const contentType = safeMediaType(file.contentType, kind, content)
+      const contentType = safeMediaType(file.contentType, kind, content, this.settings.capture)
       if (kind !== 'file' && contentType === 'application/octet-stream')
         return core.err(HaiFeedbackError.INVALID_INPUT, feedbackM('feedback_invalidInput'))
       const row: FeedbackAttachment = {
@@ -380,7 +431,7 @@ const rasterSignatures: Record<string, (bytes: Buffer) => boolean> = {
   'image/webp': bytes => bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP',
 }
 
-function safeMediaType(declared: string, kind: FeedbackAttachmentKind, bytes: Buffer) {
+function safeMediaType(declared: string, kind: FeedbackAttachmentKind, bytes: Buffer, settings: FeedbackConfig['capture']) {
   const type = declared.toLowerCase()
   if (kind === 'recording') {
     if ((type === 'video/webm' && bytes.subarray(0, 4).toString('hex') === '1a45dfa3')
@@ -392,7 +443,10 @@ function safeMediaType(declared: string, kind: FeedbackAttachmentKind, bytes: Bu
   if (kind === 'browser_logs' || kind === 'server_logs' || kind === 'replay') {
     try {
       const data: unknown = JSON.parse(bytes.toString('utf8'))
-      if (type === 'application/json' && Array.isArray(data) && data.length)
+      const maxEntries = kind === 'replay'
+        ? settings.maxReplayEvents
+        : settings.maxLogEntries
+      if (type === 'application/json' && Array.isArray(data) && data.length > 0 && data.length <= maxEntries)
         return type
     }
     catch { /* 非 JSON 数据用普通二进制类型表示，调用方将拒绝诊断材料。 */ }

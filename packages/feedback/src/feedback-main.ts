@@ -9,10 +9,16 @@ import { createFeedbackOperations } from './feedback-functions.js'
 import { feedbackM } from './feedback-i18n.js'
 import { startFeedbackLogCapture } from './feedback-log-capture.js'
 import { FeedbackReportRepository } from './feedback-repository.js'
+import { startFeedbackRetention } from './feedback-retention.js'
 import { HaiFeedbackError } from './feedback-types.js'
 
 const notInitialized = core.module.createNotInitializedKit(HaiFeedbackError.NOT_INITIALIZED, () => feedbackM('feedback_notInitialized'))
-let current: { operations: FeedbackOperations, config: FeedbackConfig, capture: ReturnType<typeof startFeedbackLogCapture> } | null = null
+let current: {
+  operations: FeedbackOperations
+  config: FeedbackConfig
+  capture: ReturnType<typeof startFeedbackLogCapture>
+  closeRetention?: () => Promise<void>
+} | null = null
 let initializing: Promise<HaiResult<void>> | null = null
 let closing: Promise<HaiResult<void>> | null = null
 const inFlight = new Set<Promise<unknown>>()
@@ -67,17 +73,21 @@ export const feedback: FeedbackFunctions = {
     initializing = (async () => {
       await Promise.allSettled([...inFlight])
       previous?.capture.close()
-      const repository = new FeedbackReportRepository()
+      await previous?.closeRetention?.()
+      const repository = new FeedbackReportRepository(parsed.data)
       const ready = await repository.ready()
       if (!ready.success)
         return ready
       if (closing)
         return notInitialized.result<void>()
-      const capture = startFeedbackLogCapture()
+      const capture = startFeedbackLogCapture(parsed.data)
       current = {
-        operations: createFeedbackOperations(repository, parsed.data.appId, capture.snapshot),
+        operations: createFeedbackOperations(repository, parsed.data, capture.snapshot),
         config: parsed.data,
         capture,
+        closeRetention: parsed.data.retention.days > 0
+          ? startFeedbackRetention(repository)
+          : undefined,
       }
       core.logger.info('Feedback module initialized', { module: 'feedback', appId: parsed.data.appId })
       return core.ok(undefined)
@@ -101,6 +111,7 @@ export const feedback: FeedbackFunctions = {
     closing = (async () => {
       await Promise.allSettled([...inFlight, initializing])
       previous?.capture.close()
+      await previous?.closeRetention?.()
       return core.ok(undefined)
     })().finally(() => { closing = null })
     return closing
@@ -112,10 +123,11 @@ export const feedback: FeedbackFunctions = {
 
   get config() {
     return current
-      ? { ...current.config }
+      ? structuredClone(current.config)
       : null
   },
 
+  getLimits: context => execute(ops => ops.getLimits(context)),
   submit: (input, context) => execute(ops => ops.submit(input, context)),
   listMine: (input, context) => execute(ops => ops.listMine(input, context)),
   list: (input, context) => execute(ops => ops.list(input, context)),

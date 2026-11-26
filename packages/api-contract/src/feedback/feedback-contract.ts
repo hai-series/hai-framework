@@ -7,6 +7,7 @@ import {
   FeedbackAttachmentQuerySchema,
   FeedbackDetailSchema,
   FeedbackIdInputSchema,
+  FeedbackLimitsSchema,
   FeedbackListInputSchema,
   FeedbackMessageQuerySchema,
   FeedbackMessageSchema,
@@ -17,6 +18,13 @@ import {
 
 /** 宿主按需挂载的反馈契约；身份和业务范围来自服务端授权。 */
 export const feedbackContract = {
+  limits: route({
+    method: 'GET',
+    path: '/feedback/limits',
+    operationId: 'feedback.limits',
+    summary: 'Read the current feedback submission and capture limits',
+    tags: ['feedback'],
+  }).output(haiResultSchema(FeedbackLimitsSchema)),
   reports: {
     submit: route({
       method: 'POST',

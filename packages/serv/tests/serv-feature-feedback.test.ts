@@ -1,6 +1,7 @@
 import type { FeedbackContext, FeedbackHttpOperations } from '@h-ai/api-contract/feedback'
 import { randomUUID } from 'node:crypto'
 import { apiContract } from '@h-ai/api-contract'
+import { FeedbackLimitsSchema } from '@h-ai/api-contract/feedback'
 import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
@@ -27,6 +28,9 @@ function setup(resolved: FeedbackContext = actor) {
   }))
   const feedback: FeedbackHttpOperations = {
     isInitialized: true,
+    getLimits: async () => core.ok(FeedbackLimitsSchema.parse({
+      capture: { maxRecordingSeconds: 12 },
+    })),
     submit: unused,
     list: unused,
     listMine: unused,
@@ -56,10 +60,28 @@ function setup(resolved: FeedbackContext = actor) {
       body: JSON.stringify(body),
     })
   }
-  return { send, addMessage }
+  return { send, addMessage, app }
 }
 
 describe('serv 反馈路由', () => {
+  it('仅向已认证会话公开当前限额', async () => {
+    const { app } = setup()
+    const response = await app.request('/api/v1/feedback/limits', {
+      headers: { authorization: 'Bearer test-token' },
+    })
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        capture: { maxRecordingSeconds: 12 },
+      },
+    })
+    const anonymous = await app.request('/api/v1/feedback/limits')
+    expect(await anonymous.json()).toMatchObject({
+      success: false,
+      error: { code: HaiCommonError.UNAUTHORIZED.code },
+    })
+  })
+
   it('合并历史会话路由的 ID 和正文，通过统一契约传递附件', async () => {
     const { send, addMessage } = setup()
     const input = {

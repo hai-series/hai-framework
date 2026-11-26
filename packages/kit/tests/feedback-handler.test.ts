@@ -1,6 +1,7 @@
 import type { FeedbackHttpOperations } from '@h-ai/api-contract/feedback'
 import type { RequestEvent } from '@sveltejs/kit'
 import { randomUUID } from 'node:crypto'
+import { FeedbackLimitsSchema } from '@h-ai/api-contract/feedback'
 import { core, HaiCommonError } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/index.js'
@@ -33,6 +34,9 @@ function setup(basePath = '/api/feedback', authenticated = true) {
   }))
   const feedback: FeedbackHttpOperations = {
     isInitialized: true,
+    getLimits: async () => core.ok(FeedbackLimitsSchema.parse({
+      limits: { maxFiles: 2 },
+    })),
     submit: unused,
     list: unused,
     listMine,
@@ -65,6 +69,20 @@ function setup(basePath = '/api/feedback', authenticated = true) {
 }
 
 describe('kit 反馈路由', () => {
+  it('仅向已登录用户返回生效的发送和采集限额', async () => {
+    const { request } = setup()
+    const response = await request('/api/feedback/limits')
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        limits: { maxFiles: 2 },
+        capture: { windowSeconds: 300 },
+      },
+    })
+    expect((await setup(undefined, false).request('/api/feedback/limits')).status).toBe(401)
+  })
+
   it('读取本人列表，不能从查询参数传入其他用户', async () => {
     const { request, listMine } = setup()
     expect((await request('/api/feedback/my-reports?page=2')).status).toBe(200)

@@ -4,10 +4,10 @@ import type { HaiResult } from '@h-ai/core'
 import type { RequestEvent, RequestHandler } from '@sveltejs/kit'
 import type { z } from 'zod'
 import {
+  apiContract,
   FeedbackAddMessageInputSchema,
   FeedbackAttachmentQuerySchema,
   FeedbackIdInputSchema,
-  feedbackLimits,
   FeedbackListInputSchema,
   FeedbackMessageQuerySchema,
   FeedbackSetStatusInputSchema,
@@ -87,20 +87,26 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
     }
     const method = event.request.method
     const listMine = parts.length === 1 && parts[0] === 'my-reports' && method === 'GET'
-    if (!listMine && (parts[0] !== 'reports' || parts.length > 4)) {
+    const readLimits = parts.length === 1 && parts[0] === 'limits' && method === 'GET'
+    if (!listMine && !readLimits && (parts[0] !== 'reports' || parts.length > 4)) {
       return fromError({
         ...HaiCommonError.NOT_FOUND,
         message: core.i18n.coreM('core_errorNotFound'),
       })
     }
+    const service = options.feedback
     let body: unknown = {}
     if (method === 'POST' || method === 'PATCH') {
       if (event.request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json')
         return invalid(415)
       try {
-        const maxBytes = method === 'PATCH'
-          ? 16 * 1024
-          : feedbackLimits.maxPlaintextBytes
+        let maxBytes = 16 * 1024
+        if (method === 'POST') {
+          const limits = await service.getLimits(actor)
+          if (!limits.success)
+            return fromError(limits.error)
+          maxBytes = apiContract.feedbackRequestBytes(limits.data.limits.maxTotalFileBytes)
+        }
         body = await readBoundedJson(event.request, maxBytes)
       }
       catch (error) {
@@ -121,13 +127,9 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
         ? { id: parts[1] }
         : {}),
     }
-    const service = options.feedback
-    async function execute<T>(schema: z.ZodType<T>, operation: (value: T) => Promise<HaiResult<unknown>>): Promise<Response> {
-      const parsed = schema.safeParse(input)
-      if (!parsed.success)
-        return invalid(400)
+    async function respond(operation: () => Promise<HaiResult<unknown>>): Promise<Response> {
       try {
-        const result = await operation(parsed.data)
+        const result = await operation()
         const response = result.success
           ? ok(result.data)
           : fromError(result.error)
@@ -141,6 +143,14 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
         })
       }
     }
+    function execute<T>(schema: z.ZodType<T>, operation: (value: T) => Promise<HaiResult<unknown>>): Promise<Response> | Response {
+      const parsed = schema.safeParse(input)
+      return parsed.success
+        ? respond(() => operation(parsed.data))
+        : invalid(400)
+    }
+    if (readLimits)
+      return respond(() => service.getLimits(actor))
     if (listMine)
       return execute(FeedbackListInputSchema, value => service.listMine(value, actor))
     if (parts.length === 1) {

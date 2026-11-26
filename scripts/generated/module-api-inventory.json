@@ -11632,6 +11632,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackLimits",
+              "kind": "type",
+              "declaration": "FeedbackLimits",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackLimitsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackListInput",
               "kind": "type",
               "declaration": "FeedbackListInput",
@@ -11707,6 +11719,12 @@
               "name": "FeedbackStatusSchema",
               "kind": "value",
               "declaration": "FeedbackStatusSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackSubmissionLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackSubmissionLimitsSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -12890,6 +12908,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackLimits",
+              "kind": "type",
+              "declaration": "FeedbackLimits",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackLimitsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackListInput",
               "kind": "type",
               "declaration": "FeedbackListInput",
@@ -12965,6 +12995,12 @@
               "name": "FeedbackStatusSchema",
               "kind": "value",
               "declaration": "FeedbackStatusSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackSubmissionLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackSubmissionLimitsSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -14148,6 +14184,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackLimits",
+              "kind": "type",
+              "declaration": "FeedbackLimits",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackLimitsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackListInput",
               "kind": "type",
               "declaration": "FeedbackListInput",
@@ -14223,6 +14271,12 @@
               "name": "FeedbackStatusSchema",
               "kind": "value",
               "declaration": "FeedbackStatusSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackSubmissionLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackSubmissionLimitsSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15624,6 +15678,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackLimits",
+              "kind": "type",
+              "declaration": "FeedbackLimits",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackLimitsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackListInput",
               "kind": "type",
               "declaration": "FeedbackListInput",
@@ -15699,6 +15765,12 @@
               "name": "FeedbackStatusSchema",
               "kind": "value",
               "declaration": "FeedbackStatusSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackSubmissionLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackSubmissionLimitsSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15856,6 +15928,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackLimits",
+              "kind": "type",
+              "declaration": "FeedbackLimits",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackLimitsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackListInput",
               "kind": "type",
               "declaration": "FeedbackListInput",
@@ -15931,6 +16015,12 @@
               "name": "FeedbackStatusSchema",
               "kind": "value",
               "declaration": "FeedbackStatusSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "FeedbackSubmissionLimitsSchema",
+              "kind": "value",
+              "declaration": "FeedbackSubmissionLimitsSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -23333,6 +23423,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "FeedbackLimits",
+              "kind": "type",
+              "declaration": "FeedbackLimits",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackListInput",
               "kind": "type",
               "declaration": "FeedbackListInput",
@@ -23473,6 +23569,12 @@
               "kind": "type",
               "declaration": "FeedbackFunctions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FeedbackLimits",
+              "kind": "type",
+              "declaration": "FeedbackLimits",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "FeedbackListInput",

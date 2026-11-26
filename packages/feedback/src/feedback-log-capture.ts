@@ -1,6 +1,5 @@
-import type { FeedbackAttachmentInput, FeedbackContext } from '@h-ai/api-contract/feedback'
+import type { FeedbackAttachmentInput, FeedbackContext, FeedbackLimits } from '@h-ai/api-contract/feedback'
 import { Buffer } from 'node:buffer'
-import { feedbackLimits } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
 
 interface RequestLog {
@@ -13,14 +12,16 @@ interface RequestLog {
 }
 
 /** 在当前进程保留有界请求日志，提交时只取匹配身份的快照。 */
-export function startFeedbackLogCapture() {
+export function startFeedbackLogCapture({ limits, capture }: FeedbackLimits) {
   const rows: RequestLog[] = []
   let totalBytes = 0
+  const windowMs = capture.windowSeconds * 1000
+  const maxLogBytes = Math.min(limits.maxFileBytes, capture.maxLogBytes)
   const trim = (now: number) => {
     let remove = 0
-    while (rows[remove] && (rows[remove]!.timestamp < now - feedbackLimits.captureWindowMs
-      || rows.length - remove > feedbackLimits.maxLogEntries * 5
-      || totalBytes > feedbackLimits.maxLogBytes * 8)) {
+    while (rows[remove] && (rows[remove]!.timestamp < now - windowMs
+      || rows.length - remove > capture.maxLogEntries * 5
+      || totalBytes > maxLogBytes * 8)) {
       totalBytes -= rows[remove]!.bytes
       remove++
     }
@@ -56,11 +57,11 @@ export function startFeedbackLogCapture() {
   return {
     snapshot(context: FeedbackContext, remainingBytes: number): FeedbackAttachmentInput | undefined {
       trim(Date.now())
-      const budget = Math.min(remainingBytes, feedbackLimits.maxLogBytes)
+      const budget = Math.min(remainingBytes, maxLogBytes)
       const currentRequest = core.context.get().requestId
       const lines: string[] = []
       let bytes = 2
-      for (let index = rows.length - 1; index >= 0 && lines.length < feedbackLimits.maxLogEntries; index--) {
+      for (let index = rows.length - 1; index >= 0 && lines.length < capture.maxLogEntries; index--) {
         const row = rows[index]!
         if (row.scopeId !== context.scopeId || row.userId !== context.userId || row.requestId === currentRequest)
           continue

@@ -1,11 +1,12 @@
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { apiContract, FeedbackAddMessageInputSchema, FeedbackSetStatusInputSchema, FeedbackSubmitInputSchema } from '../src/index.js'
+import { apiContract, FeedbackAddMessageInputSchema, FeedbackLimitsSchema, FeedbackSetStatusInputSchema, FeedbackSubmitInputSchema } from '../src/index.js'
 
 describe('反馈契约', () => {
   const id = randomUUID()
   const file = { name: 'instructions.txt', contentType: 'text/plain', dataBase64: 'YQ==' }
+  const defaultWrites = apiContract.createFeedbackWriteSchemas(FeedbackLimitsSchema.parse({}))
 
   it('允许纯文件的提交和双向消息，身份字段由服务端决定', () => {
     expect(FeedbackSubmitInputSchema.parse({
@@ -48,7 +49,7 @@ describe('反馈契约', () => {
         dataBase64: encode(4 * 1024 * 1024),
       })),
     ]) {
-      expect(FeedbackSubmitInputSchema.safeParse({ id, body: '', attachments }).success).toBe(false)
+      expect(defaultWrites.submit.safeParse({ id, body: '', attachments }).success).toBe(false)
     }
   })
 
@@ -75,7 +76,7 @@ describe('反馈契约', () => {
       ...file,
       dataBase64: Buffer.alloc(5 * 1024 * 1024).toString('base64'),
     }
-    expect(FeedbackSubmitInputSchema.safeParse({
+    expect(defaultWrites.submit.safeParse({
       id,
       body: '',
       attachments: [full, full],
@@ -85,7 +86,7 @@ describe('反馈契约', () => {
       ...replay,
       dataBase64: Buffer.alloc(512 * 1024 + 1).toString('base64'),
     }
-    expect(FeedbackSubmitInputSchema.safeParse({
+    expect(defaultWrites.submit.safeParse({
       id,
       body: '',
       capture: { browserLogs: logs },

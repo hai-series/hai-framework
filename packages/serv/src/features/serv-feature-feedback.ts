@@ -45,6 +45,10 @@ export function createFeedbackProcedures(deps: FeedbackProcedureDeps) {
   return implement(apiContract.feedback)
     .context<ServContext>()
 
+    .route('limits')
+    .auth()
+    .handle(({ context }) => withActor(context, actor => service.getLimits(actor)))
+
     .route('reports.submit')
     .auth()
     .handle(({ input, context }) => withActor(context, actor => service.submit(input, actor)))

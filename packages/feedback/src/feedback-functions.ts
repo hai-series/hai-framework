@@ -1,17 +1,16 @@
 import type { FeedbackAttachment, FeedbackAttachmentInput, FeedbackAttachmentKind, FeedbackListInput, FeedbackMessage, FeedbackReport } from '@h-ai/api-contract/feedback'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
-import type { FeedbackReportRepository } from './feedback-repository.js'
+import type { FeedbackConfig } from './feedback-config.js'
+import type { FeedbackReportRepository, ReportRow } from './feedback-repository.js'
 import type { FeedbackContext, FeedbackFunctions } from './feedback-types.js'
 import { Buffer } from 'node:buffer'
 import {
-  FeedbackAddMessageInputSchema,
+  apiContract,
   FeedbackAttachmentQuerySchema,
   FeedbackIdInputSchema,
-  feedbackLimits,
   FeedbackListInputSchema,
   FeedbackMessageQuerySchema,
   FeedbackSetStatusInputSchema,
-  FeedbackSubmitInputSchema,
 } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
@@ -58,16 +57,27 @@ function activityTime(updatedAt: number) {
 
 export function createFeedbackOperations(
   repo: FeedbackReportRepository,
-  appId: string,
+  config: FeedbackConfig,
   serverLogs: (context: FeedbackContext, remainingBytes: number) => FeedbackAttachmentInput | undefined,
 ): FeedbackOperations {
+  const { appId, limits, capture: captureLimits } = config
+  const writes = apiContract.createFeedbackWriteSchemas(config)
+
+  function existingReport(row: ReportRow, context: FeedbackContext) {
+    if (row.user_id !== context.userId)
+      return conflict()
+    return repo.isExpired(row.updated_at)
+      ? missing()
+      : core.ok(repo.report(row))
+  }
+
   async function access(id: string, context: FeedbackContext, tx?: DmlWithTxOperations) {
     if (!validContext(context))
       return forbidden()
     const result = await repo.find(appId, context.scopeId, id, tx)
     if (!result.success)
       return result
-    if (!result.data)
+    if (!result.data || repo.isExpired(result.data.updated_at))
       return missing()
     if (result.data.user_id !== context.userId && !permitted(context, 'feedback:read'))
       return forbidden()
@@ -90,21 +100,27 @@ export function createFeedbackOperations(
   }
 
   return {
+    getLimits(context) {
+      return Promise.resolve(validContext(context)
+        ? core.ok({
+            limits: { ...limits },
+            capture: { ...captureLimits },
+          })
+        : forbidden())
+    },
+
     async submit(input, context) {
       if (!validContext(context) || !permitted(context, 'feedback:create'))
         return forbidden()
-      const parsed = FeedbackSubmitInputSchema.safeParse(input)
+      const parsed = writes.submit.safeParse(input)
       if (!parsed.success)
         return invalid()
       const { id, body, attachments = [], capture } = parsed.data
       const saved = await repo.find(appId, context.scopeId, id)
       if (!saved.success)
         return saved
-      if (saved.data) {
-        return saved.data.user_id === context.userId
-          ? core.ok(repo.report(saved.data))
-          : conflict()
-      }
+      if (saved.data)
+        return existingReport(saved.data, context)
 
       const files: Array<FeedbackAttachmentInput & { kind?: FeedbackAttachmentKind }> = [...attachments]
       if (capture) {
@@ -119,7 +135,7 @@ export function createFeedbackOperations(
             files.push({ ...file, kind })
         }
         if (capture.includeServerLogs) {
-          const remainingBytes = feedbackLimits.maxTotalFileBytes - files.reduce((sum, file) => sum + Buffer.byteLength(file.dataBase64, 'base64'), 0)
+          const remainingBytes = limits.maxTotalFileBytes - files.reduce((sum, file) => sum + Buffer.byteLength(file.dataBase64, 'base64'), 0)
           const logs = serverLogs(context, remainingBytes)
           if (logs)
             files.push({ ...logs, kind: 'server_logs' })
@@ -153,11 +169,8 @@ export function createFeedbackOperations(
 
       // 同一个 UUID 的并发请求可能已经写入，读回该作者已保存的记录。
       const concurrent = await repo.find(appId, context.scopeId, id)
-      if (concurrent.success && concurrent.data) {
-        return concurrent.data.user_id === context.userId
-          ? core.ok(repo.report(concurrent.data))
-          : conflict()
-      }
+      if (concurrent.success && concurrent.data)
+        return existingReport(concurrent.data, context)
       return stored
     },
 
@@ -217,7 +230,7 @@ export function createFeedbackOperations(
     },
 
     async addMessage(input, context) {
-      const parsed = FeedbackAddMessageInputSchema.safeParse(input)
+      const parsed = writes.addMessage.safeParse(input)
       if (!parsed.success)
         return invalid()
       const message = parsed.data

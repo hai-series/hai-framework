@@ -10,3 +10,12 @@ it('只为带文件的反馈路径声明共享传输容量', () => {
   })
   expect(budget).toBeGreaterThan(4 * Math.ceil(feedbackLimits.maxTotalFileBytes / 3))
 })
+
+it('扩大写入预算，保留单文件读取预算', () => {
+  const budget = apiContract.feedbackTransportRoutes('/api', 24 * 1024 * 1024)
+  expect(budget).toEqual({
+    '/api/feedback/reports': 33 * 1024 * 1024,
+    '/api/feedback/reports/*/messages': 33 * 1024 * 1024,
+    '/api/feedback/reports/*/attachments/*': 16 * 1024 * 1024,
+  })
+})

@@ -2,7 +2,7 @@ import type { DbTestEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { reldb } from '@h-ai/reldb'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { mysqlEnv, postgresEnv, sqliteMemoryEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
@@ -92,5 +92,42 @@ describe.each([
       success: true,
       data: { total: 0 },
     })
+  })
+
+  it('启动时只级联清理本应用到期反馈，同库的其他应用继续保留', async () => {
+    const id = randomUUID()
+    const otherAppId = randomUUID()
+    const attachment = { name: 'steps.txt', contentType: 'text/plain', dataBase64: 'YQ==' }
+    expect(await feedback.submit({
+      id,
+      body: 'Old report',
+      attachments: [attachment],
+    }, owner)).toMatchObject({ success: true })
+    expect(await feedback.addMessage({
+      id,
+      messageId: randomUUID(),
+      kind: 'reply',
+      body: 'Review',
+      attachments: [attachment],
+    }, staff)).toMatchObject({ success: true })
+    expect(await feedback.setStatus({ id, status: 'handled' }, staff)).toMatchObject({ success: true })
+    expect(await feedback.init({ appId: 'Order-App' })).toMatchObject({ success: true })
+    expect(await feedback.submit({ id: otherAppId, body: 'Other application' }, owner)).toMatchObject({ success: true })
+    const old = Date.now() - 2 * 86_400_000
+    expect(await reldb.sql.execute('UPDATE hai_feedback_reports SET updated_at = ? WHERE id IN (?, ?)', [old, id, otherAppId])).toMatchObject({ success: true })
+    expect(await feedback.init({
+      appId: 'order-app',
+      retention: { days: 1 },
+    })).toMatchObject({ success: true })
+    await vi.waitFor(async () => {
+      expect(await reldb.sql.query('SELECT id FROM hai_feedback_reports WHERE id IN (?, ?)', [id, otherAppId])).toMatchObject({
+        success: true,
+        data: [
+          { id: otherAppId },
+        ],
+      })
+    })
+    expect(await reldb.sql.query('SELECT id FROM hai_feedback_messages WHERE report_id = ?', [id])).toMatchObject({ success: true, data: [] })
+    expect(await reldb.sql.query('SELECT id FROM hai_feedback_attachments WHERE report_id = ?', [id])).toMatchObject({ success: true, data: [] })
   })
 })
