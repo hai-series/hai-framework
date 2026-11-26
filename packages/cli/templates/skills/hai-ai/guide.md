@@ -162,7 +162,7 @@ memory:
 | 语音识别      | `ai.audio.transcribe` / `transcribeStream`                                                                     | 完整音频返回 `HaiResult`；持续音频输入用 `AudioInputStream` 流式返回临时文本                                                                                 |
 | 语音合成      | `ai.audio.synthesize` / `synthesizeStream`                                                                     | `text` 可为字符串或 `AsyncIterable<string>`（可接 LLM 文本流边生成边合成）；完整结果可用 `ai.serializePlayableAudio` 转为浏览器播放负载                         |
 | 图片生成      | `ai.image.generate({ prompt, size?, model?, referenceImages? })`                                               | 可选参考图使用字节 + MIME；Provider 协议和临时 URL 下载由模块内部处理                                                                                        |
-| A2A           | `ai.a2a.registerExecutor/handleRequest`                                                                        | 延迟初始化 SDK handler                                                                                                                                       |
+| A2A           | `ai.a2a.registerExecutor/createHttpHandler`                                                                        | 注册执行器后，以同一个 HTTP 处理器接入 Serv 或 Kit                                                                                                                                       |
 
 ## LLM + 工具调用
 
@@ -517,7 +517,8 @@ export const POST = kit.handler(async ({ request }) => {
 - 批量导入、批量 embedding 用批量 API，避免 await-in-loop。
 - 文件解析/OCR 失败按 `HaiAIError.FILE_*` 返回，不抛业务异常。
 - HTML 文件按 HTML 结构解析并迭代提取，script/style 不进入结果，正常正文不截断。`data.text` 仍是文本/Markdown，不是可信 HTML；使用文本绑定或 `MarkdownRenderer`，不能直接交给 `{@html}`。
-- A2A 认证失败返回 `A2A_AUTH_FAILED`；`callRemoteAgent` 只依赖 `ai.init()`，无需注册本地 executor。远端 URL 仅接受 HTTP(S) 且不得内嵌凭据，应用仍须配置 origin 白名单与出口网络策略。不要记录 token、apiKey、私钥、完整 headers 或带 query 的 URL。
+- 对外发布 A2A 时先初始化 AI 与 IAM，注册业务执行器后创建 HTTP 处理器。执行器从 `getCallerIdentity(context)` 读取有效权限并检查业务数据归属。凭据校验失败返回 401 `A2A_AUTH_FAILED`，校验服务故障返回 503 `A2A_AUTH_UNAVAILABLE`。
+- 作为客户端调用 `callRemoteAgent` 只需 `ai.init()`。远端使用受信 HTTP(S) 地址并配置出口策略，凭据单独放在请求头。日志应脱敏 token、API Key、私钥、请求头和查询参数。
 - A2A 入站日志保存并重验租约后才执行业务，出站日志在已有有界队列内完成后才发布；日志失败产生 failed/interrupted Task，不重放相同 receipt。日志不是交付回执，按 requiresEffectReconciliation 核对可能已执行的效果；listMessages 失败为安全的 A2A_LIST_MESSAGES_FAILED（984）。
 - A2A 任务与事件只有共享 journal 一套权威，不装配旧 TaskStore；push notification 配置和 authenticated extended card RPC 返回 SDK 标准不支持/未配置错误。应用通过公开 executor 接口接入，不导入内部 handler/Store 装配类型。
 - Context 的 flush 会报告本节点后台提取异常及失败 HaiResult；同轮并发调用共享一次报告，返回即确认该批，后续只观察新任务。save/reset(waitForMemoryTasks)/consolidate 传播失败并停止后续写入，pendingMemoryTasks=0 不代表成功，不自动重试未知副作用。

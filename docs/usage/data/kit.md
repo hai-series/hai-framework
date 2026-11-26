@@ -1,22 +1,56 @@
 # @h-ai/kit 数据结构
 
-<a id="kit-数据结构"></a>
-
 [English](kit.en.md) · [日本語](kit.ja.md)
 
-[数据结构索引](README.md) · [模块配置](../configuration/kit.md) · [功能说明](../function/kit.md)
+[数据结构索引](README.md) · [模块配置](../configuration/kit.md) · [功能说明](../function/kit.md) · [订单运营台教程](../getting-started/kit.md)
 
-应用开启限流后，Kit 保存访问者在当前窗口内的请求计数。处理浏览器请求时，Kit 还读取登录 Cookie 或按宿主配置封装 Cookie 数据。
+订单运营台读取报表时，Kit 把已验证的审计员身份和请求编号交给 SvelteKit 的服务端页面和接口。合作方调用外部报表时，启用的限流存储会记录访问次数。
+
+<a id="runtime-data"></a>
+
+## 请求上下文
+
+`kit.createHandle()` 将请求上下文写入 SvelteKit 的 `event.locals`。服务端 load、action 和 API 守卫在处理期间读取这些字段。
+
+| 字段 | 何时读取及含义 |
+| --- | --- |
+| `event.locals.requestId` | 请求排查编号，可与响应的 `X-Request-Id` 对照。匿名请求也有编号。 |
+| `event.locals.session` | 使用共享 `HttpSession`，必填 `userId`、`roles`、`permissions`，可选 `username`、`displayName`、`avatarUrl` 和应用自定义的 `data`。未认证时省略。 |
+| `event.getClientAddress()` | 读取 Kit 按可信代理规则解析的地址。静态预渲染或无法确认客户端地址时，调用可能抛错。 |
+| `event.locals.accessToken` | 成功验证的当前访问令牌，只在服务端读取。 |
+
+Serv 的 `ServSession` 与 Kit 的 `SessionData` 均使用 `@h-ai/core` 的 `HttpSession`。认证成功后，宿主把这些字段交给本次请求，过滤 `data._tokenPair`。已有会话的存储、续期和撤销继续由 IAM 管理。 [IAM 会话数据](iam.md)
+
+以下是服务端收到的节选。
+
+```json
+{
+  "requestId": "request-42",
+  "session": {
+    "userId": "user-42",
+    "roles": ["auditor"],
+    "permissions": ["reports:read"]
+  }
+}
+```
+
+`request-42` 可关联本次响应的 `X-Request-Id`。匿名请求也有追踪编号。浏览器页面只接收所需的展示字段，`locals.accessToken` 留在服务端。 [请求管道](../function/kit.md#hooks)
+
+## 数据库
+
+Kit 自身创建 0 张数据库表。订单、报表等业务数据由应用保存，启用 IAM 后由 [IAM](iam.md) 管理会话。
+
+启用 A2A 后，这两个宿主只处理 HTTP，任务事件与消息由 AI 模块保存。 [A2A 任务和消息数据](ai.md#table-hai-ai-a2a-journal)
 
 <a id="cache"></a>
 
 ## 缓存
 
-应用选择共享限流存储时，Kit 使用 1 类键。键中的 `digest` 是命名空间、`windowMs` 和被限流对象的 SHA-256 摘要。Redis 会加上 Cache 的 `keyPrefix`。多个实例共用 Redis 时读取同一份计数，进程内模式各进程分别计数。
+启用 Redis 限流时，Serv 和 Kit 都使用下表的一类键。设限流主体 `key` 为可信客户端 IP（默认）或应用生成的分组键。框架用 `SHA-256(JSON.stringify([namespace, windowMs, key]))` 生成十六进制 `digest`，Cache 在 Redis 键前添加 `keyPrefix`。多个实例连接同一 Redis 数据库，且前缀、命名空间、窗口和主体相同时，会更新同一条记录。进程内存储按进程计数；它不会写入 Redis。密钥登记和防重放记录由 [Crypto](crypto.md) 管理。 [限流接入](../getting-started/kit.md#orders-console-access)
 
 | 键或类别 | 用途 | 默认有效期与清理 |
 | --- | --- | --- |
-| [`hai:kit:ratelimit:{<digest>}`](#cache-kit-rate-limit) | 限制同一访问者或业务范围的请求频率。 | 从第一次请求起 `windowMs` 毫秒。递增时保留现有期限，过期后下一次请求重新计数。 |
+| [`hai:kit:ratelimit:{<digest>}`](#cache-kit-rate-limit) | 限制同一访问者或业务范围的请求频率。 | 从第一次成功写入计数起 `windowMs` 毫秒。递增时保留现有期限，过期后下一次请求重新计数。 |
 
 <a id="cache-kit-rate-limit"></a>
 
@@ -24,15 +58,14 @@
 
 | 值字段 | 类型 | 默认值 | 说明 | 示例 |
 | --- | --- | --- | --- | --- |
-| `count` | `integer` | — | 本轮请求计数，第一次写入为 `1`。 | `2` |
-| `resetAt` | `number` | — | 首次请求时间加窗口时长，以 Unix 毫秒记录。响应头用此值估算剩余时间。 | `1794873660000` |
+| `count` | `integer` | — | 本轮累计计数，首次写入为 `1`。默认限流器的超额请求也计入。 | `2` |
+| `resetAt` | `integer` | — | 第一次写入时估算的窗口结束时间，单位为 Unix 毫秒。共享存储实际以 Redis 键到期为准。 | `1794873660000` |
 
 <a id="example-data"></a>
 
-
 #### 示例 · 某个访问者这一轮来了多少次
 
-服务端用这条记录限制同一访问者或业务范围的请求频率，多节点共用计数才不会各放行一份。
+设某客户端在 2026 年 11 月 17 日 00:00:00 UTC 触发第一次计数，窗口为 60 秒，额度为 2 次。下列记录出现在同一客户端的第二次请求之后。
 
 ```json
 {
@@ -41,7 +74,9 @@
 }
 ```
 
-count:2 表示本轮已计两次；resetAt 以 Unix 毫秒记录本轮结束时间。此例窗口60秒，更新计数不会再延长60秒。
+`count: 2` 表示额度已用完。该客户端在窗口内的第三次请求会把计数加到 `3`，并收到默认的 HTTP 429。`resetAt` 仍是 00:01:00 UTC 的估算值。Redis 键到期后，下一次请求从 `1` 开始。
+
+缓存的 `resetAt` 用毫秒。响应头 `X-RateLimit-Reset` 把它向上取整为 Unix 秒；超限时的 `Retry-After` 是还需等待的秒数。
 
 <a id="browser-storage"></a>
 
@@ -56,20 +91,20 @@ count:2 表示本轮已计两次；resetAt 以 Unix 毫秒记录本轮结束时�
 
 ### 浏览器请求中携带的访问 Cookie
 
-Kit 在服务端读取它，验证后才把用户身份交给页面或接口。
+登录写入已签发的访问令牌，后续请求由认证 Hook 验证。登出时使用相同的名称和路径删除 Cookie，即使服务端撤销会话失败也会清除浏览器凭据。调用方可通过登出结果识别撤销失败。
 
-```json
-"<access-token:redacted>"
+```http
+Set-Cookie: hai_access_token=<redacted>; Path=/; Max-Age=900; HttpOnly; SameSite=Lax; Secure
 ```
 
-值已脱敏，默认 HttpOnly、SameSite=Lax、Path=/，有效时间取登录返回值；客户端不能自己改角色取得权限。
+以上是生产 HTTPS 中的脱敏响应头。`Max-Age` 的示例值为 900 秒，实际值取登录返回的 `tokens.expiresIn`。
 
 ### 应用选中加密的普通 Cookie
 
 需要把普通 Cookie 的值隐藏并防止篡改时，由服务端加密写入、读取时解密验证。
 
 ```json
-"enc:v2:<encrypted-content>"
+"enc:v2:<iv>:<ciphertext>:<mac>"
 ```
 
-enc:v2: 是格式前缀，后面只是示意占位，不能用来真实解密；这不是防重放请求编号，也不改变原 Cookie 的期限。
+`enc:v2:` 标明格式。后续三段是随机 IV、密文和认证码的占位符。Kit 用认证码校验 Cookie 的名称及封装。读取被篡改或无法解密的值会得到 `undefined`。应用通过 `event.cookies.get("order_preferences")` 获取已验证的明文。

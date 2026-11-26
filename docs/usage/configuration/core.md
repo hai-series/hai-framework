@@ -37,7 +37,7 @@ Core 提供检查请求的函数。应用启动时把访问策略交给负责接
 | 后端            | 配置位置                            | 启动代码怎样传入                                               |
 | --------------- | ----------------------------------- | -------------------------------------------------------------- |
 | 独立的 Serv API | `config/_serv.yml` 的 `http.access` | 将读取到的 `http` 传给 `serv.createApp({ http, ... })`。       |
-| SvelteKit 服务  | `config/_kit.yml` 的顶层 `access`   | 将读取到的 `access` 传给 `kit.createHandle({ access, ... })`。 |
+| SvelteKit 服务  | `config/_kit.yml` 的 `http.access`   | 将读取到的 `http` 传给 `kit.createHandle({ http, ... })`。 |
 
 `config/_core.yml` 只能填写上面配置清单中的字段。把 `access` 或 `global` 写进这个文件会触发配置校验错误。按上表选择真正接收请求的后端文件。省略 `access` 或将它设为 `false` 时，服务不会执行这些额外的地址及时段检查。
 
@@ -114,16 +114,17 @@ http:
 
 #### 示例二：在 SvelteKit 中让所有动态请求只在工作时段通过
 
-在 `config/_kit.yml` 的顶层设置 `access`。`global` 也可以只写时段，本例只限制进入 SvelteKit 请求处理函数的请求。
+在 `config/_kit.yml` 中设置 `http.access`。`global` 也可以只写时段，本例只限制进入 SvelteKit 请求处理函数的请求。
 
 ```yaml schema=@h-ai/kit:KitConfigSchema
-access:
-  global:
-    timezone: Asia/Shanghai
-    windows:
-      - days: [1, 2, 3, 4, 5]
-        start: '09:00'
-        end: '18:00'
+http:
+  access:
+    global:
+      timezone: Asia/Shanghai
+      windows:
+        - days: [1, 2, 3, 4, 5]
+          start: '09:00'
+          end: '18:00'
 ```
 
 此配置在上海时间周一到周五 `09:00` 至 `18:00` 之间允许访问，`18:00` 整即停止放行。只想限制部分接口时，可把这个时段条件移进 `rules` 的一条路径规则，避免影响登录页或健康检查。
@@ -145,11 +146,12 @@ http:
     file: ./config/security/request-access.yml
 ```
 
-SvelteKit 在 `config/_kit.yml` 通过 `access.file` 引用它。
+SvelteKit 在 `config/_kit.yml` 通过 `http.access.file` 引用它。
 
 ```yaml schema=@h-ai/kit:KitConfigSchema
-access:
-  file: ./config/security/request-access.yml
+http:
+  access:
+    file: ./config/security/request-access.yml
 ```
 
 `access` 里写了 `file` 就把规则都放进该文件，大小上限为 1 MiB。相对路径从后端进程的工作目录起算。服务启动时读取文件，改完配置后重启后端。使用其他 Node HTTP 框架时，启动代码可以调用 `core.access.createRequestCheck({ file: './config/security/request-access.yml' })`，再将请求路径、方法和可信客户端 IP 交给返回的函数。

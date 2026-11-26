@@ -136,7 +136,7 @@ SSR では認証情報とストレージをリクエストごとに用意しま�
 | `config.transport` の項目 | 型と既定値 | 効果 |
 | --- | --- | --- |
 | `crypto` | 初期化済みの `CryptoFunctions`、`transport` 使用時に必須 | クライアントの暗号化セッションを作成 |
-| `keyExchangePath` | `string`、既定 `/_hai/key-exchange` | API 接頭辞の下でホストと一致させる鍵交換パス |
+| `keyExchangePath` | 省略可能。既定は `/api/v1/_hai/key-exchange` | `baseUrl` のオリジンを基準にした絶対パス。サーバーの鍵交換パスと揃える。 |
 | `maxPlaintextBytes` | `number`、省略時はホストの上限を使用 | 平文 UTF-8 バイト数の上限。指定時はホストとローカルの小さい方を使用 |
 
 ##### クライアントのアドレス・期限・復旧

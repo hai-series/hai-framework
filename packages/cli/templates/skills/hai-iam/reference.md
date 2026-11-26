@@ -331,7 +331,7 @@ async function revokeKey(keyId: string) {
 }
 ```
 
-创建后只有 `rawKey` 能用于 Key 登录；`apiKey.id` 是管理 ID，`keyPrefix` 仅用于显示/检索，均不能代替 rawKey。`verifyApiKey(rawKey)` 仅验证 Key 并返回元数据，不能代替用户状态、scopes 与操作授权。
+签发时保存 `rawKey` 用于程序认证。`apiKey.id` 用于管理，`keyPrefix` 用于显示和检索。`verifyApiKey(rawKey)` 校验 Key 和所属账户，返回 Key 元数据及 `permissions`，有效权限取当前主体授权和 Key scopes 的交集。报表服务用 `permissions` 检查 `orders:read`，再按可信 `userId` 限定数据归属。验证程序凭据无需建立会话。
 
 Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不会丢失该绑定或扩大 scopes。撤销成功后，已有 accessToken 的 get/verify 以及 refreshToken 的 refresh 都会失败；过期、禁用及必要状态读取失败同样拒绝。角色撤权由 `iam.auth.verifyToken` 读取当前授权生效。改 scope 使用创建新 Key 后撤销旧 Key，当前 API 不提供 scope 更新操作。
 
@@ -343,7 +343,7 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 | `listApiKeys`  | `(userId, options?) => Promise<HaiResult<PaginatedResult<ApiKey>>>`                | 分页列出用户的 API Key               |
 | `getApiKey`    | `(keyId) => Promise<HaiResult<ApiKey \| null>>`                                    | 获取 API Key 详情                    |
 | `revokeApiKey` | `(keyId) => Promise<HaiResult<void>>`                                              | 吊销/删除 API Key                    |
-| `verifyApiKey` | `(rawKey) => Promise<HaiResult<ApiKey>>`                                           | 验证 API Key 并返回实体（含用户 ID） |
+| `verifyApiKey` | `(rawKey) => Promise<HaiResult<VerifiedApiKey>>`                                  | 验证 API Key 和账户，返回 Key 元数据和有效权限 |
 
 ## HTTP API 契约
 
@@ -418,12 +418,7 @@ import { kit } from '@h-ai/kit'
 // 用下方公开路径、保护路径和认证回调构造 SvelteKit 请求钩子。
 export const handle = kit.createHandle({
   auth: {
-    verifyToken: async (token) => {
-      // 在回调中验证请求 token，成功时用会话作为回调输出，失败映射为 null。
-      const result = await iam.auth.verifyToken(token)
-      return result.success ? result.data : null
-    },
-    operations: () => iam.auth,
+    iam,
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
     publicPaths: ['/api/auth/*', '/api/public/*'],
@@ -561,5 +556,7 @@ Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessio
 
 ### 页面离开会话
 
-`session.endOnPageHide` 默认关闭。Kit/typed client 的 `createAuthActions().bindPageExit({ enabled })` 返回监听清理函数，宿主卸载时调用；typed client.close 也清理本实例监听。请求走现有 CSRF/加密管线，POST `/auth/session/close` 仅撤销所持旧会话，不清 Cookie，避免迟到响应影响新登录。刷新/整页导航也触发，BFCache 跳过；浏览器关闭属于最善努力，需配合服务端闲置/绝对期限，显式 logout 始终可靠撤销。
+`session.endOnPageHide` 默认关闭。SvelteKit 服务端布局从已验证的 `locals.accessToken` 调用 `kit.auth.sessionFingerprint(token)`，只把指纹传给页面，再调用 `kit.client.createAuthActions().bindPageExit({ enabled, sessionFingerprint })`。使用 Bearer 的 typed client 调用 `bindPageExit({ enabled })`。宿主卸载时执行返回的清理函数。
+
+POST `/auth/session/close` 沿用 CSRF 和传输加密。Kit 只在指纹匹配当前 Cookie 令牌时撤销会话，响应不清 Cookie。刷新或整页导航也会触发，BFCache 会跳过。浏览器离开时只能尽力提交，服务端需配置闲置或绝对期限。用户主动退出时调用常规 logout。
 

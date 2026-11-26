@@ -5,7 +5,7 @@ description: "在 SvelteKit 中接入 hooks、认证守卫、输入校验、响�
 
 # hai-kit
 
-限流采用首次成功提交为起点的固定窗口，后续请求不延长 TTL。必须显式传 store；应用先检查共享 Redis 初始化结果，所有节点使用相同 namespace/windowMs/maxRequests。缓存读取/条件提交失败或冲突耗尽返回503，超限429；不会回退 get+set 或本地计数。createMemoryRateLimitStore 仅开发或显式 HAI_E2E/HAI_E2E_MOCK 测试使用，无常驻定时器，丢弃引用即可回收；每次请求最多惰性扫描 64 项，最多保存 10000 个窗口，容量满时对新 key 返回503且不驱逐有效计数，外部 store 生命周期由创建者管理；生产不得设置测试开关。响应重置时间为节点时钟估算，实际窗口由 Redis TTL 决定，须同步时钟。默认键只读取可信 adapter 的 getClientAddress、规范化等价IPv6和IPv4映射地址，不采信原始转发头；代理信任通过部署adapter配置。
+在 `kit.createHandle({ http: { rateLimit } })` 启用固定窗口限流并注入原子 `store`。默认关闭。生产实例共用 Redis 和策略参数。开发可用进程内计数器，生产不得设置测试开关。默认按 `http.trustedProxies` 解析的可信 IP 计数，超限返回 429，存储故障返回 503。按[固定窗口限流示例](reference.md#rate-limit-example)验证剩余额度和重置。
 
 transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC、HTTP 上下文/响应状态绑定及共享原子防重放。GET/HEAD、空 POST 与空响应也认证；无降级开关。TLS 信任边界、可配时间窗口、nonce 持久化与实现示例见 [参考](reference.md)。
 
@@ -24,11 +24,11 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 ## 使用路径
 
 1. 仅在 SvelteKit 集成；先查现有 hooks、配置、守卫与路由，不将其套用于独立 serv 应用。
-2. 用 createHandle 编排已初始化模块；认证 API 与公开路径复用 kit.auth，客户端复用框架动作。
+2. 用 `kit.createHandle` 编排已初始化模块。使用 IAM 验证会话，并用 `kit.auth.publicPaths` 配置标准公开端点。用 `auth.iam` 同时装配会话验证和 Cookie 登录助手。浏览器从 `@h-ai/kit/client` 创建认证动作。
 3. 区分返回 HaiResult 的业务操作与抛 Response/redirect/error 的框架控制流，不吞掉控制流。
 4. 对齐 Cookie/CSRF/transport 与服务端配置，验证匿名、登录、权限拒绝和表单失败。
 
-默认请求日志支持 prerender。查询从独立 `new URL(event.request.url)` 统计参数数量，路径保留 `event.url.pathname`。JSON 正文日志默认关闭，显式启用时从请求副本读取并脱敏。页面业务确实依赖查询时按 SvelteKit 的动态路由条件处理。
+默认请求日志支持 prerender。查询从独立 `new URL(event.request.url)` 统计参数数量，路径保留 `event.url.pathname`。设置 `logging.logBody: true` 只增加表示是否有请求正文流的 `hasBody` 字段。默认按可信 IP 的限流在传输处理和会话验证前执行。自定义限流键在会话解析后计算。
 
 Kit 自动请求审计与 Serv 一样，仅在请求时发现 audit.isInitialized 才写入；未选 Audit 的站点不因默认 handle 产生未初始化错误。选择 Audit 时检查 init 结果并失败停止启动；显式业务审计仍遵守初始化和事务合同，已就绪模块写入失败必须保留诊断，不能当作可选模块静默跳过。handle 创建早于模块初始化时不能在装配阶段把审计永久禁用。
 

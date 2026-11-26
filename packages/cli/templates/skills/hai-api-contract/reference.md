@@ -145,6 +145,8 @@ const previewPath = '/api/v1' + apiContract.pathOf(widgetContract.preview)
 | `apiContract.payment` | 订单和支付通知。 |
 | `apiContract.feedback` | 反馈报告、对话和附件。 `reports.listMine` 查询本人报告，`limits` 读取生效的发送与采集设置，`apiContract.feedbackTransportRoutes` 按单次文件容量声明路由预算。 |
 
+自定义反馈 HTTP 适配器可从 `@h-ai/api-contract/feedback` 导入 `FeedbackContext` 与 `FeedbackHttpOperations`。从已验证的会话解析身份与权限，并将已初始化的 `feedback` 实例交给适配器。
+
 <a id="response-schemas"></a>
 
 ### 选用 HTTP 扩展契约
@@ -225,7 +227,7 @@ const response = await app.request('/api/v1/widgets/preview', {
 // 预期 HTTP 200，JSON 为 { success: true, data: { name: 'demo' } }。
 ```
 
-使用内置 IAM 时，先初始化 IAM 和所需依赖。将同一实例同时传给 `serv.createIamProcedures({ iam })` 和 `serv.createApp({ ..., iam })`，使认证守卫能取得经校验的会话。公开 IAM 配置、登录、注册、验证码、找回密码和刷新等操作在 OpenAPI 中声明 `security: []`。实际凭据和访问权限仍由请求处理器校验。
+使用内置 IAM 时，先初始化 IAM 和所需依赖。将同一实例同时传给 `serv.createIamProcedures({ iam })` 和 `serv.createApp({ ..., auth: { iam } })`，使认证守卫能取得经校验的会话。公开 IAM 配置、登录、注册、验证码、找回密码和刷新等操作在 OpenAPI 中声明 `security: []`。实际凭据和访问权限仍由请求处理器校验。
 
 <a id="use-with-kit"></a>
 

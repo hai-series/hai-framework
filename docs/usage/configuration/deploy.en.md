@@ -80,6 +80,12 @@ With `environment: prod`, the CLI loads the prod environment layers, including p
 }
 ```
 
+<a id="http-rate-limit-deployment"></a>
+
+### Deploy Serv or Kit with HTTP rate limiting
+
+Set `http.rateLimit` in the backend’s `config/_serv.yml` or `config/_kit.yml`. Deploy validates the window and quota after applying environment overrides. Each application instance supplies the atomic store at startup. Share Redis, namespace, and settings across instances. A managed private gateway uses `http.trustedProxies: auto`. For a gateway you manage, list its actual IPs or CIDRs. Send consecutive requests from the same client through the deployed domain to verify that instances share the allowance. [Serv configuration example](serv.en.md#rate-limit-config-example) · [Kit configuration example](kit.en.md#rate-limit-config-example)
+
 <a id="rootless-docker-external-https"></a>
 
 ### Deploy to Rootless Docker behind an existing HTTPS gateway

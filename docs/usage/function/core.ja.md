@@ -534,7 +534,7 @@ Vite では `() => new Worker(new URL("./stats-worker.js", import.meta.url), { t
 
 `core.access` は、パス、HTTP メソッド、クライアント IP、サーバーの現在時刻に基づいて、Node サーバーがリクエストを通すかを判定します。認証と認可は引き続きサービス側で行います。
 
-- **Serv または Kit:** `_serv.yml` の `http.access` または `_kit.yml` の `access` に書き、`serv.createApp({ http, ... })` または `kit.createHandle({ access, ... })` に渡します。フレームワークが起動時に判定の準備を行い、拒否時は HTTP 403 を返します。ルールは `_core.yml` には書きません。
+- **Serv または Kit** では、`_serv.yml` または `_kit.yml` の `http.access` に設定し、`http` をファクトリーまたはフックに渡します。フレームワークが判定を準備し、拒否時は HTTP 403 を返します。
 - **その他の Node HTTP フレームワーク:** 起動時に IP 解決関数と判定関数を作ります。リクエストごとに、サーバーや信頼できる基盤から直接接続した相手のアドレスを取得して IP を解決し、URL のパス、HTTP メソッド、解決した IP を判定関数に渡します。HTTP の応答は結果を見て呼び出し側で返します。
 
 リクエストは `global` と該当するすべてのルールを満たす必要があります。該当するルールがなければ `global` だけが適用されます。`methods` を省略するか空の配列を渡すとすべてのメソッドに適用され、末尾の `/**` はパス自体と配下の両方に一致します。拒否時には `reason`（`address`、`time` または `path`）と、ルールで拒否した場合の `ruleId` が返ります。
@@ -550,6 +550,14 @@ Vite では `() => new Worker(new URL("./stats-worker.js", import.meta.url), { t
 | `core.access.createConditionCheck(condition)` | アドレスと時間帯の条件を準備 | 信頼済みアドレスと時間の条件 `condition` が必須。項目と値は[アクセス方針](#access-condition-options)を参照。 | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
 | `core.access.createRequestCheck(input?)` | リクエストポリシーを準備 | `input` はインライン方針、`{ file }`、`false` のいずれか。既定値は `false`。 | `check(pathname, method, ip?)` → `AccessDecision` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
 | `core.access.loadPolicy(input?, baseDirectory?)` | ポリシーを読み込んで検証 | `input` はインライン方針、`{ file }`、`false` のいずれか。既定値は `false`。`baseDirectory` は相対ファイルの基準で、既定は現在のディレクトリ。 | `RequestAccessPolicy` / `false` | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+| `core.access.createRateLimiter(options)` | 固定時間枠の制限を作成 | アトミックな `store` が必須。`windowMs: 60000` と `maxRequests: 100` が既定値。任意のコールバックは `keyGenerator(context)` と `onLimitReached(context, defaultResponse)`。 | 判定を待つと許可時は `Headers`、拒否時は `Response`。超過は 429、ストア障害は 503。 | `core.access.createRateLimiter({ store })` |
+| `core.access.createCacheRateLimitStore(backend, options)` | 共有 Redis でアトミックに計数 | 初期化済み Cache の `backend` と、1～128 文字の `options.namespace` が必須。開発・明示的テストでは `allowMemory: true` が使える。 | `RateLimitStore`。Redis の読み書き障害を判定側が 503 に変換。 | `core.access.createCacheRateLimitStore(cache, { namespace: "orders" })` |
+| `core.access.createMemoryRateLimitStore()` | 1 プロセスの開発・明示的テスト用ストアを作成 | 引数なし。 | `MemoryRateLimitStore`。本番では例外。 | `core.access.createMemoryRateLimitStore()` |
+| `core.access.createCors(options)` | ブラウザー向け CORS 方針を準備 | `HttpCorsOptions` が必須。 | `{ preflight, headers }` を返す関数。対象外は `undefined`。 | `core.access.createCors({ origin: "https://console.example" })` |
+| `core.access.isCorsPreflight(request)` | ブラウザーのプリフライトを判定 | 現在の Fetch リクエスト。 | `boolean`。OPTIONS、Origin と要求するメソッドのヘッダーが必要。 | `core.access.isCorsPreflight(request)` |
+| `core.access.applyCorsHeaders(response, headers)` | レスポンスに CORS ヘッダーを追加 | レスポンスと方針が返したヘッダー。 | `Response`。`Vary` を結合し、本文を保持。 | `core.access.applyCorsHeaders(response, headers)` |
+
+Serv と Kit は `core.auth.verifySession(verifyToken, token)` で信頼済みセッションを取り出します。検証が 4xx を返すとセッションは空になります。認証サービス障害は失敗した `HaiResult` を返します。ブラウザーは `core.auth.matchPermission("orders:read", ["orders:*"])` で注文リンクの表示を判断できます。API は利用者と対象リソースへの権限を引き続き検証します。
 
 <a id="access-condition-options"></a>
 
@@ -674,11 +682,39 @@ async function handlePartnerAccess(
 | 月曜 18:00、取引先が再び同期を要求 | `403` を返し、サーバーは `reason: 'time'` を記録します。 |
 | 任意の時刻に `GET /health` を要求 | ルールに該当せず、ヘルスチェックを続行します。 |
 
-Serv または Kit では、同じルールを `_serv.yml` の `http.access` または `_kit.yml` の `access` に記述します。プロキシは Serv の `http.trustedProxies`、または Kit の最上位の `trustedProxies` に設定します。判定はフレームワークが行います。[リクエストポリシーの設定](../configuration/core.ja.md#request-access)に設定例があります。
+Serv と Kit では、サービス設定の `http.access` に規則、`http.trustedProxies` にプロキシを指定します。フレームワークが判定を行います。 [リクエストポリシーの設定](../configuration/core.ja.md#request-access)に設定例があります。
 
 設定が不正なら判定関数の作成時に例外が発生します。別ファイルを変更したら、再起動するか判定関数を作り直します。`check.encryption(pathname, method)` は `'required'`、`'disabled'` または `undefined`（サービスの設定を使う）を返します。これは HTTPS とは別のアプリケーション層の暗号化設定で、アクセスの許可とは別です。`check.requiresEncryption` が `true` の場合、Serv と Kit はアプリケーション層の通信暗号化設定を必要とします。
 
 [リクエストポリシーの設定](../configuration/core.ja.md#request-access)
+
+<a id="http-rate-limit"></a>
+
+#### 利用例：2 回の利用枠を確認する
+
+この例は計数処理を直接確認します。Serv と Kit では `http.rateLimit` を設定し、信頼済みアドレスの解決と応答の組み込み、ストアの管理をホストに任せます。 [Serv のレート制限](serv.ja.md#rate-limit-example) · [Kit のレート制限](kit.ja.md#rate-limit-example)
+
+```ts
+import { core } from '@h-ai/core'
+
+// 開発プロセス内でアトミックに計数するストアを作ります。本番では共有 Redis を使います。
+const store = core.access.createMemoryRateLimitStore()
+// 同じ信頼済み接続元について、作成したストアで 10 秒間に 2 回まで許可します。
+const check = core.access.createRateLimiter({ store, windowMs: 10_000, maxRequests: 2 })
+
+for (const requestId of ['request-1', 'request-2', 'request-3']) {
+  // 同じ接続元のリクエストを模擬します。許可時は Headers、超過時は Response を取得します。
+  const result = await check({ clientAddress: '192.0.2.42', context: undefined, requestId })
+  if (result instanceof Response) {
+    process.stdout.write(`${result.status}\n`)
+  }
+  else {
+    process.stdout.write(`${result.get('X-RateLimit-Remaining')}\n`)
+  }
+}
+```
+
+最初と 2 回目の残り回数は 1 と 0 です。3 回目は HTTP 429 と `Retry-After` を返します。ホストは許可時のヘッダーを業務レスポンスに追加し、拒否時は得られたレスポンスを返します。共有ストアでは Redis キーの期限で時間枠が切り替わります。
 
 <a id="id-api"></a>
 

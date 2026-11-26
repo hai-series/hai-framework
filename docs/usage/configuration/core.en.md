@@ -28,7 +28,7 @@ At Node startup, call `core.init({ configDir: './config' })` to read `config/_co
 
 ### HTTP request access
 
-The HTTP service applies the policy. Put it under `http.access` in `config/_serv.yml` for Serv or under the top-level `access` in `config/_kit.yml` for SvelteKit. Both use Core to check the policy when creating the HTTP application or request handler. The `_core.yml` validator rejects `access` and `global`.
+The HTTP service applies the policy. Put it under `http.access` in `config/_serv.yml` for Serv or under `http.access` in `config/_kit.yml` for SvelteKit. Both use Core to check the policy when creating the HTTP application or request handler. The `_core.yml` validator rejects `access` and `global`.
 
 Omit `access` or set it to `false` to disable this policy. To enable it, write `global` and/or `rules` inside `access`. You can instead use `access.file` to point to a YAML file with `global` or `rules` at the top level. The file is read at startup, has a 1 MiB limit and is resolved relative to the server's working directory.
 
@@ -76,20 +76,21 @@ http:
             end: '18:00'
 ```
 
-`global` checks every request handled by the service, including health checks. In the example, `192.0.2.7` is denied even though it belongs to the allowed subnet. A request for an order from `192.0.2.10` must also pass the weekday time rule. At 18:00 the window has ended. For SvelteKit, move the entire `access` block to the top level of `_kit.yml`.
+`global` checks every request handled by the service, including health checks. In the example, `192.0.2.7` is denied even though it belongs to the allowed subnet. A request for an order from `192.0.2.10` must also pass the weekday time rule. At 18:00 the window has ended. Use the same `http.access` block in `_kit.yml` for SvelteKit.
 
 #### Restrict SvelteKit requests to business hours
 
-Set the time window at the top level of `config/_kit.yml`. This example allows requests reaching the SvelteKit handler from 09:00 up to 18:00 on weekdays in Shanghai. To restrict only an API, put the window in a path rule so it does not cover the sign-in route.
+Set the time window under `http.access` in `config/_kit.yml`. This example allows requests reaching the SvelteKit handler from 09:00 up to 18:00 on weekdays in Shanghai. To restrict only an API, put the window in a path rule so it does not cover the sign-in route.
 
 ```yaml schema=@h-ai/kit:KitConfigSchema
-access:
-  global:
-    timezone: Asia/Shanghai
-    windows:
-      - days: [1, 2, 3, 4, 5]
-        start: '09:00'
-        end: '18:00'
+http:
+  access:
+    global:
+      timezone: Asia/Shanghai
+      windows:
+        - days: [1, 2, 3, 4, 5]
+          start: '09:00'
+          end: '18:00'
 ```
 
 #### Keep the policy in a separate file
@@ -112,8 +113,9 @@ http:
 In SvelteKit, reference it in `config/_kit.yml`.
 
 ```yaml schema=@h-ai/kit:KitConfigSchema
-access:
-  file: ./config/security/request-access.yml
+http:
+  access:
+    file: ./config/security/request-access.yml
 ```
 
 Put all rules in the referenced file when `file` is set. On another Node HTTP framework, call `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` at startup. Pass the request path, method, and trusted client IP to the returned checker.

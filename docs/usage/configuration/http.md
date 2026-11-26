@@ -64,7 +64,7 @@ HAI_SERV_REFRESH_COOKIE_SECURE=false
 
 Kit 的 YAML 字段与默认值见 [Kit 配置清单](kit.md#配置清单)。
 
-`config/_kit.yml` 的 `server` 默认同Serv，`transport` 默认 `false`；默认协商路径为 `/api/_hai/key-exchange`，与Serv默认不同。Kit 没有 `close()`，应用在 `hooks.server.ts` 调用 `kit.createHandle()` 时传入认证、Cookie、限流和请求处理函数，不能把Serv 整个 `http` 对象放入Kit。
+`config/_kit.yml` 和 `config/_serv.yml` 都在 `http` 下设置 `trustedProxies` 和 `access`。Kit 在 `hooks.server.ts` 调用 `kit.createHandle({ http, transport })` 时还可传入认证、Cookie、限流和请求处理函数。
 
 SvelteKit 子目录的构建设置与 basePath 传递见 [Kit 接入](../function/kit.md#host-options)。
 
@@ -79,7 +79,7 @@ transport: false
 
 在 `_serv.yml` 或 `_kit.yml` 中设置传输路径、大小和时间窗口；密钥环、registry 与客户端实例由代码接入，见[调用参数](../function/crypto.md#call-options)。HTTPS 负责网络身份与通道保护。
 
-Serv 的密钥协商路径是相对于 `http.apiPrefix` 的子路径，Kit 使用服务端完整路径，API Client 相对于 `baseUrl`。例如 Serv 前缀 `/backend/api` 配合子路径 `/_hai/key-exchange`，完整路径为 `/backend/api/_hai/key-exchange`，客户端 `baseUrl` 使用 `/backend/api`。明文预算按 UTF-8 字节计量，使用 `routePlaintextBytes` 为附件等大材料按完整路径段预算。[Serv](serv.md#配置清单) · [Kit](kit.md#配置清单) · [API Client 调用参数](../function/api-client.md#call-options) · [Crypto 调用参数](../function/crypto.md#call-options)
+Serv、Kit 和 API Client 都使用从站点根开始的 `transport.keyExchangePath`，默认 `/api/v1/_hai/key-exchange`。例如 Serv 的 `http.apiPrefix` 为 `/backend/api` 时，服务端和客户端可同时把 `transport.keyExchangePath` 设为 `/backend/api/_hai/key-exchange`，客户端 `baseUrl` 仍包含协议、主机和业务前缀。明文预算按 UTF-8 字节计量，使用 `routePlaintextBytes` 为附件等大材料按完整路径段预算。[Serv](serv.md#配置清单) · [Kit](kit.md#配置清单) · [API Client 调用参数](../function/api-client.md#call-options) · [Crypto 调用参数](../function/crypto.md#call-options)
 
 ```yaml schema=@h-ai/serv:ServConfigSchema
 transport:
@@ -88,7 +88,7 @@ transport:
   maxRequestAgeSeconds: 300
   routePlaintextBytes:
     /api/v1/feedback/*/attachments: 8388608
-  keyExchangePath: /_hai/key-exchange
+  keyExchangePath: /api/v1/_hai/key-exchange
   excludePaths: [/health, /ready]
 ```
 

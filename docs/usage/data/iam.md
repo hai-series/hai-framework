@@ -211,7 +211,7 @@ role-reader 包含 permission-read，与前两条关联后，user-42 才获得 o
 | `expires_at` | `TIMESTAMP` | 是 | — | API Key 的使用截止时间。 | `null` |
 | `created_at` | `TIMESTAMP` | 否 | — | API Key 签发时间。 | `2026-11-17T00:00:00Z` |
 | `last_used_at` | `TIMESTAMP` | 是 | — | 最近一次使用时间。 | `NULL` |
-| `scopes` | `JSON` | 是 | — | API Key 可使用的授权范围。 | `["orders.read"]` |
+| `scopes` | `JSON` | 是 | — | API Key 配置的权限范围。 | `["orders:read"]` |
 
 <a id="供程序调用的-api-凭据登记"></a>
 
@@ -247,6 +247,8 @@ apikey-42 属于 user-42，只允许 orders.read。key_hash/key_prefix 已脱敏
 | `user_id` | `TEXT` | 否 | — | 引用本地用户。与 `directory_id` 组成唯一组合，删除用户会级联清除绑定。 | `user-42` |
 
 API Key 原始值只在签发时返回。用 `iam.user`、`iam.authz` 等公开入口修改账号、角色或权限，IAM 会同步维护关联会话和缓存。
+
+`verifyApiKey` 查验 Key 的所属账户，并将该账户当前授权与 Key 范围的交集作为 `VerifiedApiKey.permissions` 返回。该字段在认证时计算。 [程序凭据](../function/iam.md#api-keys)
 
 <a id="记录目录条目与本地用户的归属"></a>
 
@@ -298,7 +300,7 @@ IAM 写入 6 类缓存记录。以下是逻辑键。如果 Cache 设置了 `keyP
 | `session.credentialVersion` | `string` | — | 签发时绑定的凭据版本，改密码后用来拒绝旧会话。 | `credential-version-42` |
 | `session.terminalType` | `string` | — | 签发时保存的终端分组。登录省略终端时写入 `web`。 | `web` |
 | `session.apiKeyId` | `string` | — | 仅 API Key 派生会话保存关联密钥 ID。 | `apikey-42` |
-| `session.apiKeyScopes` | `string[]` | — | API Key 派生会话的授权范围。 | `["orders.read"]` |
+| `session.apiKeyScopes` | `string[]` | — | API Key 派生会话的授权范围。 | `["orders:read"]` |
 | `session.roles` | `string[]` | — | 当前会话的角色码。 | `["reader"]` |
 | `session.permissions` | `string[]` | — | 当前会话的权限码。 | `["orders.read"]` |
 | `session.source` | `string` | — | 可选的登录来源。 | `pc` |

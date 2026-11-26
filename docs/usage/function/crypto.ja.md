@@ -445,7 +445,8 @@ Node サーバーは専用の Worker プールで封入と開封を行います�
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
 | `crypto.transport.createServer(options)` | 通信マネージャーを作る。サーバーで鍵リングと共有ストアを渡す。 | 必須の `options` にサーバー鍵リングと登録ストアを渡す。容量と時間制限は[サーバーとクライアントの引数](#call-options)を参照。 | `HaiResult<TransportEncryptionManager>` | `crypto.transport.createServer({ serverKeyRing, keyStore })` |
-| `crypto.transport.createClient(options)` | クライアントセッションを作る。鍵交換 URL はサーバーの設定と一致させる。 | 必須の `options.keyExchangeUrl` は信頼するサービスを指す。 `options.fetch` とローカル容量制限は任意。[サーバーとクライアントの引数](#call-options)を参照。 | `TransportClient` | `crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange' })` |
+| `crypto.transport.createClient(options)` | クライアントセッションを作る。鍵交換 URL はサーバーの設定と一致させる。 | 必須の `options.keyExchangeUrl` は信頼するサービスを指す。 `options.fetch` とローカル容量制限は任意。[サーバーとクライアントの引数](#call-options)を参照。 | `TransportClient` | `crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange' })` |
+| `crypto.transport.isKeyExchangePath(value)` | 鍵交換パスを検証する | 検証する値を渡します。オリジン直下から始まり、半角英数字、`_`、`-`、`.` で構成された空でないセグメントを指定します。 | `boolean`。真の場合は絶対パス型に絞り込まれます。 | `crypto.transport.isKeyExchangePath("/api/v1/_hai/key-exchange")` |
 | `crypto.transport.protocol` | 共通のヘッダー名とプロトコル定数を取得する（プロパティ）。 | `—` | `typeof crypto.transport.protocol` | `crypto.transport.protocol` |
 | `manager.getServerKeyId()` | 現在使っているサーバー鍵の ID を取得する。 | `—` | `string` | `manager.getServerKeyId()` |
 | `manager.getServerPublicKey()` | 鍵交換用の現在の公開鍵を取得する。 | `—` | `string` | `manager.getServerPublicKey()` |
@@ -547,7 +548,7 @@ session は crypto.transport.createClient が返す**クライアントの暗号
 ```ts
 // API の鍵交換 URL でクライアントセッションを作ります。
 const session = crypto.transport.createClient({
-  keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange',
+  keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange',
 })
 // 引数なしで準備状態を読みます。作成直後または破棄後は false です。
 session.ready() // false

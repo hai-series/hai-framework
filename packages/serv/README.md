@@ -12,13 +12,17 @@ hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，
 
 使用 pnpm 安装：`pnpm add @h-ai/serv`。
 
-[跟着最小示例完成接入](../../docs/usage/function/serv.md#quick-start)。 [依赖与接入顺序](../../docs/usage/function/serv.md#module-dependencies)。
+[跟着最小示例完成接入](../../docs/usage/getting-started/serv.md#quick-start)。 [依赖与接入顺序](../../docs/usage/function/serv.md#module-dependencies)。
 
 ## 配置清单
 
 生成的项目在 `config/_serv.yml` 中设置 HTTP 选项、监听地址和端口。服务端启动时先把 HTTP 选项、接口定义和处理函数传给 `serv.createApp(options)`，再把创建的应用、监听地址和端口交给 `serv.listen()`。
 
-在[模块配置清单](../../docs/usage/configuration/serv.md)中查阅配置入口、默认值、取值限制和生效条件。
+`http.access` 和 `http.trustedProxies` 用于访问控制和可信代理。启用传输加密时，`transport.keyExchangePath` 从站点根开始，默认 `/api/v1/_hai/key-exchange`。
+
+在[模块配置清单](../../docs/usage/configuration/serv.md)中查阅监听、HTTP、跨域和传输加密的字段与部署示例。配置 SvelteKit 站点时，参见 [Kit 配置清单](../../docs/usage/configuration/kit.md)。
+
+Serv 的请求访问、可信代理与限流均通过 `http` 配置。启用 `http.rateLimit` 时，应用提供计数存储。 [限流与恢复示例](../../docs/usage/function/serv.md#rate-limit-example)
 
 ## 功能说明
 
@@ -26,7 +30,11 @@ hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，
 
 [查 API 清单](../../docs/usage/function/serv.md#api-reference)，包含调用入口、输入、返回值和用法。
 
-- 按需挂载扩展 operations，并为 multipart、文件和 SSE 配置请求字节上限。 [扩展 HTTP 契约](../../docs/usage/function/serv.md#http-contract-extensions)
+- 在报告助手中显示聊天增量、保存写作偏好，或在商品后台生成图像。 [流式聊天](../../docs/usage/function/serv.md#ai-streaming-procedures-api) · [记忆写入](../../docs/usage/function/serv.md#ai-memory-write-procedures-api) · [音频与图像生成](../../docs/usage/function/serv.md#ai-media-procedures-api)
+- 为授权的审计员签发实时语音票据并播放报告。 [IAM 语音装配](../../docs/usage/function/serv.md#iam-audio-api)
+- 为管理端挂载角色权限和 API Key 管理、私有文件中转或订单关单。 [IAM 管理](../../docs/usage/function/serv.md#iam-management-procedures-api) · [文件中转](../../docs/usage/function/serv.md#storage-transfer-procedures-api) · [支付关单](../../docs/usage/function/serv.md#payment-close-order-procedures-api)
+- 按已挂载的操作配置 multipart、文件和 SSE 请求上限。 [文件与流式传输](../../docs/usage/function/serv.md#http-contract-extensions)
+- 订单 API 可以通过 `serv.createContractHandler()` 挂到 Kit；两端使用相同的 A2A 处理器、访问策略和限流配置。
 
 ## 数据结构
 
@@ -42,7 +50,7 @@ pnpm --filter @h-ai/serv typecheck
 pnpm --filter @h-ai/serv lint
 ```
 
-声明旁的 JSDoc 示例从实际 `@h-ai/serv` 或已公开的 features 子路径导入；内部 Hono/guard/router/transport 示例明确标注“模块内部上下文”，不代表根 API。示例区分工厂的启动配置异常、领域 HaiResult、HTTP middleware 状态码和监听句柄的 Promise<void> 关闭；默认 AI completion 仍只返回非流式 JSON。框架维护运行 `node scripts/check-module-jsdoc.mjs --package serv` 对实际声明和内部词法绑定编译示例，编译不代替真实 HTTP、授权与分布式防重放验收。
+公开 API 的 JSDoc 示例从 `@h-ai/serv` 导入；内部 Hono/guard/router/transport 示例明确标注“模块内部上下文”，不代表根 API。示例区分工厂的启动配置异常、领域 HaiResult、HTTP middleware 状态码和监听句柄的 Promise<void> 关闭；默认 AI completion 仍只返回非流式 JSON。框架维护运行 `node scripts/check-module-jsdoc.mjs --package serv` 对实际声明和内部词法绑定编译示例，编译不代替真实 HTTP、授权与分布式防重放验收。
 
 ## 许可证
 

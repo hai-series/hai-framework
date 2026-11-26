@@ -208,7 +208,7 @@ role-reader includes permission-read; with the user-role link, user-42 gains ord
 | `expires_at` | `TIMESTAMP` | Yes | — | API key expiry time. | `null` |
 | `created_at` | `TIMESTAMP` | No | — | API key issuance time. | `2026-11-17T00:00:00Z` |
 | `last_used_at` | `TIMESTAMP` | Yes | — | Last used time. | `NULL` |
-| `scopes` | `JSON` | Yes | — | Scopes available to the API key. | `["orders.read"]` |
+| `scopes` | `JSON` | Yes | — | Permission scopes configured for the API key. | `["orders:read"]` |
 
 <a id="credentials-for-programmatic-calls"></a>
 
@@ -244,6 +244,8 @@ apikey-42 belongs to user-42 and allows orders.read only. Redacted digest/prefix
 | `user_id` | `TEXT` | No | — | References the local user. Unique with `directory_id`. Deleting the user also removes the binding. | `user-42` |
 
 IAM returns the original API key only when issuing it. Update accounts, roles, and permissions through APIs such as `iam.user` and `iam.authz` so IAM can update the related sessions and cache.
+
+`verifyApiKey` checks the owner account and computes `VerifiedApiKey.permissions` at verification time by intersecting its current grants with the key scopes. [Program credentials](../function/iam.en.md#api-keys)
 
 <a id="bind-a-directory-entry-to-a-local-account"></a>
 
@@ -293,7 +295,7 @@ IAM writes six cache record families. These are logical keys. Redis adds `keyPre
 | `session.credentialVersion` | `string` | — | Credential version bound at issuance, used to refuse old sessions after a password change. | `credential-version-42` |
 | `session.terminalType` | `string` | — | Client category saved at issuance. Sign-ins that omit it store `web`. | `web` |
 | `session.apiKeyId` | `string` | — | Bound key ID on sessions issued from an API key. | `apikey-42` |
-| `session.apiKeyScopes` | `string[]` | — | Allowed scopes of a session issued from an API key. | `["orders.read"]` |
+| `session.apiKeyScopes` | `string[]` | — | Allowed scopes of a session issued from an API key. | `["orders:read"]` |
 | `session.roles` | `string[]` | — | Role codes for the session. | `["reader"]` |
 | `session.permissions` | `string[]` | — | Permission codes for the session. | `["orders.read"]` |
 | `session.source` | `string` | — | Optional sign-in source. | `pc` |

@@ -209,7 +209,7 @@ user-42 に role-reader が割り当てられ、同じ組合せは一度だけ�
 | `expires_at` | `TIMESTAMP` | 可 | — | API Key の利用期限。 | `null` |
 | `created_at` | `TIMESTAMP` | 不可 | — | API Key の発行時刻。 | `2026-11-17T00:00:00Z` |
 | `last_used_at` | `TIMESTAMP` | 可 | — | 最終利用時刻。 | `NULL` |
-| `scopes` | `JSON` | 可 | — | API Key に許可する範囲。 | `["orders.read"]` |
+| `scopes` | `JSON` | 可 | — | API キーに設定された権限のスコープ。 | `["orders:read"]` |
 
 <a id="プログラム用-api-認証情報"></a>
 
@@ -245,6 +245,8 @@ user-42 の注文参照専用です。秘匿した値から元のキーは復元
 | `user_id` | `TEXT` | 不可 | — | ローカル利用者を参照し、`directory_id` と一意の組になります。利用者の削除時に紐付けも削除されます。 | `user-42` |
 
 API Key の元の値は発行時だけ返ります。アカウント、ロール、権限の変更には `iam.user` や `iam.authz` などの公開 API を使います。IAM が関連するセッションやキャッシュを更新します。
+
+`verifyApiKey` は所有アカウントを確認し、現在のアカウント権限とキースコープの共通部分を検証時に計算して `VerifiedApiKey.permissions` を返します。 [API キーによる認証](../function/iam.ja.md#api-keys)
 
 <a id="ディレクトリエントリーをローカル利用者に関連付ける"></a>
 
@@ -296,7 +298,7 @@ IAM は 6 種類のキャッシュに書き込みます。以下は論理キー�
 | `session.credentialVersion` | `string` | — | 発行時の認証情報の版。パスワード変更後の旧セッションを拒否します。 | `credential-version-42` |
 | `session.terminalType` | `string` | — | 発行時に保存する端末区分。ログイン時に省略すると `web` を保存します。 | `web` |
 | `session.apiKeyId` | `string` | — | API Key から発行したセッションのキー ID。 | `apikey-42` |
-| `session.apiKeyScopes` | `string[]` | — | API Key から発行したセッションの許可範囲。 | `["orders.read"]` |
+| `session.apiKeyScopes` | `string[]` | — | API Key から発行したセッションの許可範囲。 | `["orders:read"]` |
 | `session.roles` | `string[]` | — | セッションのロールコード。 | `["reader"]` |
 | `session.permissions` | `string[]` | — | セッションの権限コード。 | `["orders.read"]` |
 | `session.source` | `string` | — | 任意のログイン元。 | `pc` |

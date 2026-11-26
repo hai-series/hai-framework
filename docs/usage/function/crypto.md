@@ -446,6 +446,7 @@ Node 服务端通过独立的 Worker 池封包和解包。池满时可返回 `TR
 | --- | --- | --- | --- | --- |
 | `crypto.transport.createServer(options)` | 创建共享传输管理器 | 必填 `options` 包含服务端密钥环与注册存储。容量及时间限制见[服务端和客户端参数](#call-options)。 | `HaiResult<TransportEncryptionManager>` | `crypto.transport.createServer({ serverKeyRing, keyStore })` |
 | `crypto.transport.createClient(options)` | 创建加密 HTTP 会话 | 必填 `options.keyExchangeUrl` 指向可信服务，`options.fetch` 与本地明文上限可省略。见[服务端和客户端参数](#call-options)。 | `TransportClient: init / encryptedFetch / destroy` | `crypto.transport.createClient({ keyExchangeUrl: "https://api.example.com/api/v1/_hai/key-exchange" })` |
+| `crypto.transport.isKeyExchangePath(value)` | 校验密钥交换路径 | 传入待校验的值。路径从站点根开始，使用由英文字母、数字、`_`、`-`、`.` 组成的非空普通路径段。 | `boolean`。返回 `true` 时收窄为绝对路径类型。 | `crypto.transport.isKeyExchangePath("/api/v1/_hai/key-exchange")` |
 | `crypto.transport.protocol` | 复用协议路径与头名 | `—` | `typeof crypto.transport.protocol` | `crypto.transport.protocol` |
 | `manager.getServerKeyId()` | 读取当前服务端密钥版本 | `—` | `string` | `manager.getServerKeyId()` |
 | `manager.getServerPublicKey()` | 提供握手公钥 | `—` | `string` | `manager.getServerPublicKey()` |
@@ -547,7 +548,7 @@ async function exchange(manager: TransportEncryptionManager, clientPublicKey: st
 ```ts
 // 用业务 API 的握手 URL 构造客户端会话，返回可初始化的实例。
 const session = crypto.transport.createClient({
-  keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange',
+  keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange',
 })
 // 无参数读取会话就绪值。刚创建或已销毁的会话返回 false。
 session.ready() // false

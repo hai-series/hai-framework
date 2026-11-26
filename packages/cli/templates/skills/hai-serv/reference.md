@@ -71,7 +71,7 @@ const procedures = {
 const app = serv.createApp({
   contract,
   procedures,
-  iam,
+  auth: { iam },
   http: {
     apiPrefix: '/api/v1',
     openapi: { path: '/openapi.json' },
@@ -112,7 +112,7 @@ const app = serv.createApp({
     openapi: security.exposeApiDocs ? servConfig.http.openapi : false,
     docs: security.exposeApiDocs ? servConfig.http.docs : false,
   },
-  iam,
+  auth: { iam },
   refreshCookie: { secure: security.secureRefreshCookie },
   middlewares: [{
     // 使用允许来源和配置的请求头、响应头生成 CORS 中间件，不匹配的来源不取得跨域授权。
@@ -128,17 +128,21 @@ const app = serv.createApp({
 
 - 生产环境 `cors.origin` 禁止为空或 `*`，启动时 fail-fast。
 - 普通 Web Origin 仅接受 HTTP(S)；原生 Origin 通过 `cors.nativeOrigins` 显式允许 HTTP(S)、Capacitor 或 Tauri。
-- Origin 按完整规范化值精确匹配，不使用前缀/后缀匹配。
+- Origin 按完整规范化值精确匹配。配置 `allowedHeaders` 时，预检只声明名单中的头部。将业务和客户端实际使用的头加入配置，例如 `X-Hai-Terminal`。普通 OPTIONS 继续路由。
 - 生产环境默认给刷新 Cookie 加 `Secure`，并关闭 OpenAPI 和 docs。受控内网或 VPN 的 HTTP 入口可在后端进程设置 `HAI_SERV_REFRESH_COOKIE_SECURE=false`，重启并重新登录。HTTP 会明文传输刷新凭据，生产 CORS 仍须配置完整的实际 Origin。
 
 ### 2.1 Audio WebSocket 安全接入
+
+审计员需要边生成边听报告摘要时，使用 `serv.createIamAudio({ ai, iam, config: settings.audio, permission: 'reports:read' })`。把返回的 `config` 交给 `serv.createApp({ audio })`，把 `issueTicket` 与 `apiContract.extensions.ai.audio.issueTicket` 挂在同一契约位置。报告页发送带访问令牌的 HTTP 请求取得 30 秒一次性票据，随后以 `wss:` 连接。工厂在消费票据时重新检查账号与权限，使用操作对应的默认模型。
+
+`audio.path` 是站点绝对路径。省略时取 `http.apiPrefix` 加 `/ai/audio`。受管 Fullstack 网关从同一配置转发 WebSocket Upgrade，网关不记录票据查询。为私有模型、音色或并发配额定制授权时，可直接装配下面的回调。
 
 ```typescript
 // 在已装配的 App 中挂载 AI 音频能力，使用应用提供的票据、授权与会话关闭回调。无效或未获授权的请求不能开启会话。
 const app = serv.createApp({
   contract,
   procedures,
-  iam,
+  auth: { iam },
   audio: {
     ai,
     verifyTicket: consumeAudioTicket, // 校验用途/时效并原子消费，返回 { session, grant? }（推荐 iam.ticket.consume）
@@ -152,7 +156,7 @@ const app = serv.createApp({
 - `verifyTicket` 返回 `HaiResult<AudioTicketVerification>`（`{ session, grant? }`）；`grant` 承载票据绑定的操作/模型/会话，供 `authorize` 交叉校验 `start` 未越权。
 - 每帧经运行时 Zod 校验并按严格状态机接受（识别只收音频、合成只收文本、`start`/`done` 各一次、`segmentId` 会话内唯一）；输入队列、消息积压、发送缓冲均有上限（`preAuthTimeoutMs`/`maxPendingMessages`/`maxSendBufferBytes` 等可调），超限或取消时以领域错误关闭并级联中止上游。
 - `authorize` 返回的 `AuthorizedAudioRequest` 是唯一会传给 `ai.audio` 的模型、音色与格式配置；未提供时客户端的付费参数会被忽略（若票据 `grant.model` 存在则采用之）。
-- IAM 权限、Persona、套餐配额和并发计数属于应用策略；框架提供校验与结束钩子，不硬编码业务权限名或存储。
+- IAM 权限、Persona、套餐配额和并发计数由应用管理。断连后才成功的授权也会触发结束钩子，Node 停机限时等待授权与释放。底层接收器按 `maxMessageBytes` 限制完整消息。
 
 ### 3. 扩展应用自有 contract + procedures
 
@@ -240,7 +244,7 @@ const procedures = {
 }
 
 // 将契约、过程及传入 HTTP/IAM 设置装配为 HTTP App。
-const app = serv.createApp({ contract, procedures, http, iam })
+const app = serv.createApp({ contract, procedures, http, auth: { iam } })
 ```
 
 注意要点：
@@ -264,6 +268,8 @@ export default { fetch: handler }
 ```
 
 ### 6. 通过 `config/_serv.yml` 管理 HTTP 配置
+
+Serv 的 `_serv.yml` 和 Kit 的 `_kit.yml` 都以 `http.trustedProxies` 和 `http.access` 配置可信代理及访问控制。两者都用 `transport` 设置密钥交换路径、双向明文上限和请求时间窗口。填写从站点根开始的 `transport.keyExchangePath`，默认 `/api/v1/_hai/key-exchange`。排除路径和逐路由容量同样使用实际请求路径。
 
 `@h-ai/serv` 不自己扫描 YAML；推荐由 `@h-ai/core` 统一加载，再用 `ServConfigSchema` 校验：
 
@@ -290,11 +296,10 @@ const app = serv.createApp({
   transport: servConfig.transport === false
     ? undefined
     : {
+        ...servConfig.transport,
         crypto,
         serverKeyRing,
         keyStore,
-        keyExchangePath: servConfig.transport.keyExchangePath,
-        excludePaths: [...servConfig.transport.excludePaths],
       },
 })
 ```
@@ -318,7 +323,7 @@ http:
     readyPath: /ready
 
 transport:
-  keyExchangePath: /_hai/key-exchange
+  keyExchangePath: /api/v1/_hai/key-exchange
   excludePaths:
     - /health
     - /ready
@@ -397,7 +402,7 @@ const app = serv.createApp({
   transport: {
     crypto,
     serverKeyRing,
-    // keyExchangePath 默认 '/_hai/key-exchange'
+    // keyExchangePath 默认 '/api/v1/_hai/key-exchange'
     keyStore, // 已连接的基于 @h-ai/cache 的 Redis registry。
   },
 })
@@ -433,11 +438,11 @@ await apiClient.init({
 **上下文工厂优先级**（`context.session` 填充来源）：
 
 1. 显式 `createContext`（高级场景：多租户、额外字段）
-2. `verifyToken`（逃脱口：使用非 @h-ai/iam 的认证服务）
-3. `iam.auth.verifyToken`（推荐：传入 `iam` 后自动启用）
+2. `auth.verifyToken`（自定义校验：使用非 @h-ai/iam 的认证服务）
+3. `iam.auth.verifyToken`（推荐：传入 `auth.iam` 后自动启用）
 4. 默认 `parseRequestContext`：仅解析请求元数据，`session` 为 `undefined`
 
-> ⚠️ `verifyToken` 会在每次请求调用（不缓存）；verifyToken 失败或抛错统一收敛为 `session=undefined`，由 route 的 `.auth()` / `.permission()` / `.role()` 返回失败 HaiResult，`error.httpStatus=401`；普通 procedure 的 HTTP 响应默认仍为 200。
+> 携带访问令牌的请求会调用 `verifyToken`。没有令牌或校验返回有效 4xx 时，受保护 procedure 返回 `error.httpStatus=401` 的失败 HaiResult。校验依赖故障中止请求，由 `createApp` 返回带追踪编号的 HTTP 5xx。
 
 ### 链式 procedure guard
 
@@ -484,10 +489,12 @@ const procedures = serv
 `@h-ai/serv` 的 pipeline 分三层：
 
 1. **HTTP middleware 层**：通过 `serv.createApp({ middlewares })` 注入 HTTP middleware
-2. **context 层**：通过 `verifyToken` / `createContext` / `serv.buildAuthContextFactory()` 自定义请求上下文
+2. **context 层**：通过 `auth.verifyToken` / `createContext` / `serv.buildAuthContextFactory()` 自定义请求上下文
 3. **route guard 层**：通过 `.auth()` / `.permission()` / `.role()` 声明认证授权
 
 #### HTTP middleware
+
+请求限流通过 `serv.createApp({ http: { rateLimit } })` 启用。默认 `false`，窗口默认 60000 毫秒，容量默认 100 次。应用将 `core.access.createCacheRateLimitStore(cache, { namespace })` 创建的原子存储传入 `rateLimit.store`。同一可信 IP 在同一窗口内跨路由共用额度，多节点用同一 Redis 和命名空间。第 101 次计数返回 429，按 `Retry-After` 等待后再次请求。存储故障返回 503。密钥交换也计数，预检和内置探针单独处理。单进程开发可用 `core.access.createMemoryRateLimitStore()`。
 
 适用于请求日志、trace、限流、CORS、租户头校验等 **HTTP 层** 横切逻辑，也可挂载不适合进入 JSON/oRPC contract 的 WebSocket、文件和二进制端点。常见 CORS 场景可直接复用 `serv.cors(...)`：
 
@@ -543,7 +550,7 @@ const app = serv.createApp({
 执行顺序为：`securityHeaders` → 内置 CORS 响应包装/握手和预检策略 → `transport`（若启用）/请求策略 → 普通 `middlewares` → health/refresh-cookie/OpenAPI/docs/oRPC routes。
 
 - 普通 `middlewares` 在解密和策略之后执行，提前响应仍受访问策略和响应加密约束。二进制端点显式加入 transport.excludePaths；内置 CORS 预检和密钥交换也执行策略。
-- 公开只读文件优先使用 `serv.storageAssets(...)`；应用仍须显式提供 key/MIME 白名单、缓存与跨域策略，框架不内置头像等业务概念。
+- 公开只读文件优先使用 `serv.storageAssets(...)`；应用仍须显式提供 key/MIME 白名单、缓存与跨域策略，对象最多 5 MiB，超限返回 404。
 - 资源 GET 使用同一次读取中的 MIME、ETag 和正文，HEAD 只读元数据。需要定制 Storage 适配器时，提供 `file.head()` 和 `file.getStreamWithMetadata()`。
 - 私有资源、Range 下载或动态授权继续使用自定义 middleware/procedure。
 - 若需要读取解密后的业务 body，请改用 context / procedure 层扩展。
@@ -574,7 +581,7 @@ const app = serv.createApp({
 
 选择建议：
 
-- 只换 token 校验实现：`verifyToken`
+- 只换 token 校验实现：`auth.verifyToken`
 - 在默认认证上下文之上追加字段：`buildAuthContextFactory(...) + createContext`
 - 完全接管上下文构造：`createContext`
 
@@ -692,7 +699,7 @@ const spec = await serv.generateSpec(contract, {
 | `health`    | `{ path: '/health', readyPath: '/ready' }` | 健康与就绪检查端点                                                                                     |
 | `openapi`   | `false`                                    | OpenAPI JSON endpoint，显式开启                                                                        |
 | `docs`      | `false`                                    | Scalar 文档页，显式开启；在文档目录下挂载 `_hai/scalar.js`，页面使用相对脚本和 spec 地址；认证仍在后端执行 |
-| `transport` | `undefined`                                | 顶层配置；启用后默认挂载 `{apiPrefix}/_hai/key-exchange`                                               |
+| `transport` | `undefined`                                | 顶层配置；启用后默认挂载 `/api/v1/_hai/key-exchange`                                               |
 
 ```ts
 import type { ServHttpConfigInput } from '@h-ai/serv'
@@ -722,7 +729,7 @@ const http: ServHttpConfigInput = {
 
 AI 默认 feature 把 objectId 绑定到可信 `context.session.userId`，客户端可省略；所有读写与记忆查询都使用授权后的主体。sessionId 与 objectId 组成复合会话，写入默认 sessionId 为 `default`。其它 objectId 默认被拒绝；跨用户管理需显式提供 `authorizeObject({ context, objectId, sessionId, operation })`，按可信权限及租户关系严格返回 true。
 
-`chats.createCompletion` 只提供非流式 JSON 输出，stream 字段无论 true/false 都在 procedure 前以 HTTP 400 拒绝。完整 function tools（嵌套 JSON Schema/strict）、tool_choice（auto/none/required/已定义函数名）和角色消息直接传给模型，不自动执行工具。工具结果必填 tool_call_id，不能把未知字段静默裁剪为看似成功。流式调用使用应用自己的 endpoint 与 ai.llm.chatStream 输出契约。
+`chats.createCompletion` 只提供非流式 JSON 输出，stream 字段无论 true/false 都在 procedure 前以 HTTP 400 拒绝。完整 function tools（嵌套 JSON Schema/strict）、tool_choice（auto/none/required/已定义函数名）和角色消息直接传给模型，不自动执行工具。工具结果必填 tool_call_id，不能把未知字段静默裁剪为看似成功。需要显示逐步生成的回复时，从 `serv.createAiStreamingProcedures()` 选取 `chats.streamCompletion`。
 
 ```typescript
 // 用初始化后的 AI 实例创建处理器。对象级操作还须通过本例中的 ai.manage 授权。
@@ -732,11 +739,43 @@ const aiProcedures = serv.createAiProcedures({
 })
 ```
 
-### 文件与事件流端点
+### 按业务能力选择路由
 
-内置扩展工厂是 `serv.createAiExtensionProcedures`、`serv.createIamExtensionProcedures`、`serv.createStorageExtensionProcedures`、`serv.createAuditProcedures` 和 `serv.createPaymentExtensionProcedures`。将选择的 procedures 和 `apiContract.extensions` 中对应节点挂到相同路由树，并传入可信的业务鉴权回调。
+继续从 `@h-ai/serv` 根入口导入 `serv`。将选择的 procedures 和 `apiContract.extensions` 中对应节点挂到相同路由树。业务授权回调从验证过的会话与服务端记录判断。
+
+| 工厂 | 真实使用场景 |
+| --- | --- |
+| `serv.createAiStreamingProcedures(deps)` | 聊天页逐段显示回复。为访问其他主体的会话显式核对权限。 |
+| `serv.createAiMemoryWriteProcedures(deps)` | 用户维护自己的助手记忆。清空需要可信的作用域授权。 |
+| `serv.createAiMediaProcedures(deps)` | 用户生成图片或语音。业务授权回调可检查权限、额度并选定模型。 |
+| `serv.createIamManagementProcedures(deps)` | 管理员读取角色权限或管理指定用户的 API Key。核对目标角色或用户的管理权限。 |
+| `serv.createStorageTransferProcedures(deps)` | 登录用户经业务服务器上传或下载私有文件。核对完整对象 key。 |
+| `serv.createAuditProcedures(deps)` | 审计员查看本租户的审计日志，归档另行核对权限和再鉴别。 |
+| `serv.createPaymentCloseOrderProcedures(deps)` | 后台关闭指定订单。授权回调从可信订单记录读取支付渠道及交易标识。 |
+
+聊天页只开放流式补全时，从已初始化的 AI 和 IAM 各取一项实际依赖。传输层开始后，客户端收到 SSE 事件，普通会话守卫会先检查用户身份。
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { type AiStreamingProcedureDeps, type ServIam, serv } from '@h-ai/serv'
+
+export function createChatApp(ai: AiStreamingProcedureDeps['ai'], iam: ServIam) {
+  const streamCompletion = apiContract.extensions.ai.chats.streamCompletion
+  // 用已初始化的流式聊天能力绑定共享端点。当前会话只能访问自己的主体数据。
+  const routes = serv.createAiStreamingProcedures({ ai })
+  return serv.createApp({
+    auth: { iam },
+    contract: { ai: { chats: { streamCompletion } } },
+    procedures: { ai: { chats: { streamCompletion: routes.chats.streamCompletion } } },
+    // 本例单次聊天请求最多 64 KiB。超限在建立事件流前被拒绝。
+    transportRoutes: [{ procedure: streamCompletion, maxRequestBytes: 64 * 1024 }],
+  })
+}
+```
 
 自定义 multipart、文件和 SSE 端点通过 `route(...).auth().handleTransport(handler)` 实现。每项 `serv.createApp({ transportRoutes })` 包含 `procedure`（具体契约节点）和 `maxRequestBytes`（HTTP 请求体上限）。生产在 HTTPS 入口发布。若应用启用框架加密，为这些方法和路径显式配置 `encryption: 'disabled'`。其他 JSON 端点的加密策略继续由宿主配置。
+
+Serv 与 Kit 按 HTTP 方法分发契约。显式 HEAD 操作返回自身的状态和响应头，正文为空。设置 `http.docs.requireAuth: true` 后，文档响应使用 `Cache-Control: private, no-store`。为文档页、OpenAPI JSON 和 Scalar 脚本保留不同的路径，并避开已挂载的 GET 和 HEAD 契约路径。
 
 ## 常见模式
 
@@ -791,7 +830,7 @@ const app = serv.createApp({
     widget: createMyProcedures(),
   },
   // 应用从这个 IAM 服务派生请求认证上下文。
-  iam,
+  auth: { iam },
   http: { apiPrefix: '/api/v1' },
 })
 ```
@@ -802,7 +841,7 @@ route 实现器内置以下错误：
 
 | 错误码                          | 触发条件                                                        |
 | ------------------------------- | --------------------------------------------------------------- |
-| `HaiCommonError.UNAUTHORIZED`   | `.auth()`：`context.session` 为空（无 token 或 token 校验失败） |
+| `HaiCommonError.UNAUTHORIZED`   | `.auth()` 在缺少令牌或校验明确拒绝时返回 |
 | `HaiCommonError.FORBIDDEN`      | `.permission()` / `.role()`：无对应权限或角色                   |
 | `HaiCommonError.INTERNAL_ERROR` | route handler 抛出未处理异常                                    |
 
@@ -834,7 +873,7 @@ route 实现器内置以下错误：
 原生客户端匹配 `nativeTokenTransport.isRequest` 后，登录/注册/刷新响应保留轮换后的
 `refreshToken`，刷新请求从 `{ refreshToken }` body 读取，且不读写浏览器 Cookie。
 
-刷新失败经过同一公开错误投影，并记录英文关联日志；仅 401 认证失效会清除浏览器刷新 Cookie，限流、5xx 和缺失或非法状态保留凭据供稍后重试。未捕获的刷新异常返回安全的 HTTP 500 JSON，不公开内部 cause/ext。
+刷新失败保留浏览器 Cookie，以免竞争失败的响应清掉已轮换的新凭据。IAM 拒绝失效凭据，显式登出成功时清除 Cookie。原生刷新正文的明文上限为 16 KiB，超限返回 413。5xx 保留安全提示和追踪编号，实际原因写入服务端日志。验证 access token 的依赖故障也会返回安全 5xx，客户端不会自动刷新。
 
 若同时启用 `transport: { crypto, serverKeyRing, keyStore }`，`/auth/refresh` 也必须走加密链路；cookie-only 刷新请求允许空 body，服务端不要把 `Request.body === null` 误判为需要解密的请求体。
 
@@ -846,7 +885,7 @@ const app = serv.createApp({
   contract,
   procedures,
   http: { apiPrefix: '/api/v1' },
-  iam, // 顶层句柄：同时驱动 verifyToken 与 refresh
+  auth: { iam }, // IAM 同时验证会话与刷新令牌
   refreshCookie: {
     // cookieName?: string              默认 'hai_refresh_token'
     // maxAge?: number                  默认 30 * 24 * 3600（30 天）
@@ -860,11 +899,11 @@ const app = serv.createApp({
         && security.isNativeOrigin(request.headers.get('origin') ?? ''),
     },
   },
-  // ✅ 顶层 iam 同时为 access token 校验提供默认实现，无需再传 verifyToken
+  // ✅ auth.iam 同时提供 access token 校验与 refresh
 })
 ```
 
-> **逃脱口**：不使用 `@h-ai/iam` 时，可显式传入顶层 `verifyToken: token => myAuthService.verify(token)`。
+> **逃脱口**：不使用 `@h-ai/iam` 时，可传入 `auth.verifyToken`，返回 `HaiResult`。
 
 ### Cookie 规格
 

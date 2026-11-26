@@ -13,10 +13,10 @@
 | 应用入口 | 配置位置 | 生效参数 | 默认行为 |
 | --- | --- | --- | --- |
 | 独立 API、Fullstack 的 Serv 后端 | `config/_serv.yml` | `http.access` → `serv.createApp({ http })` | `false`，不限制请求来源和时段 |
-| SvelteKit 的动态页面与接口 | `config/_kit.yml` | `access` → `kit.createHandle({ access })` | `false`，不限制请求来源和时段 |
+| SvelteKit 的动态页面与接口 | `config/_kit.yml` | `http.access` → `kit.createHandle({ http })` | `false`，不限制请求来源和时段 |
 | 浏览器 Vite、静态导出、Nginx 静态文件 | 由实际入口服务器配置 | 没有 Node 请求处理链 | 本章 Node 策略不处理这些请求 |
 
-CLI 生成的 API 和 Fullstack 后端会把 `_serv.yml` 的 `http` 传给 `serv.createApp()`。生成的 SvelteKit 服务会把 `_kit.yml` 的 `access` 传给 `kit.createHandle()`。已有应用可在启动文件或 `hooks.server.ts` 中核对这一步。策略的 IP 名单、时段和文件路径只在服务器上使用。页面加载函数只返回浏览器需要的字段，例如用于发起请求的传输设置。
+CLI 生成的 API 和 Fullstack 后端会把 `_serv.yml` 的 `http` 传给 `serv.createApp()`。生成的 SvelteKit 服务会把 `_kit.yml` 的 `http` 传给 `kit.createHandle({ http })`。已有应用可在启动文件或 `hooks.server.ts` 中核对这一步。策略的 IP 名单、时段和文件路径只在服务器上使用。页面加载函数只返回浏览器需要的字段，例如用于发起请求的传输设置。
 
 Serv 的最小配置如下。示例网段只用于说明，正式使用前替换为实际可信来源。
 
@@ -37,15 +37,16 @@ http:
 SvelteKit 使用同一种策略内容，配置层级如下：
 
 ```yaml schema=@h-ai/kit:KitConfigSchema
-trustedProxies: auto
-access:
-  rules:
-    - id: partner-api
-      paths: [/yyy/api/v1/external/**]
-      allowIps: [192.0.2.0/24]
-      timezone: Asia/Shanghai
-      windows:
-        - { days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' }
+http:
+  trustedProxies: auto
+  access:
+    rules:
+      - id: partner-api
+        paths: [/yyy/api/v1/external/**]
+        allowIps: [192.0.2.0/24]
+        timezone: Asia/Shanghai
+        windows:
+          - { days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' }
 transport: false
 ```
 
@@ -63,7 +64,7 @@ Nginx 直达对象存储的下载也不经过 Node。若文件下载本身需要
 
 ### 2.1 策略入口
 
-按实际处理 HTTP 请求的服务选择 [Serv 的 `http.access`](serv.md#配置清单) 或 [Kit 的 `access`](kit.md#配置清单)。条件字段、默认值和文件约束见 [Core 请求访问策略](core.md#请求访问策略)。
+按实际处理 HTTP 请求的服务选择 [Serv 的 `http.access`](serv.md#配置清单) 或 [Kit 的 `http.access`](kit.md#配置清单)。条件字段、默认值和文件约束见 [Core 请求访问策略](core.md#请求访问策略)。
 
 文件引用与内联的 `global/rules` 二选一，混合配置会报错。文件只包含策略正文，不再包一层 `http`、`access` 或 `serv`。
 
@@ -103,7 +104,7 @@ Nginx 直达对象存储的下载也不经过 Node。若文件下载本身需要
 
 ```yaml schema=@h-ai/serv:ServConfigSchema
 transport:
-  keyExchangePath: /_hai/key-exchange
+  keyExchangePath: /api/v1/_hai/key-exchange
 http:
   access:
     rules:
@@ -121,7 +122,7 @@ http:
 
 使用独立文件时，把 `http.access` 内的 `rules` 移到该文件，把 `transport` 留在 `_serv.yml` 或 `_kit.yml`。第 4 节说明如何引用、校验和发布此文件。服务端密钥通过私有环境变量或密钥管理服务提供。
 
-SvelteKit 在 `_kit.yml` 的 `access` 写入相同规则，并在 `transport` 打开请求加密。创建项目时选中 `crypto` 和数据库后，生成的服务端代码会从私有环境读取密钥环，并把客户端公钥和防重放记录存入数据库。页面加载函数只返回浏览器建立加密连接所需的路径和选项。部署在 `/yyy` 这类目录时，服务端和浏览器的 `basePath` 都要设置成同一个 `/yyy`。生成模板已处理这一步，已有应用见 [Kit 配置](http.md#kitcookie与请求上下文)。未选数据库时，生成的内存存储仅适合开发和测试，生产启动会拒绝。此模板默认 `transport: false`。
+SvelteKit 在 `_kit.yml` 的 `http.access` 写入相同规则，并在 `transport` 打开请求加密。选择 `crypto` 的生成项目会从私有环境读取密钥环，并使用 Cache 保存客户端公钥和防重放记录。生产环境为所有实例配置同一个 Redis；开发和测试可用内存 Cache。页面加载函数只返回浏览器建立加密连接所需的路径和选项。部署在 `/yyy` 这类目录时，服务端和浏览器的 `basePath` 都要设置成同一个 `/yyy`。生成模板会传入构建基路径。将 `transport.keyExchangePath` 显式设为 `/yyy/api/v1/_hai/key-exchange`，让浏览器通过 SvelteKit 挂载目录协商。已有应用见 [Kit 配置](kit.md#transport)。生产版启用加密时，Redis 不可用或使用内存 Cache 会导致启动失败。此模板默认 `transport: false`。
 
 Fullstack 管理模板的默认选择不同：它要求启用业务传输加密，并明确拒绝 `transport: false`；需要向外部系统提供普通 HTTPS 接口时，使用独立路径的 disabled 规则。这样不会通过关闭全局传输而意外影响后台管理链路。
 
@@ -136,7 +137,7 @@ Fullstack 管理模板的默认选择不同：它要求启用业务传输加密�
 
 required 路径也要从客户端的排除列表中移除，否则客户端仍可能发送普通请求并被服务端拒绝。全局 fetch 的排除列表不按 HTTP 方法区分；同一路径按方法选择不同协议时，调用方必须明确选择相应协议。对外服务优先使用独立前缀，可以减少客户端配置冲突。
 
-密钥交换端点是框架协议入口，本身按协议进行协商，不是普通业务加密响应；访问条件仍会检查它。OPTIONS 不携带业务密文，同样继续执行适用的 IP/时间策略。
+密钥交换端点使用自己的协商协议，适用的 IP 和时段限制仍会执行。Serv 挂载 `serv.cors()` 后，会在加密管线外处理带 `Origin` 和 `Access-Control-Request-Method` 的浏览器预检。普通 `OPTIONS` 请求按业务路由处理。Kit 的传输加密跳过所有 `OPTIONS` 请求，适用的 IP 和时段限制仍会执行。
 
 ## 3. 运维人员：先确认真实 IP 的来源
 
@@ -146,7 +147,7 @@ required 路径也要从客户端的排除列表中移除，否则客户端仍�
 
 Serv 从 Node socket 获取对端地址；Kit 使用平台提供的 `getClientAddress()`。不要将请求 JSON 或任意转发头复制为可信地址。
 
-`trustedProxies` 默认是 `auto`。直接运行 Node 服务时，它忽略转发头。使用自己的反向代理时，填写代理连接后端所用的 IP 或 CIDR 网段。填写 `[]` 时，后端一律忽略转发头。只有后端确认连接来自已配置的代理，才从右向左读取 `X-Forwarded-For`。缺少该头时再读 `X-Real-IP`。转发链无效或过长时，返回无法确认的客户端地址。
+`http.trustedProxies` 默认是 `auto`。直接运行 Node 服务时，它忽略转发头。使用自己的反向代理时，填写代理连接后端所用的 IP 或 CIDR 网段。填写 `[]` 时，后端一律忽略转发头。只有后端确认连接来自已配置的代理，才从右向左读取 `X-Forwarded-For`。缺少该头时再读 `X-Real-IP`。转发链无效或过长时，返回无法确认的客户端地址。
 
 Kit 接入代理解析后，IAM、审计、限流和业务路由的 `getClientAddress()` 使用同一结果。使用 SvelteKit Node adapter 时，保留原始 socket 地址给框架校验，不同时用未经边界校验的 `ADDRESS_HEADER` 覆盖它；其他平台按平台对客户端地址的保证配置。
 
@@ -170,7 +171,7 @@ trustedEdgeProxies: [192.0.2.10/32]
 
 受管 Web 代理和独立 SSR/API gateway 只接受白名单真实对端提供的单值 `http` 或 `https` 协议头。其他来源和组合值使用代理自身协议。Host 使用入口请求的 Host，外部 `X-Forwarded-Host`、`X-Forwarded-Port` 和 `Forwarded` 不直接透传。使用[外部 HTTPS 网关](delivery.md#外部-https-网关)时，由网关覆盖客户端提交的转发头。
 
-`trustedEdgeProxies` 只影响实际生成的 Nginx。直接公开 Node 的部署若没有 Nginx，应在 Serv/Kit 的 `trustedProxies` 中配置连接它的上游，不能只设置部署 Provider。浏览器配置只接收 `transport` 等公共字段，不应包含内部代理网段和策略文件路径。
+`trustedEdgeProxies` 只影响实际生成的 Nginx。直接公开 Node 的部署若没有 Nginx，应在 Serv/Kit 的 `http.trustedProxies` 中配置连接它的上游，不能只设置部署 Provider。浏览器配置只接收 `transport` 等公共字段，不应包含内部代理网段和策略文件路径。
 
 rootless 端口转发器有时会把外部来源替换为网关地址。已经丢失的地址无法通过增加一个转发头恢复；应选择保留来源的网络模式，或在外层可信入口完成真实 IP 解析，并实际检查后端收到的结果。
 
@@ -198,7 +199,7 @@ rules:
 
 规则文件使用字面配置，不解析 dotenv 插值或继续引用其他文件。重复 YAML 键、别名、未知字段、非法地址或时区会导致初始化失败，不会忽略失败后继续开放接口。修改后重新创建服务实例，运行中不监视文件变化。
 
-在 `_serv.yml` 设置 `http.access: { file: ./config/security/request-access.yml }`；SvelteKit 在 `_kit.yml` 设置 `access: { file: ./config/security/request-access.yml }`。
+在 `_serv.yml` 设置 `http.access: { file: ./config/security/request-access.yml }`；SvelteKit 在 `_kit.yml` 设置 `http.access: { file: ./config/security/request-access.yml }`。
 
 ### 4.2 从环境变量选择文件
 
@@ -208,10 +209,10 @@ rules:
 # Serv 后端
 HAI_SERV_HTTP_ACCESS='{"file":"./config/security/request-access.yml"}'
 # SvelteKit 后端
-HAI_KIT_ACCESS='{"file":"./config/security/request-access.yml"}'
+HAI_KIT_HTTP_ACCESS='{"file":"./config/security/request-access.yml"}'
 ```
 
-完整 `HAI_SERV` 或 `HAI_KIT` JSON 是基础，同一来源的子字段变量继续覆盖。生成命令优先输出 `HAI_SERV_HTTP_ACCESS_FILE` / `HAI_KIT_ACCESS_FILE` 等细项，JSON 位于对应模块的细项之前。完整环境优先级见[配置来源](runtime.md#配置从哪里来)。
+完整 `HAI_SERV` 或 `HAI_KIT` JSON 是基础，同一来源的子字段变量继续覆盖。生成命令优先输出 `HAI_SERV_HTTP_ACCESS_FILE` / `HAI_KIT_HTTP_ACCESS_FILE` 等细项，JSON 位于对应模块的细项之前。完整环境优先级见[配置来源](runtime.md#配置从哪里来)。
 
 内联规则同样可以用 JSON 传入。例如只对外部同步接口限制来源，并关闭该接口的框架应用层加密：
 
@@ -219,7 +220,7 @@ HAI_KIT_ACCESS='{"file":"./config/security/request-access.yml"}'
 HAI_SERV_HTTP_ACCESS='{"rules":[{"id":"delivery-sync","paths":["/api/v1/sync"],"allowIps":["192.0.2.10"],"encryption":"disabled"}]}'
 ```
 
-将示例地址替换为真实允许来源；接口原有认证、API Key 与权限校验继续执行，HTTPS 仍需保留。当前 SDK 的 Node 后端可以修改实际挂载的发布 `.env.runtime` 后重启；已有 `HAI_SERV` 或 `HAI_SERV_HTTP` 上层 JSON 时，分别修改其中的 `http.access` 或 `access`，不能只增加已被覆盖的叶子变量。Kit 同理修改 `HAI_KIT` 的 `access`。具体路径与保护范围见[重启加载运行配置](runtime.md#部署后重启加载运行配置)。
+将示例地址替换为真实允许来源；接口原有认证、API Key 与权限校验继续执行，HTTPS 仍需保留。当前 SDK 的 Node 后端可以修改实际挂载的发布 `.env.runtime` 后重启；已有 `HAI_SERV` 或 `HAI_SERV_HTTP` 上层 JSON 时，分别修改其中的 `http.access` 或 `access`，不能只增加已被覆盖的叶子变量。Kit 同理修改 `HAI_KIT` 的 `http.access` 或 `HAI_KIT_HTTP` 的 `access`。具体路径与保护范围见[重启加载运行配置](runtime.md#部署后重启加载运行配置)。
 
 自行维护且只使用 Compose `env_file` 注入环境的容器，修改该文件后需要**重新创建容器**；`docker compose restart serv` 会保留创建时的变量，见[Docker 说明](https://docs.docker.com/reference/cli/docker/compose/restart/)。通常执行 `docker compose up -d --no-deps --force-recreate serv`，无需重建镜像；沿用原项目名和全部 Compose 文件参数。
 
@@ -254,7 +255,7 @@ services:
       - ./runtime/security:/run/hai/security:ro
 ```
 
-`.env.runtime` 中固定使用以下入口；SvelteKit 对应改为 `HAI_KIT_ACCESS`：
+`.env.runtime` 中固定使用以下入口；SvelteKit 对应改为 `HAI_KIT_HTTP_ACCESS`：
 
 ```dotenv
 HAI_SERV_HTTP_ACCESS='{"file":"/run/hai/security/request-access.yml"}'

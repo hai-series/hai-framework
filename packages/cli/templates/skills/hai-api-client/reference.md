@@ -6,13 +6,13 @@
 
 ### 1. 确定 API 地址和客户端所有者
 
-`baseUrl` 包含部署时启用的 API 前缀。浏览器同源部署可用 `/api/v1`，Node.js 和没有浏览器来源的设备使用完整的 HTTP(S) 地址。业务、刷新和密钥交换路径都以这个地址为前缀。地址中省略凭据、查询和片段。应用通过 `init(config)` 传入公开设置。
+`baseUrl` 包含部署时启用的 API 前缀。浏览器同源部署可用 `/api/v1`，Node.js 和没有浏览器来源的设备使用完整的 HTTP(S) 地址。业务和刷新路径相对 `baseUrl`；密钥交换从其 Origin 解析站点根绝对路径。地址中省略凭据、查询和片段。应用通过 `init(config)` 传入公开设置。
 
 浏览器布局可复用默认客户端。多用户 SSR 按请求使用 `apiClient.create(contract)`。在初始化成功后调用业务接口，所属请求、应用或布局结束时调用 `close()` 释放实例。并发初始化同一未就绪实例共享当前工作；已就绪或正在关闭时初始化返回 `CONFIG_ERROR`。 `client.config` 返回生效的绝对 `baseUrl` 和脱敏快照。
 
 ### 2. 从共享契约创建客户端
 
-使用应用和服务端共用的契约，把已声明的路由传给工厂。完整的路由声明和挂载过程见 [共享契约](../hai-api-contract/reference.md#use-with-client)。
+把服务端已挂载的契约节点传给工厂。应用已有共享契约包时，从该包的公开入口导入。下例直接用 `@h-ai/api-contract` 的 IAM 契约，按需添加该依赖。只使用标准 IAM 操作时，也可初始化默认客户端。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -58,7 +58,7 @@ export async function loadAuthPolicy(baseUrl: string) {
 | `apiClient.tokenStorage.memory()` | 新建的进程内存保存访问和刷新令牌 | SSR 或 Node.js 测试，按请求或用例隔离。 |
 | `capacitor.createTokenStorage()` | Capacitor 的原生安全存储 | Android 或 iOS 应用显式注入。安装对应的原生插件。 |
 
-浏览器 Cookie 模式自动发送 `credentials: 'include'`。跨域服务端允许指定的页面 Origin 和凭据，Cookie 属性应与部署域名匹配。 `serv.createApp({ iam, refreshCookie: {} })` 可开启 Serv 的 Cookie 模式，见 [Serv 参考](../hai-serv/reference.md)。原生实例在 `init({ baseUrl, auth: { storage, terminalType: 'app' } })` 中传入安全存储。Capacitor 公共工厂依赖 Android/iOS 原生安全存储插件。Node.js SSR 的全局 Fetch 不带浏览器的 Cookie jar，入站身份由应用按请求注入。持久凭据保存在对应的安全适配器中。
+浏览器 Cookie 模式自动发送 `credentials: 'include'`。跨域服务端允许指定的页面 Origin 和凭据，Cookie 属性应与部署域名匹配。使用 Serv 的后端在 `serv.createApp` 选项中提供已初始化的 `iam` 和 `refreshCookie: {}`，浏览器调用配置中的刷新路径。原生实例在 `init({ baseUrl, auth: { storage, terminalType: 'app' } })` 中传入安全存储。Capacitor 公共工厂依赖 Android/iOS 原生安全存储插件。Node.js SSR 的全局 Fetch 不带浏览器的 Cookie jar，入站身份由应用按请求注入。持久凭据保存在对应的安全适配器中。
 
 `client.auth.setTokens(tokens)` 和 `client.auth.clear()` 等待适配器完成，适配器失败时 Promise 拒绝。成功登录和注册可用认证动作自动提交。若直接调用 `client.iam.auth.login(input)`，应用先检查结果，再把 `data.tokens` 交给 `client.auth.setTokens(tokens)`。退出时先请求 IAM 撤销会话并清除 Cookie，再清理客户端的本地凭据。 `close()` 结束运行期、清理订阅和等待在途的凭据操作，宿主保存并按自身策略清理注入的适配器。
 
@@ -85,12 +85,12 @@ export async function loadAuthPolicy(baseUrl: string) {
 | 字段 | 说明 |
 | --- | --- |
 | `transport.crypto` | 已初始化的 `@h-ai/crypto` 实例。 |
-| `transport.keyExchangePath` | 相对于 `baseUrl` 的协商子路径，默认 `/_hai/key-exchange`。 |
+| `transport.keyExchangePath` | 从 `baseUrl` 的源解析的绝对协商路径，默认 `/api/v1/_hai/key-exchange`。 |
 | `transport.maxPlaintextBytes` | 可选的明文字节上限；省略时采用握手公布的值，传入后只能收紧。 |
 
-服务端通过 Serv 或 Kit 启用密钥交换和加密路由。服务端密钥环及共享 registry 由服务端管理；客户端通过 HTTPS 获取握手公钥及版本。启用 `transport` 的实例对业务和刷新使用同一个加密链路。服务端允许普通 HTTPS 的路由可通过普通 `fetch` 或独立未配置 `transport` 的客户端调用。 `kit.client` 的路径例外见 [Kit 参考](../hai-kit/reference.md)。客户端关闭后，再由依赖所有者决定是否关闭 Crypto。
+服务端通过 Serv 或 Kit 启用密钥交换和加密路由。服务端管理密钥环和共享的公钥登记。客户端通过 HTTPS 获取握手公钥及版本。启用 `transport` 的实例对业务和刷新使用同一个加密链路。服务端允许普通 HTTPS 的路由可通过普通 `fetch` 或独立未配置 `transport` 的客户端调用。如果同页使用 Kit 的浏览器加密包装，还需将该路由纳入 Kit 的公开 `transport.excludePaths`，并与服务端路径策略一致。客户端关闭后，再由依赖所有者决定是否关闭 Crypto。
 
-启用了 IAM 和 Crypto 的 CLI 独立移动模板默认使用加密。模板用 `PUBLIC_API_TRANSPORT=off` 对应允许普通 HTTPS 的部署，用 `PUBLIC_API_KEY_EXCHANGE_PATH` 覆盖公开的协商子路径。握手失败返回错误，由应用处理。加密时间错误映射为 `VALIDATION_FAILED`，`cause.transportCode` 和 `cause.serverTime` 记录底层编号与 Unix 毫秒。容量超限映射为 `PAYLOAD_TOO_LARGE`，原因可包含 `direction`、`stage`、`limitBytes` 和 `actualBytes`。
+启用了 IAM 和 Crypto 的 CLI 独立移动模板默认使用加密。模板用 `PUBLIC_API_TRANSPORT=off` 对应允许普通 HTTPS 的部署，用 `PUBLIC_API_KEY_EXCHANGE_PATH` 覆盖公开的绝对协商路径。握手失败返回错误，由应用处理。加密时间错误映射为 `VALIDATION_FAILED`，`cause.transportCode` 和 `cause.serverTime` 记录底层编号与 Unix 毫秒。容量超限映射为 `PAYLOAD_TOO_LARGE`，原因可包含 `direction`、`stage`、`limitBytes` 和 `actualBytes`。
 
 ## 常见模式
 

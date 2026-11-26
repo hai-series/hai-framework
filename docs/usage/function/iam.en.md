@@ -553,6 +553,12 @@ Two nodes using the same old token cannot both publish successors. Account, API 
 
 Session workflows explain create’s TokenPair, verify’s session, refresh’s replacement tokens and destroy/destroyAll revocation. Tokens are described by source and type rather than logged; optional policies remain server-enforced.
 
+#### Scenario: Request revocation when a page closes
+
+Enable `session.endOnPageHide` to opt in. A SvelteKit server layout derives a fingerprint with `kit.auth.sessionFingerprint(locals.accessToken)` from the verified session and passes only the fingerprint to the page. Call `actions.bindPageExit({ enabled, sessionFingerprint })` in Kit, or `actions.bindPageExit({ enabled })` with the Bearer typed client. Call the returned function to remove the listener.
+
+Kit skips revocation when the cookie token has changed or the fingerprint is absent. The browser may also leave before the request completes. Keep server-side idle or absolute expiry configured and use the normal logout operation for explicit sign-out.
+
 #### Scenario: Manage sessions and rotate tokens
 
 Only trusted server code may build options after verifying the user. These low-level methods do not grant business authorization. The first function affects all sessions for the test user. Run the second separately with a refresh token from a successful login.
@@ -632,7 +638,7 @@ Issue API keys with ownership and scopes for programmatic access. Give the raw k
 | `iam.apiKey.listApiKeys(userId, options?)` | Paginate a user API keys | `userId: string` target user ID · `options?: ListApiKeysOptions` · Filter, sort, and paginate keys for this user · [Object arguments](#api-keys-arguments) | `PaginatedResult<ApiKey>` | `await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20 })` |
 | `iam.apiKey.getApiKey(keyId)` | Read safe API key metadata by ID | `keyId: string` API key metadata ID | `ApiKey \| null` | `await iam.apiKey.getApiKey(keyId)` |
 | `iam.apiKey.revokeApiKey(keyId)` | Revoke an API key | `keyId: string` API key metadata ID | `void` | `await iam.apiKey.revokeApiKey(keyId)` |
-| `iam.apiKey.verifyApiKey(rawKey)` | Verify an API key | `rawKey: string` plaintext API key returned once when issued | `ApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
+| `iam.apiKey.verifyApiKey(rawKey)` | Verify a key and its owner, and resolve current permissions | `rawKey: string` plaintext API key returned once when issued | `VerifiedApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
 
 <a id="api-keys-arguments"></a>
 
@@ -658,6 +664,8 @@ Issue API keys with ownership and scopes for programmatic access. Give the raw k
 ##### Parameters and result semantics: API keys
 
 Save the raw key securely when creating it; only the creation result contains it. List or get key metadata, verify a submitted secret, or revoke a key.
+
+`verifyApiKey(rawKey)` checks that the key is enabled and unexpired and its account is active. It returns key metadata and the intersection of current account grants and key scopes as `VerifiedApiKey.permissions`, without opening a session. A reporting service checks `orders:read` against these permissions and uses the verified `userId` to select the caller’s reports. [A2A executor example](ai.en.md#a2a-http-example)
 
 [Detailed parameters and workflows](iam.md#api-keys)
 

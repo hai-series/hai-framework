@@ -557,6 +557,12 @@ async function reviewReader(userId: string) {
 
 create の TokenPair、verify のセッション、refresh の新トークンと destroy/destroyAll の効果を示します。実際のトークンをログに出さず、追加方針もサーバーで適用します。
 
+#### 利用例：ページ離脱時にセッションの失効を要求する
+
+`session.endOnPageHide` を有効にします。SvelteKit のサーバーレイアウトで、検証済みセッションから `kit.auth.sessionFingerprint(locals.accessToken)` を使って指紋を取得し、指紋だけをページに渡します。Kit は `actions.bindPageExit({ enabled, sessionFingerprint })`、Bearer の型付きクライアントは `actions.bindPageExit({ enabled })` を呼び出します。解除時は戻り値の関数を実行します。
+
+Cookie のトークンが変わった場合や指紋がない場合、Kit は失効処理を省略します。離脱時にブラウザーから要求を送れない場合もあります。サーバー側でアイドル期限または絶対期限を設定し、明示的なログアウトには通常のログアウト操作を使います。
+
 #### 利用例：低層セッションの管理と輪換
 
 options は検証後に信頼済みサーバーで作成します。低層 API は業務認可を行いません。最初の関数はテストユーザー全会話に影響します。二つ目は成功したログインの refreshToken で別途実行します。
@@ -636,7 +642,7 @@ async function rotateThenRevoke(refreshToken: string) {
 | `iam.apiKey.listApiKeys(userId, options?)` | ユーザーの API キーをページ取得 | `userId: string` 対象ユーザー ID · `options?: ListApiKeysOptions` · ユーザーのキーを絞り込み、並べ替えてページ分割 · [オブジェクト引数](#api-keys-arguments) | `PaginatedResult<ApiKey>` | `await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20 })` |
 | `iam.apiKey.getApiKey(keyId)` | ID で安全な API キー情報を取得 | `keyId: string` API キーのメタデータ ID | `ApiKey \| null` | `await iam.apiKey.getApiKey(keyId)` |
 | `iam.apiKey.revokeApiKey(keyId)` | API キーを失効 | `keyId: string` API キーのメタデータ ID | `void` | `await iam.apiKey.revokeApiKey(keyId)` |
-| `iam.apiKey.verifyApiKey(rawKey)` | API キーを検証 | `rawKey: string` 発行時に一度だけ返る元の API キー | `ApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
+| `iam.apiKey.verifyApiKey(rawKey)` | API キーと所有者を検証し、現在の権限を取得 | `rawKey: string` 発行時に一度だけ返る元の API キー | `VerifiedApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
 
 <a id="api-keys-arguments"></a>
 
@@ -662,6 +668,8 @@ async function rotateThenRevoke(refreshToken: string) {
 ##### 引数と結果：API キー
 
 キーの平文は作成時にのみ返ります。安全な場所に保存してください。キー情報の取得、提出されたキーの検証、キーの失効ができます。
+
+`verifyApiKey(rawKey)` は、キーが有効かつ期限内で、所有アカウントが有効であることを確認します。セッションを発行せず、キー情報とアカウントの現在の権限およびキースコープの共通部分を `VerifiedApiKey.permissions` として返します。レポートサービスでは、この権限で `orders:read` を確認し、検証済みの `userId` に対応するレポートを取得します。 [A2A 実行器の例](ai.ja.md#a2a-http-example)
 
 [引数と手順の詳細](iam.md#api-keys)
 

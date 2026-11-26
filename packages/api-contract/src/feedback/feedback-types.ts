@@ -13,7 +13,15 @@ import type {
   FeedbackSubmitInput,
 } from './feedback-schemas.js'
 
-/** 由宿主根据可信会话确定的反馈身份、数据范围及权限。 */
+/**
+ * 由可信服务端认证与授权策略生成的范围。HTTP 输入不能指定此对象。
+ * @example
+ * ```ts
+ * import type { FeedbackContext } from '@h-ai/api-contract/feedback'
+ * const context: FeedbackContext = { scopeId: 'tenant-1', userId: 'user-1', permissions: ['feedback:create'] }
+ * void context
+ * ```
+ */
 export interface FeedbackContext {
   scopeId: string
   userId: string

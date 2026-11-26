@@ -1463,27 +1463,87 @@ Publish Agent Cards, register executors and handle A2A requests with host-valida
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `ai.a2a.registerExecutor(executor)` | 注册任务执行器 | `executor: AgentExecutor` | `void` | `ai.a2a.registerExecutor(executor)` |
-| `ai.a2a.getAgentCard()` | 提供标准发现文档 | No arguments. Reads the configured Agent Card. | `A2AAgentCardDocument (A2A 1.0 ProtoJSON)` | `ai.a2a.getAgentCard()` |
-| `ai.a2a.handleRequest(requestBody, context?)` | 处理认证的协议请求 | `requestBody: unknown, context?: Record<string, unknown>`. `requestBody` is the received A2A JSON-RPC request value. The entry validates it. | `direct Promise<A2AHandleResult>; JSON-RPC/SSE outcome` | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })` |
-| `ai.a2a.listMessages(filter)` | 可信管理查询 | `filter: A2ATaskFilter` | `StorePage<A2AMessageRecord>` | `ai.a2a.listMessages(messageFilter)` |
-| `ai.a2a.callRemoteAgent(remoteUrl, message, options?)` | 调用获准远端 | `remoteUrl: string, message: string, options?: A2ACallOptions` | `A2ACallResult` | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "请分析订单")` |
+| `ai.a2a.createHttpHandler(options)` | Create an A2A HTTP entry point for Serv or Kit | `A2AHttpOptions.authenticate` is required. Discovery defaults to `/.well-known/agent-card.json` and RPC to `/a2a`. | `A2AHttpHandler`. Initialize AI, configure A2A and register the executor first. Invalid paths or authentication options throw `TypeError`. | `ai.a2a.createHttpHandler({ authenticate })` |
+| `ai.a2a.registerExecutor(executor)` | Register a task executor | `executor: AgentExecutor` | `HaiResult<void>` | `ai.a2a.registerExecutor(executor)` |
+| `ai.a2a.getAgentCard()` | Read the Agent Card | No arguments. Reads the configured Agent Card. | `HaiResult<A2AAgentCardDocument>` | `ai.a2a.getAgentCard()` |
+| `ai.a2a.handleRequest(requestBody, caller?)` | Handle JSON-RPC for a verified caller | `requestBody: unknown, caller?: A2AHttpIdentity` | `Promise<A2AHandleResult>` | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })` |
+| `ai.a2a.getCallerIdentity(context)` | Read the trusted caller in the executor | `context: RequestContext` | `A2AHttpIdentity \| undefined` | `ai.a2a.getCallerIdentity(context)?.permissions` |
+| `ai.a2a.listMessages(filter)` | Query authorized message records | `filter: A2ATaskFilter` | `Promise<HaiResult<StorePage<A2AMessageRecord>>>` | `ai.a2a.listMessages(messageFilter)` |
+| `ai.a2a.callRemoteAgent(remoteUrl, message, options?)` | Call an approved remote agent | `remoteUrl: string, message: string, options?: A2ACallOptions` | `Promise<HaiResult<A2ACallResult>>` | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "Analyze the orders")` |
 
 #### A2A request, page, and call arguments
 
 | Object or method | Fields | Defaults, conditions, and effect |
 | --- | --- | --- |
-| `registerExecutor`, `handleRequest` | `executor`, `requestBody`, `context` | Supply the application executor for protocol tasks. The entry takes raw JSON-RPC and optional server-verified call context. Protocol validation errors return a protocol failure |
+| `A2AHttpOptions` | `cardPath`, `rpcPath` | Match GET Agent Card and POST JSON-RPC exactly. Supply site-root paths that include any deployment prefix. Publish the full externally reachable RPC URL in the Agent Card's `supportedInterfaces`. |
+| `A2AHttpOptions` | `authenticate` | A custom callback reads the Fetch `Request` and returns a verified `{ agentId }`. An empty result gives 401. Pass `{ verifyApiKey }` to verify the Card's configured header or query parameter, defaulting to the `x-api-key` header. Use `false` to explicitly allow anonymous callers. |
+| `A2AHttpIdentity` | `agentId`, `apiKeyId`, `scopes`, `permissions` | Effective permissions are the intersection of the current account grants and API key scopes. Use `permissions` to authorize business operations. |
+| `A2AHttpHandler` | `cardPath`, `rpcPath`, `handleRequest(request, requestId?)` | The instance exposes its mounted paths and returns a `Response` or `null` to continue host routing. RPC accepts bodies up to 2 MiB and returns JSON or SSE. Disconnecting from SSE releases the subscription. Use `CancelTask` to stop the business task. |
+| `registerExecutor`, `handleRequest` | `executor`, `requestBody`, `caller` | Supply the application executor for protocol tasks. The entry takes raw JSON-RPC and optional server-verified call context. Protocol validation errors return a protocol failure |
 | `A2ATaskFilter` | `status`, `contextId`, `callerId`, `since`, `limit`, `offset` | Filter by message role `user/agent`, context, or trusted caller. `since` is an inclusive starting timestamp in Unix milliseconds. Defaults are offset 0 and limit 50 |
 | `callRemoteAgent`, `A2ACallOptions` | `remoteUrl`, `message`, `timeout`, `headers` | The remote address and text are required. Timeout defaults to 60000 ms. Pass additional server-side headers, with case-insensitive overrides of the same name |
 
 For `{ callerId: 'docs-reader', status: 'agent', limit: 10 }`, the page contains at most ten agent messages for that caller. Task outcomes are available on their corresponding task results.
 
-#### Scenario: Publish and call remote agents
+<a id="a2a-http-example"></a>
 
-getAgentCard returns public capabilities; handleRequest maps protocol input to JSON/events, callRemoteAgent returns remote results and listMessages reads authorized task messages. Protocol construction grants no authorization.
+#### Scenario: Publish the orders assistant to a partner
 
-[Detailed parameters and workflows](ai.md#a2a)
+A partner system discovers the order backlog assistant through its Agent Card. Enable IAM `login.apikey`, grant `orders:read` to the partner account and issue a key with `scopes: [orders:read]`. In `_ai.yml`, set `a2a.agentCard.url: https://orders.example.com/partners/orders` and `a2a.security.apiKey: { in: header, name: x-api-key }`.
+
+After initializing AI and IAM, pass the application’s partner-specific order query to this factory. The executor checks effective permissions before it reads the caller’s orders.
+
+```ts
+import { randomUUID } from 'node:crypto'
+import { ai } from '@h-ai/ai'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+
+export function createPartnerA2A(loadBacklogSummary: (partnerId: string) => Promise<string>) {
+  const registered = ai.a2a.registerExecutor({
+    async execute(context, bus) {
+      const caller = ai.a2a.getCallerIdentity(context)
+      const text = caller && core.auth.matchPermission('orders:read', caller.permissions ?? [])
+        ? await loadBacklogSummary(caller.agentId)
+        : 'This partner is not authorized to read the order backlog.'
+      bus.publish(ai.AgentEvent.message(ai.Message.fromJSON({
+        messageId: randomUUID(),
+        role: 'ROLE_AGENT',
+        parts: [{ text }],
+      })))
+      bus.finished()
+    },
+    async cancelTask(_taskId, bus) {
+      bus.finished()
+    },
+  })
+  if (!registered.success)
+    throw new Error(registered.error.message)
+
+  return ai.a2a.createHttpHandler({
+    rpcPath: '/partners/orders',
+    authenticate: { verifyApiKey: key => iam.apiKey.verifyApiKey(key) },
+  })
+}
+```
+
+Pass the result as the Serv or Kit `a2a` option. The partner reads `GET /.well-known/agent-card.json` and sends `SendMessage` with `X-API-Key` to the advertised RPC address. Invalid credentials and deactivated accounts receive 401. A verification service failure returns 503. The executor returns a denial message if the authenticated caller lacks permission. [Mount and call with Serv](serv.en.md#shared-a2a-http) · [Mount and call with Kit](kit.en.md#kit-a2a)
+
+The partner service can also make this request with the AI client. Call `ai.init()` and pass the key retrieved from the service’s secret storage.
+
+```ts
+import { ai } from '@h-ai/ai'
+import { core } from '@h-ai/core'
+
+export async function requestBacklog(rawKey: string) {
+  const result = await ai.a2a.callRemoteAgent(
+    'https://orders.example.com/partners/orders',
+    'Summarize my open orders',
+    { headers: { 'x-api-key': rawKey } },
+  )
+  return result.success ? core.ok(result.data.responseText ?? '') : result
+}
+```
 
 <a id="http-contract-extensions"></a>
 

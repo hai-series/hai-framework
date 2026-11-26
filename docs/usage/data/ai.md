@@ -529,6 +529,8 @@ hai_ai_knowledge 当前为 generation-42、维度3且未删除；同名集合换
 
 A2A 以共享存储的时钟判断任务期限，保存事件时会比较记录版本。完成消息的回执没有自动过期时间。
 
+执行器通过 `ai.a2a.getCallerIdentity(context)` 读取该次请求的 Key ID、范围与有效权限。这些字段放在 SDK 请求上下文中。任务和消息按已核验的调用方 ID 关联。 [A2A 执行器鉴权](../function/ai.md#a2a-http-example)
+
 <a id="智能体任务已经处理到哪一步"></a>
 
 #### 示例 · 智能体任务已经处理到哪一步

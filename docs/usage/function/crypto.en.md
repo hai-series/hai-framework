@@ -443,7 +443,8 @@ Ordinary applications use Serv/Kit on the server and api-client/kit.client on th
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `crypto.transport.createServer(options)` | Make the transport manager. Supply the server key ring and a shared key store on the server. | Required `options` includes the server key ring and registration store. See [server and client arguments](#call-options) for body and time limits. | `HaiResult<TransportEncryptionManager>` | `crypto.transport.createServer({ serverKeyRing, keyStore })` |
-| `crypto.transport.createClient(options)` | Make a client session. Its key exchange URL must resolve to the configured server endpoint. | Required `options.keyExchangeUrl` points to the trusted service. `options.fetch` and the local plaintext limit are optional. See [server and client arguments](#call-options). | `TransportClient` | `crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange' })` |
+| `crypto.transport.createClient(options)` | Make a client session. Its key exchange URL must resolve to the configured server endpoint. | Required `options.keyExchangeUrl` points to the trusted service. `options.fetch` and the local plaintext limit are optional. See [server and client arguments](#call-options). | `TransportClient` | `crypto.transport.createClient({ keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange' })` |
+| `crypto.transport.isKeyExchangePath(value)` | Validate a key exchange pathname | Pass the value to check. The pathname starts at the origin root and has nonempty segments using ASCII letters, digits, `_`, `-`, and `.`. | `boolean`. Narrows to the absolute pathname type when true. | `crypto.transport.isKeyExchangePath("/api/v1/_hai/key-exchange")` |
 | `crypto.transport.protocol` | Read the shared header names and protocol constants (property). | None | `typeof crypto.transport.protocol` | `crypto.transport.protocol` |
 | `manager.getServerKeyId()` | Read the active server key ID. | None | `string` | `manager.getServerKeyId()` |
 | `manager.getServerPublicKey()` | Read the current public key for exchange. | None | `string` | `manager.getServerPublicKey()` |
@@ -545,7 +546,7 @@ The example sends POST hello and reads decrypted `{ received: "hello" }`. This i
 ```ts
 // Construct a client session for the API's handshake URL and return the instance.
 const session = crypto.transport.createClient({
-  keyExchangeUrl: 'https://api.example.com/api/_hai/key-exchange',
+  keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange',
 })
 // Read readiness without arguments. A new or destroyed session returns false.
 session.ready() // false

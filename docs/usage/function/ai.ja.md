@@ -1467,27 +1467,87 @@ Agent Card と実行器を公開し、相手先・呼び出し主体・タスク
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `ai.a2a.registerExecutor(executor)` | 注册任务执行器 | `executor: AgentExecutor` | `void` | `ai.a2a.registerExecutor(executor)` |
-| `ai.a2a.getAgentCard()` | 提供标准发现文档 | 引数なし。設定された Agent Card を読み取ります。 | `A2AAgentCardDocument (A2A 1.0 ProtoJSON)` | `ai.a2a.getAgentCard()` |
-| `ai.a2a.handleRequest(requestBody, context?)` | 处理认证的协议请求 | `requestBody: unknown, context?: Record<string, unknown>`。`requestBody` は受信した A2A JSON-RPC リクエストで、入口で検証します。 | `direct Promise<A2AHandleResult>; JSON-RPC/SSE outcome` | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })` |
-| `ai.a2a.listMessages(filter)` | 可信管理查询 | `filter: A2ATaskFilter` | `StorePage<A2AMessageRecord>` | `ai.a2a.listMessages(messageFilter)` |
-| `ai.a2a.callRemoteAgent(remoteUrl, message, options?)` | 调用获准远端 | `remoteUrl: string, message: string, options?: A2ACallOptions` | `A2ACallResult` | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "请分析订单")` |
+| `ai.a2a.createHttpHandler(options)` | Serv または Kit で使う A2A の HTTP 入口を作成する | `A2AHttpOptions.authenticate` は必須。探索パスの既定値は `/.well-known/agent-card.json`、RPC は `/a2a`。 | `A2AHttpHandler`。AI を初期化し、A2A を設定して実行器を登録してから呼び出します。不正なパスや認証設定の場合は `TypeError` が発生します。 | `ai.a2a.createHttpHandler({ authenticate })` |
+| `ai.a2a.registerExecutor(executor)` | タスク実行器を登録する | `executor: AgentExecutor` | `HaiResult<void>` | `ai.a2a.registerExecutor(executor)` |
+| `ai.a2a.getAgentCard()` | Agent Card を取得する | 引数なし。設定された Agent Card を読み取ります。 | `HaiResult<A2AAgentCardDocument>` | `ai.a2a.getAgentCard()` |
+| `ai.a2a.handleRequest(requestBody, caller?)` | 検証済みの呼び出し元の JSON-RPC を処理する | `requestBody: unknown, caller?: A2AHttpIdentity` | `Promise<A2AHandleResult>` | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })` |
+| `ai.a2a.getCallerIdentity(context)` | 実行器で検証済みの呼び出し元を取得する | `context: RequestContext` | `A2AHttpIdentity \| undefined` | `ai.a2a.getCallerIdentity(context)?.permissions` |
+| `ai.a2a.listMessages(filter)` | 認可済みのメッセージを検索する | `filter: A2ATaskFilter` | `Promise<HaiResult<StorePage<A2AMessageRecord>>>` | `ai.a2a.listMessages(messageFilter)` |
+| `ai.a2a.callRemoteAgent(remoteUrl, message, options?)` | 許可済みのリモートエージェントを呼び出す | `remoteUrl: string, message: string, options?: A2ACallOptions` | `Promise<HaiResult<A2ACallResult>>` | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "注文を分析してください")` |
 
 #### A2A リクエスト・ページング・呼び出し引数
 
 | オブジェクトまたはメソッド | 項目 | 既定値、条件、用途 |
 | --- | --- | --- |
-| `registerExecutor`、`handleRequest` | `executor`、`requestBody`、`context` | プロトコルタスクをアプリの実行器に渡す。入口は生の JSON-RPC 値と、任意のサーバー確認済みコンテキストを受け取り、検証に失敗するとプロトコルエラーを返す |
+| `A2AHttpOptions` | `cardPath`、`rpcPath` | Agent Card の GET と JSON-RPC の POST に完全一致します。配置先のプレフィックスも含め、サイトルートからの絶対パスを指定します。外部からアクセスできる完全な RPC URL を Agent Card の `supportedInterfaces` に公開してください。 |
+| `A2AHttpOptions` | `authenticate` | 独自コールバックは Fetch `Request` から検証済みの `{ agentId }` を返します。空値の場合は 401 です。`{ verifyApiKey }` は Agent Card のヘッダーまたはクエリ項目を検証し、未指定なら `x-api-key` ヘッダーを使用します。匿名の利用を許可する場合は `false` を明示します。 |
+| `A2AHttpIdentity` | `agentId`, `apiKeyId`, `scopes`, `permissions` | 有効な権限は現在のアカウント権限と API キーのスコープの共通部分です。業務認可には `permissions` を使います。 |
+| `A2AHttpHandler` | `cardPath`、`rpcPath`、`handleRequest(request, requestId?)` | 配置したパスを取得できます。`Response` を返し、一致しない場合は `null` を返してホストの処理を続けます。RPC 本文は 2 MiB までで、応答は JSON または SSE です。SSE を切断すると購読が解除されます。タスクを止める操作は `CancelTask` です。 |
+| `registerExecutor`、`handleRequest` | `executor`、`requestBody`、`caller` | プロトコルタスクをアプリの実行器に渡す。入口は生の JSON-RPC 値と、任意のサーバー確認済みコンテキストを受け取り、検証に失敗するとプロトコルエラーを返す |
 | `A2ATaskFilter` | `status`、`contextId`、`callerId`、`since`、`limit`、`offset` | メッセージの役割 `user/agent`、コンテキスト、信頼済み呼び出し元で絞り込む。`since` は Unix ミリ秒の開始時刻。既定はオフセット 0、上限 50 |
 | `callRemoteAgent`、`A2ACallOptions` | `remoteUrl`、`message`、`timeout`、`headers` | リモートアドレスと本文は必須。期限は既定 60000 ミリ秒。サーバー側で追加のヘッダーを指定でき、同名項目は大小文字を区別せず上書きする |
 
 `{ callerId: 'docs-reader', status: 'agent', limit: 10 }` はその呼び出し元のエージェントメッセージを最大十件取得します。タスクの結果は対応するタスク結果から取得します。
 
-#### 利用例：遠隔エージェントとの通信
+<a id="a2a-http-example"></a>
 
-getAgentCard は公開能力、handleRequest は JSON/イベント、callRemoteAgent は相手の結果、listMessages は許可済みメッセージです。オブジェクト作成だけで権限を得ません。
+#### 利用例：取引先に注文アシスタントを公開する
 
-[引数と手順の詳細](ai.md#a2a)
+取引先のシステムは Agent Card から未処理注文アシスタントを見つけます。IAM の `login.apikey` を有効にし、取引先のアカウントに `orders:read` を付与して `scopes: [orders:read]` のキーを発行します。`_ai.yml` に `a2a.agentCard.url: https://orders.example.com/partners/orders` と `a2a.security.apiKey: { in: header, name: x-api-key }` を設定します。
+
+AI と IAM の初期化後、取引先ごとの注文を取得する業務関数を次のファクトリーに渡します。実行器は有効な権限を確認してから、呼び出し元の注文を取得します。
+
+```ts
+import { randomUUID } from 'node:crypto'
+import { ai } from '@h-ai/ai'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+
+export function createPartnerA2A(loadBacklogSummary: (partnerId: string) => Promise<string>) {
+  const registered = ai.a2a.registerExecutor({
+    async execute(context, bus) {
+      const caller = ai.a2a.getCallerIdentity(context)
+      const text = caller && core.auth.matchPermission('orders:read', caller.permissions ?? [])
+        ? await loadBacklogSummary(caller.agentId)
+        : 'この取引先には未処理注文を閲覧する権限がありません。'
+      bus.publish(ai.AgentEvent.message(ai.Message.fromJSON({
+        messageId: randomUUID(),
+        role: 'ROLE_AGENT',
+        parts: [{ text }],
+      })))
+      bus.finished()
+    },
+    async cancelTask(_taskId, bus) {
+      bus.finished()
+    },
+  })
+  if (!registered.success)
+    throw new Error(registered.error.message)
+
+  return ai.a2a.createHttpHandler({
+    rpcPath: '/partners/orders',
+    authenticate: { verifyApiKey: key => iam.apiKey.verifyApiKey(key) },
+  })
+}
+```
+
+戻り値を Serv または Kit の `a2a` オプションに渡します。取引先は `GET /.well-known/agent-card.json` を取得し、公開された RPC アドレスに `X-API-Key` を付けて `SendMessage` を送信します。無効なキーや無効化されたアカウントは 401、認証サービスの障害は 503 になります。認証済みでも閲覧権限が不足している場合は、実行器が拒否メッセージを返します。 [Serv での公開と呼び出し](serv.ja.md#shared-a2a-http) · [Kit での公開と呼び出し](kit.ja.md#kit-a2a)
+
+取引先のサーバーからは AI クライアントでも同じ問い合わせを実行できます。`ai.init()` を呼び出し、シークレット管理から取得したキーを次の関数に渡します。
+
+```ts
+import { ai } from '@h-ai/ai'
+import { core } from '@h-ai/core'
+
+export async function requestBacklog(rawKey: string) {
+  const result = await ai.a2a.callRemoteAgent(
+    'https://orders.example.com/partners/orders',
+    '未処理の注文を集計してください',
+    { headers: { 'x-api-key': rawKey } },
+  )
+  return result.success ? core.ok(result.data.responseText ?? '') : result
+}
+```
 
 <a id="http-contract-extensions"></a>
 

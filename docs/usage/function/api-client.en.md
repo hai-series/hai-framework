@@ -1024,7 +1024,7 @@ Enable application-layer transport encryption on the server first. Initialize a 
 | Field | Type and default | Effect |
 | --- | --- | --- |
 | `transport.crypto` | Required initialized `CryptoFunctions` when transport is enabled. | Creates this client's transport session. |
-| `transport.keyExchangePath` | Optional string relative to `baseUrl`. Default `/_hai/key-exchange`. | Must resolve to the service's key exchange endpoint. |
+| `transport.keyExchangePath` | Optional absolute pathname from the origin of `baseUrl`. Defaults to `/api/v1/_hai/key-exchange`. | For a `baseUrl` of `https://api.example.com/backend/api`, `/exchange/keys` resolves to `https://api.example.com/exchange/keys`. |
 | `transport.maxPlaintextBytes` | Optional number in bytes. The client uses the server value when omitted. | An explicit client cap takes the smaller of the local and negotiated plaintext limits. |
 
 #### Scenario: Enable transport encryption

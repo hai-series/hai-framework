@@ -176,6 +176,19 @@ const reportUrl = '/api/v1' + template.replace('{id}', encodeURIComponent('r-42'
 
 組み込みのパスも、個々のエンドポイントを渡して取得できます。たとえば `apiContract.pathOf(apiContract.iam.auth.login)` は `/auth/login` を返します。型付きクライアントは引数からパスを組み立てるため、`client.reports.get({ id: 'r-42' })` と呼び出せます。
 
+<a id="resolve-audio-ws-path"></a>
+
+### `apiContract.resolveAudioWebSocketPath` · レポート音声の WebSocket パスを解決する
+
+レポートサービスは `/backoffice/api/v2` を使用します。音声を業務 API と同じプレフィックスに置く場合、Serv とデプロイゲートウェイは `/backoffice/api/v2/ai/audio` を使用します。音声を `/voice/reports` で個別に公開する場合は、サイトの完全なパスを渡します。
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+
+const defaultPath = apiContract.resolveAudioWebSocketPath('/backoffice/api/v2')
+const dedicatedPath = apiContract.resolveAudioWebSocketPath('/backoffice/api/v2', '/voice/reports')
+```
+
 <a id="use-with-serv"></a>
 
 ### 独立したサービスに契約を登録する：`@h-ai/serv`
@@ -244,7 +257,7 @@ export function mountIam(iam: IamFunctions) {
   const contract = apiContract.create({ iam: apiContract.iam })
   const procedures = { iam: serv.createIamProcedures({ iam }) }
   // 初期化済みの IAM でリクエストを認証し、ルートを /api/v1 に登録する。
-  return serv.createApp({ contract, procedures, iam, http: { apiPrefix: '/api/v1' } })
+  return serv.createApp({ contract, procedures, auth: { iam }, http: { apiPrefix: '/api/v1' } })
 }
 ```
 
@@ -414,16 +427,19 @@ console.info(parsed.data.data.total) // 1
 - **Payment**。サーバーが対応する決済手段で注文を作成または照会します。Alipay の通知を受理したときは、決済サービスの仕様に従って HTTP 200 とプレーンテキストの `success` を返します。[Alipay の通知応答](payment.ja.md#alipay-notification-ack)
 - **Feedback**. 提出者は `reports.listMine` で自分の問題票を、担当者は `reports.list` で権限のある問題票を取得します。双方が `reports.listMessages` で会話を取得し、`reports.addMessage` で返信します。 [@h-ai/feedback](feedback.ja.md#api-reference)
 
+独自の HTTP アダプターの型には、`@h-ai/api-contract/feedback` の `FeedbackContext` と `FeedbackHttpOperations` を使います。`FeedbackContext` の `scopeId`、`userId`、任意の `permissions` は、サーバーで検証済みのセッションから取得します。`FeedbackHttpOperations` は、アダプターで使うサービスの状態、容量、フィードバック操作を定義します。`@h-ai/feedback` を使うアプリは、引き続き同パッケージから `FeedbackContext` を読み込み、初期化済みの `feedback` をアダプターに直接渡せます。
+
 <a id="feedback-budget"></a>
 
 ### フィードバックの転送容量を宣言する
 
-`@h-ai/api-contract/feedback` から `apiContract.feedbackTransportRoutes(apiPrefix?)` を読み込みます。既定 `/api` の API プレフィックスを持つパスとバイト数を返します。ホストの `routePlaintextBytes` に結合します。
+`@h-ai/api-contract/feedback` から `apiContract.feedbackTransportRoutes(apiPrefix?, maxTotalFileBytes?)` を読み込みます。第一引数は実際の API プレフィックスで、既定は `/api` です。第二引数は 1 回の書き込みで許可するファイルの合計サイズで、既定は 10 MiB です。返り値をホストの `routePlaintextBytes` に結合します。提出と返信の上限には Base64 と JSON の分が含まれ、添付の取得は 16 MiB です。
 
 ```ts
 import { apiContract } from '@h-ai/api-contract/feedback'
 
-const routePlaintextBytes = apiContract.feedbackTransportRoutes('/api')
+// 1 回の送信でファイルの合計を 12 MiB まで許可すると、提出と返信の平文上限は 17 MiB になります。
+const routePlaintextBytes = apiContract.feedbackTransportRoutes('/api/v1', 12 * 1024 * 1024)
 void routePlaintextBytes
 ```
 

@@ -1059,7 +1059,7 @@ return client.feedback.reports.get({ id: submitted.data.id })
 | 字段 | 类型、默认值与生效条件 |
 | --- | --- |
 | `transport.crypto` | 已初始化的 `@h-ai/crypto` 运行实例。服务端密钥环和私钥由服务端保管。 |
-| `transport.keyExchangePath` | 默认 `/_hai/key-exchange`，相对于 `baseUrl`。例如 `/api/v1/_hai/key-exchange`。 |
+| `transport.keyExchangePath` | 从 `baseUrl` 的源解析的绝对路径，默认为 `/api/v1/_hai/key-exchange`。例如 `baseUrl: "https://api.example.com/backend/api"` 和 `keyExchangePath: "/exchange/keys"` 使用 `https://api.example.com/exchange/keys`。 |
 | `transport.maxPlaintextBytes` | 可选的正整数，单位字节。省略时采用握手公布的上限，指定时取客户端与服务端较小值。 |
 
 跨域时按服务端配置允许和公开 `X-Hai-Transport`。加密协议、密钥注册与 CORS 设置见 [Crypto 加密传输](crypto.md#transport) 和 [客户端配置入口](../configuration/api-client.md)。

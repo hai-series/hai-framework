@@ -271,13 +271,19 @@ if (result.success) process.stdout.write(result.data.intent) // 示例输出 que
 
 | 方法 | 说明 |
 | --- | --- |
+| `createHttpHandler({ cardPath?, rpcPath?, authenticate })` | 创建 Serv 或 Kit 可挂载的 Agent Card、JSON-RPC 与 SSE 处理器 |
 | `registerExecutor(executor)` | 注册 Agent executor |
 | `getAgentCard()` | 获取 Agent Card |
-| `handleRequest(body, context?)` | 处理 A2A JSON-RPC 请求 |
+| `handleRequest(body, caller?)` | 用可信调用方信息处理 A2A JSON-RPC 请求 |
+| `getCallerIdentity(context)` | 执行器从 SDK `RequestContext` 读取调用方标识、Key ID、范围和有效权限 |
 | `listMessages(filter)` | 查询 A2A 消息记录 |
 | `callRemoteAgent(remoteUrl, message, options?)` | 调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor |
 
-A2A 服务端 SDK handler 在注册 executor 时延迟创建；远端客户端调用不依赖服务端配置。getAgentCard 返回可直接 HTTP 输出的标准 A2A 1.0 ProtoJSON Card（supportedInterfaces、MIME、streaming、安全方案）；Kit 默认发现路径为 `/.well-known/agent-card.json`。handleRequest 在未初始化时也返回 JSON-RPC 错误；可信 context.agentId 映射 SDK user.userName。Kit 配置 authenticate 后空身份返回 401；不声明 push notifications、gRPC、REST 支持。
+先在 `_ai.yml` 配置 Agent Card 的外部 JSON-RPC URL，初始化 AI 并注册执行器。在 Serv 或 Kit 传入同一形态的 `a2a: ai.a2a.createHttpHandler({ authenticate: { verifyApiKey: key => iam.apiKey.verifyApiKey(key) } })`。Card 默认在 `GET /.well-known/agent-card.json`，RPC 默认在 `POST /a2a`。自定义路径写完整站点路径。第三方调用走 HTTPS，复用宿主的访问控制和限流，并将两个精确路径配置为不使用 Hai 正文信封。 [Serv 使用参考](../hai-serv/reference.md) · [Kit 使用参考](../hai-kit/reference.md)
+
+验证器按照 Agent Card 的 `a2a.security.apiKey` 声明读取请求头或查询参数，未声明时使用 `x-api-key` 请求头。自定义认证接收 Fetch `Request`，应返回可信的 `{ agentId }`，拒绝时返回空值并得到 401。匿名须显式传 `authenticate: false`。JSON-RPC 正文上限 2 MiB。SSE 断开只结束当前订阅，调用 `CancelTask` 才请求取消任务。远端客户端调用不依赖服务端配置。可信 `context.agentId` 映射 SDK `user.userName`。
+
+使用 IAM API Key 时，传 `authenticate: { verifyApiKey: key => iam.apiKey.verifyApiKey(key) }`。IAM 核验账户与 Key 后返回当前权限和 Key 范围的交集。订单执行器读取 `ai.a2a.getCallerIdentity(context)`，用 `core.auth.matchPermission('orders:read', caller.permissions ?? [])` 检查授权，再按 `caller.agentId` 查询该合作方的订单。认证失败返回 HTTP 401，认证服务故障返回 503。
 
 A2A journal、context 归属和消息表在 `ai.init()` 阶段初始化；可信 agentId 是身份来源，匿名共用主体，生产须认证。Task 与事件一次 CAS 发布，支持任意节点订阅、真实 owner 取消和 input-required 跨节点续接。同 message ID/内容重试复用同一轮，内容改变或旧轮重试拒绝；取消未确认时同一 Task 拒绝新消息，防止迟到回调影响新一代；失租、绝对期限或 working 状态退出标记 failed/interrupted 与 metadata.haiExecution.requiresEffectReconciliation=true，不自动重放未知副作用。a2a.execution 默认 leaseMs=30000、pollIntervalMs=250、maxExecutionMs=300000；单消息1MiB、journal8MiB、每轮2048事件、每Task256回执、32个reference tasks。listMessages 是服务端管理接口，callerId/contextId/since 不能替代调用授权。外部工具须使用稳定业务幂等键并核对未知结果，SDK异常不向用户暴露驱动凭据。
 

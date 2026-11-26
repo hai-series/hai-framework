@@ -44,7 +44,11 @@ Dockerfile使用全局HAI_NODE_IMAGE/HAI_NGINX_IMAGE及构建阶段HAI_NPM_REGIS
 
 ### 服务端边界与页面
 
-SvelteKit服务端固定加载Kit配置，根load只投影公开transport。选择crypto后，hooks从私有环境装配密钥环和registry；共享DB用于共享registry，内存仅开发/测试。纯客户端不生成服务端私钥。输入冲突路径策略或缺少required加密依赖时，创建宿主应失败。
+SvelteKit 服务端加载 `_kit.yml`，根布局只投影公开传输设置。启用传输加密后，Hook 读取私有密钥环，通过 Cache 保存客户端公钥登记和防重放状态。生产实例连接同一个 Redis，内存后端用于开发与显式测试。部署在子目录时，服务端和浏览器使用从站点根开始的同一个密钥交换路径。纯客户端不生成服务端私钥。
+
+独立 API 和 Fullstack 的 Serv 从 `_serv.yml` 读取 HTTP 策略。三个宿主都在 `http` 下设置 `trustedProxies`、`access` 和 `rateLimit`。生成项目默认关闭固定窗口限流。启用时由应用使用已初始化的 Cache 装配计数存储。 [请求访问与可信代理](skills/hai-core/request-access.md)
+
+A2A 在生成项目中默认关闭。要向合作方发布订单助手，先配置 AI Agent Card 和 IAM API Key，然后在服务端启动代码的 `createA2AExecutor` 接入应用的执行器。独立 API 和 SvelteKit 项目在 `src/lib/server/init.ts` 配置，Fullstack 后端在 `src/server/runtime.ts` 配置。执行器就绪后启用 `_serv.yml.a2a` 或 `_kit.yml.a2a`。使用自建网关时，将 Card 与 RPC 的实际路径转发给同一后端，并在 Agent Card 公布含网关或子目录前缀的完整 RPC 地址。 [执行器鉴权](skills/hai-ai/reference.md#a2a)
 
 页面文字走应用messages，认证复用AuthPanel及公开IAM配置，表单使用Form/FormLayout/FormField。输入无效表单时保留草稿、显示安全Toast和可访问错误关联；默认角色、流程和限额由业务决定，并在服务端授权。宽屏工作区可扩展，窄屏表格内部滚动，阅读内容保留合适宽度。
 

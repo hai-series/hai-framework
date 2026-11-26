@@ -32,6 +32,8 @@ For IAM templates, the initial account is `admin`; obtain its generated password
 
 ## 3. Implement one complete capability
 
+For a worked example, build the same order console as a standalone Serv API or as a SvelteKit app using Kit. Both guides start with a status endpoint and then add authorization, access rules and transport encryption. [Serv tutorial](serv.en.md) · [Kit tutorial](kit.en.md)
+
 Define the accepted input, output, owner/tenant boundary and failure behavior first. Reuse [module capabilities](../development/README.md); define HTTP schemas in the contract, enforce authorization in the service, and call it through the typed client. Hiding a button is not authorization. The server derives the trusted resource owner from the authenticated context.
 
 Initialize lifecycle modules in dependency order, check every `HaiResult.success`, and close in reverse order. Factories, schemas and UI components follow their own contracts. Handle storage/transport rejection at the documented boundary; show safe localized errors and keep a trace ID for server diagnostics. Use the module's [English README](../../../README.en.md#find-modules-by-domain) for a complete example rather than copying an internal source file.

@@ -1097,7 +1097,7 @@ finally {
 
 这组工具让 Node 后端在执行接口前，先按请求的路径、HTTP 方法、客户端 IP 和服务器时间决定是否放行。例如，限制只有合作方网段能调用某个同步接口。通过检查只表示满足访问策略，接口仍需按自己的规则验证身份和权限。
 
-- 用 **Serv** 或 **Kit**：分别在 `_serv.yml` 的 `http.access` 或 `_kit.yml` 的 `access` 写规则。将对应设置交给 `serv.createApp({ http, ... })` 或 `kit.createHandle({ access, ... })` 后，框架会在启动时准备检查器，每次收到请求自动检查，拒绝时返回 HTTP 403。规则不写在 `_core.yml`。
+- 用 **Serv** 或 **Kit**：在 `_serv.yml` 或 `_kit.yml` 的 `http.access` 写规则，再把 `http` 交给应用工厂或 Hook。框架会准备检查器，每次收到请求自动检查，拒绝时返回 HTTP 403。
 - 用 **其他 Node HTTP 框架**：启动时创建 IP 解析器和规则检查器。每次请求时先从连接取出对端地址并解析客户端 IP，再把 URL 的 `pathname`、HTTP 方法和该 IP 传给检查器。Core 返回判定结果，HTTP 响应由你的代码负责。
 
 <a id="client-ip-resolver"></a>
@@ -1111,6 +1111,14 @@ finally {
 | `core.access.createConditionCheck(condition)` | 单独检查 IP 和当前时段，不匹配路径或方法 | 必填 `condition`，包含可信地址与时间条件。字段和取值见[访问策略](../configuration/request-access.md)。 | `checkCondition(ip?)`，返回 `AccessDecision` | `core.access.createConditionCheck({ allowIps: ['198.51.100.0/24'], denyIps: [], timezone: 'UTC', windows: [] })` |
 | `core.access.createRequestCheck(input?)` | 启动时准备请求检查器 | `input` 接受内联策略、`{ file }` 或 `false`，默认 `false`。 | `check(pathname, method, ip?)`，返回 `AccessDecision`；无法创建时抛错 | `const check = core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
 | `core.access.loadPolicy(input?, baseDirectory?)` | 只读取和校验策略，适合部署前检查文件 | `input` 接受内联策略、`{ file }` 或 `false`，默认 `false`。`baseDirectory` 用来解析相对文件路径，默认当前目录。 | 校验后的策略对象或 `false`，无效时抛错 | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+| `core.access.createRateLimiter(options)` | 创建固定窗口限流器 | 必填原子 `store`，默认 `windowMs: 60000`、`maxRequests: 100`。可选 `keyGenerator(context)` 和 `onLimitReached(context, defaultResponse)`。 | 调用返回的检查函数并等待 `Headers` 或 `Response`。未超限返回限流头，超限 429，检查故障 503。 | `core.access.createRateLimiter({ store })` |
+| `core.access.createCacheRateLimitStore(backend, options)` | 用共享 Redis 原子计数 | `backend` 为已初始化的 Cache，`options.namespace` 是 1–128 字符的计数范围。默认拒绝内存后端，开发和显式测试可设 `allowMemory: true`。 | `RateLimitStore`。Redis 读写故障在检查时转为 503。 | `core.access.createCacheRateLimitStore(cache, { namespace: "orders" })` |
+| `core.access.createMemoryRateLimitStore()` | 创建单进程开发或显式测试用计数存储 | 无参数。 | `MemoryRateLimitStore`。生产调用会抛错。 | `core.access.createMemoryRateLimitStore()` |
+| `core.access.createCors(options)` | 准备浏览器跨域策略 | 必填 `HttpCorsOptions`。 | `(request) => { preflight, headers } \| undefined`，未匹配路径时返回 `undefined`。 | `core.access.createCors({ origin: "https://console.example" })` |
+| `core.access.isCorsPreflight(request)` | 识别实际浏览器预检 | 当前 Fetch 请求。 | `boolean`。需要同时具备 OPTIONS、Origin 和目标方法头。 | `core.access.isCorsPreflight(request)` |
+| `core.access.applyCorsHeaders(response, headers)` | 给响应附加跨域头 | 当前响应与策略头。 | `Response`，合并 `Vary` 并保留响应体。 | `core.access.applyCorsHeaders(response, headers)` |
+
+Serv 和 Kit 使用 `core.auth.verifySession(verifyToken, token)` 投影可信会话，明确的 4xx 返回空会话，校验服务故障返回失败的 `HaiResult`。浏览器可用 `core.auth.matchPermission("orders:read", ["orders:*"])` 决定是否显示订单链接，业务接口仍需校验当前用户和资源权限。
 
 <a id="access-condition-options"></a>
 
@@ -1237,7 +1245,7 @@ async function handlePartnerAccess(
 | 周一 18:00，合作方再次请求同步 | 返回 `403`；日志的 `reason` 为 `time`。 |
 | 任意时间请求 `GET /health` | 没有命中这条规则，健康检查继续执行。 |
 
-用 Serv 或 Kit 时，无需复制这段处理函数。把规则写进 `_serv.yml` 的 `http.access` 或 `_kit.yml` 的 `access`，对应的代理地址写进 `http.trustedProxies` 或顶层 `trustedProxies`；配置示例见[请求访问策略](../configuration/core.md#request-access)。
+用 Serv 或 Kit 时，把规则写进 `_serv.yml` 或 `_kit.yml` 的 `http.access`，把代理地址写进 `http.trustedProxies`。框架会执行检查。 [请求访问策略](../configuration/core.md#request-access)。
 
 也可以从独立的 YAML 读取策略。下面改用[独立文件示例](../configuration/request-access.md#41-准备文件)中的规则来演示文件读取，它与上面的库存同步规则是两个例子。
 
@@ -1257,6 +1265,34 @@ const decision = check('/api/v1/external/sync', 'GET', '192.0.2.7')
 - `check.encryption(pathname, method)` 只按路径和方法返回 `'required'`、`'disabled'` 或 `undefined`。没有显式设置时返回 `undefined`，由 HTTP 服务沿用自己的设置。若规则的加密模式互相冲突，检查器创建失败；若 `check.requiresEncryption` 为 `true`，Serv 和 Kit 没有配置应用层传输加密时会拒绝启动。
 
 完整默认值、独立文件、代理拓扑及部署步骤见[请求访问控制手册](../configuration/request-access.md)。
+
+<a id="http-rate-limit"></a>
+
+#### 场景：验证两次请求的额度
+
+下例独立验证计数器。实际项目使用 Serv 或 Kit 的 `http.rateLimit`，由宿主解析可信地址、装配响应并管理存储生命周期。 [Serv 限流](serv.md#rate-limit-example) · [Kit 限流](kit.md#rate-limit-example)
+
+```ts
+import { core } from '@h-ai/core'
+
+// 创建当前开发进程的原子计数存储。生产环境需要共享 Redis。
+const store = core.access.createMemoryRateLimitStore()
+// 将同一可信来源的额度配置为每 10 秒 2 次。检查器复用上述计数存储。
+const check = core.access.createRateLimiter({ store, windowMs: 10_000, maxRequests: 2 })
+
+for (const requestId of ['request-1', 'request-2', 'request-3']) {
+  // 模拟来自同一可信地址的请求。允许时得到 Headers，超限时得到 Response。
+  const result = await check({ clientAddress: '192.0.2.42', context: undefined, requestId })
+  if (result instanceof Response) {
+    process.stdout.write(`${result.status}\n`)
+  }
+  else {
+    process.stdout.write(`${result.get('X-RateLimit-Remaining')}\n`)
+  }
+}
+```
+
+前两次通过，剩余额度分别是 1 和 0。第三次得到 HTTP 429 与 `Retry-After`。实际宿主应把允许结果中的限流头加到业务响应上，直接返回拒绝响应。使用共享存储时，Redis 的键到期时间决定窗口何时重置。
 
 <a id="id-api"></a>
 

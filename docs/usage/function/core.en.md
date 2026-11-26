@@ -528,7 +528,7 @@ In a Vite application, put the entry inside the Web Worker constructor, for exam
 
 Use `core.access` to decide whether the Node server should let a request through based on its path, HTTP method, client IP and the server's current time. The service still handles authentication and authorization.
 
-- **Serv or Kit:** Configure `http.access` in `_serv.yml` or `access` in `_kit.yml`, then pass the settings to `serv.createApp({ http, ... })` or `kit.createHandle({ access, ... })`. The framework prepares the checker at startup and returns HTTP 403 for denied requests. These rules do not go in `_core.yml`.
+- **Serv or Kit:** Set `http.access` in `_serv.yml` or `_kit.yml` and pass `http` to the application factory or hook. The framework prepares the checker and returns HTTP 403 for denied requests.
 - **Other Node HTTP frameworks:** Create the IP resolver and policy checker at startup. For each request, resolve the IP using the actual peer address from the server or a trusted platform. Pass the URL pathname, HTTP method and resolved IP to the checker. Use its decision to choose the HTTP response.
 
 A request must satisfy `global` and every matching rule. If none match, only `global` applies. Omitting `methods` or passing an empty list matches all methods. A pattern ending in `/**` matches the path itself and its descendants. A denial includes `reason: 'address'`, `'time'` or `'path'`, and a `ruleId` when a path rule denies it.
@@ -544,6 +544,14 @@ A request must satisfy `global` and every matching rule. If none match, only `gl
 | `core.access.createConditionCheck(condition)` | Prepare address and schedule conditions | Required `condition` containing trusted-address and time constraints. See [access policy](#access-condition-options) for fields and values. | `(ip?) => AccessDecision` | `core.access.createConditionCheck({ allowIps: [], denyIps: [], timezone: 'UTC', windows: [] })` |
 | `core.access.createRequestCheck(input?)` | Compile a request policy | `input` is an inline policy, `{ file }`, or `false` (default). | `check(pathname, method, ip?)` → `AccessDecision` | `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` |
 | `core.access.loadPolicy(input?, baseDirectory?)` | Read and validate policy content | `input` is an inline policy, `{ file }`, or `false` (default). `baseDirectory` resolves relative file paths and defaults to the process directory. | `RequestAccessPolicy` / `false` | `core.access.loadPolicy({ file: './config/security/request-access.yml' })` |
+| `core.access.createRateLimiter(options)` | Create a fixed-window limiter | An atomic `store` is required. Defaults are `windowMs: 60000` and `maxRequests: 100`. Optional `keyGenerator(context)` and `onLimitReached(context, defaultResponse)` are callbacks. | Await the returned checker for `Headers` on allowed requests or a `Response` on rejection. Rejections are 429 for quota and 503 for store failure. | `core.access.createRateLimiter({ store })` |
+| `core.access.createCacheRateLimitStore(backend, options)` | Count atomically in shared Redis | `backend` is initialized Cache. `options.namespace` is a 1–128 character counter scope. `allowMemory: true` permits the memory backend in development and explicit tests. | `RateLimitStore`. The checker maps Redis read or write failures to 503. | `core.access.createCacheRateLimitStore(cache, { namespace: "orders" })` |
+| `core.access.createMemoryRateLimitStore()` | Create a single-process store for development or explicit tests | No arguments. | `MemoryRateLimitStore`. Throws in production. | `core.access.createMemoryRateLimitStore()` |
+| `core.access.createCors(options)` | Prepare a browser CORS policy | Requires `HttpCorsOptions`. | A request checker returning `{ preflight, headers }` or `undefined` outside configured paths. | `core.access.createCors({ origin: "https://console.example" })` |
+| `core.access.isCorsPreflight(request)` | Recognize a browser preflight | Current Fetch request. | `boolean`. Requires OPTIONS, Origin, and the requested-method header. | `core.access.isCorsPreflight(request)` |
+| `core.access.applyCorsHeaders(response, headers)` | Add CORS headers | Response and computed policy headers. | `Response`, with combined `Vary` values and its original body. | `core.access.applyCorsHeaders(response, headers)` |
+
+Serv and Kit use `core.auth.verifySession(verifyToken, token)` to project trusted sessions. A verifier returning 4xx leaves the session empty. Identity-service failures return a failed `HaiResult`. The browser can use `core.auth.matchPermission("orders:read", ["orders:*"])` to decide whether to show an orders link. The API still verifies the user and resource access.
 
 <a id="access-condition-options"></a>
 
@@ -666,11 +674,39 @@ async function handlePartnerAccess(
 | Monday 18:00, the partner requests another sync | Returns `403`; the server logs `reason: 'time'`. |
 | `GET /health` at any time | The rule does not match; the health check continues. |
 
-With Serv or Kit, put the same rules under `http.access` in `_serv.yml` or `access` in `_kit.yml`. Set `http.trustedProxies` for Serv or top-level `trustedProxies` for Kit. Those frameworks run the check; see [request policy settings](../configuration/core.en.md#request-access) for configuration examples.
+In Serv and Kit, put the rules under `http.access` and the proxies under `http.trustedProxies` in the service configuration. The frameworks run the checks. [request policy settings](../configuration/core.en.md#request-access) for configuration examples.
 
 Invalid policies throw when the checker is created. A referenced file is read only at creation; restart or recreate the checker after changing it. `check.encryption(pathname, method)` returns `'required'`, `'disabled'`, or `undefined` to keep the server's setting. It controls application-level encryption separately from HTTPS and does not grant access. If `check.requiresEncryption` is true, Serv and Kit require application-level transport encryption to be configured.
 
 [Request policy settings](../configuration/core.en.md#request-access)
+
+<a id="http-rate-limit"></a>
+
+#### Scenario: Verify a two-request allowance
+
+This example exercises the counter directly. In a Serv or Kit application use `http.rateLimit`. The host resolves trusted addresses, applies the HTTP result, and manages the store. [Serv rate limiting](serv.en.md#rate-limit-example) · [Kit rate limiting](kit.en.md#rate-limit-example)
+
+```ts
+import { core } from '@h-ai/core'
+
+// Create an atomic counter for the current development process. Production uses shared Redis.
+const store = core.access.createMemoryRateLimitStore()
+// Give a trusted client two requests per 10-second window using that store.
+const check = core.access.createRateLimiter({ store, windowMs: 10_000, maxRequests: 2 })
+
+for (const requestId of ['request-1', 'request-2', 'request-3']) {
+  // Simulate a request from the same trusted address. Allowed requests return Headers and excess requests return a Response.
+  const result = await check({ clientAddress: '192.0.2.42', context: undefined, requestId })
+  if (result instanceof Response) {
+    process.stdout.write(`${result.status}\n`)
+  }
+  else {
+    process.stdout.write(`${result.get('X-RateLimit-Remaining')}\n`)
+  }
+}
+```
+
+The first two checks report one and zero requests remaining. The third returns HTTP 429 with `Retry-After`. The host adds headers from an allowed result to its business response and returns rejected responses directly. With shared storage, Redis key expiry determines when the window resets.
 
 <a id="id-api"></a>
 

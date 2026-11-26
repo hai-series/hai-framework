@@ -82,6 +82,12 @@ provider:
 }
 ```
 
+<a id="http-rate-limit-deployment"></a>
+
+### HTTP レート制限を有効にした Serv または Kit をデプロイする
+
+バックエンドの `config/_serv.yml` または `config/_kit.yml` に `http.rateLimit` を設定します。デプロイは環境変数の上書きも適用して時間枠と上限を検証します。アプリは起動時にアトミックな計数ストアを渡します。複数のインスタンスでは Redis、名前空間、設定を揃えます。管理対象の非公開ゲートウェイでは `http.trustedProxies: auto` を利用できます。自前の場合は実際のプロキシ IP または CIDR を指定します。公開ドメインから同じ接続元で複数インスタンスに連続してリクエストし、利用枠の共有を確認します。 [Serv の設定例](serv.ja.md#rate-limit-config-example) · [Kit の設定例](kit.ja.md#rate-limit-config-example)
+
 <a id="rootless-docker-external-https"></a>
 
 ### 既存の HTTPS ゲートウェイの背後に Rootless Docker で配備する

@@ -7,7 +7,7 @@
 独立文件建议置于 `config/security/` 并显式引用，避免 Core 自动把配置根目录的 YAML 当作业务配置预读。Core 不递归自动加载此子目录；策略始终由宿主创建时验证和编译，改变文件后重建宿主。
 
 - Serv：服务端 `_serv.yml` 的 `http.access` / `http.trustedProxies`，转发到 `serv.createApp({ http })`。
-- SvelteKit：服务端 `_kit.yml` 的 `access` / `trustedProxies`，初始化后一次性传给 `kit.createHandle`。仅加载配置不代表安装守卫。
+- SvelteKit：服务端 `_kit.yml` 的 `http.access` / `http.trustedProxies`，初始化后一次性传给 `kit.createHandle({ http })`。仅加载配置不代表安装守卫。
 - `access` 默认 `false`。内联对象与 `{ file: './config/security/request-access.yml' }` 二选一，不能混合。文件按服务工作目录解析，最大 1 MiB，只在创建宿主时读取；缺失、未知字段、重复键、YAML 别名导致启动失败。修改后重建 App/Handle，不在请求中轮询文件。
 - `global` 约束宿主处理的全部请求，包括健康检查；`rules` 按完整 URL pathname 限制指定入口。静态服务器和 S3 直接返回的资源不经过 Node 守卫，另设入口/对象授权。
 
@@ -40,7 +40,7 @@ SvelteKit CLI 模板选择 crypto 后可启用 `_kit.yml.transport`；服务端�
 
 ## 真实 IP 的信任链
 
-`trustedProxies` 默认 `auto`，普通宿主相当于 `[]`，不信任转发头。只有受管 Compose 设置 `HAI_DEPLOY_PRIVATE_PROXY=1` 且后端私有、存在入口代理时，才编译本容器网络。不要在公开后端或宿主机手动设置这个内部标志。自管入口明确列出实际代理 IP/CIDR；`[]` 显式关闭。
+`http.trustedProxies` 默认 `auto`，普通宿主相当于 `[]`，不信任转发头。只有受管 Compose 设置 `HAI_DEPLOY_PRIVATE_PROXY=1` 且后端私有、存在入口代理时，才编译本容器网络。不要在公开后端或宿主机手动设置这个内部标志。自管入口明确列出实际代理 IP/CIDR；`[]` 显式关闭。
 
 Node listener 使用 socket 对端；Fetch 必须传可信平台 `remoteAddress`，不能复制头字段。SvelteKit 从受信平台取得对端，解析后的 `event.getClientAddress()` 与 IAM、审计和限流共用。可信 XFF 从右向左停在首个不可信地址；无效链不回退到一个伪造客户端身份。
 
@@ -48,7 +48,7 @@ Node listener 使用 socket 对端；Fetch 必须传可信平台 `remoteAddress`
 
 ## 部署与公共边界
 
-`.env.<环境>` 或私有覆盖可设置 `HAI_SERV_HTTP_ACCESS='{"file":"./config/security/request-access.yml"}'` / `HAI_KIT_ACCESS=...`。同来源 `HAI_SERV` / `HAI_KIT` JSON 提供基础，`HAI_SERV_HTTP_ACCESS_FILE` / `HAI_KIT_ACCESS_FILE` 等细项继续覆盖；更高来源整段替换会清除低来源细项。
+`.env.<环境>` 或私有覆盖可设置 `HAI_SERV_HTTP_ACCESS='{"file":"./config/security/request-access.yml"}'` / `HAI_KIT_HTTP_ACCESS=...`。同来源 `HAI_SERV` / `HAI_KIT` JSON 提供基础，`HAI_SERV_HTTP_ACCESS_FILE` / `HAI_KIT_HTTP_ACCESS_FILE` 等细项继续覆盖；更高来源整段替换会清除低来源细项。
 
 部署校验当前选中后端的配置文件，规范化快照放入交付包并参加 SHA-256 校验，容器通过 `/run/hai/request-access.yml` 只读挂载。工程原始引用不回写成容器路径。仅更新前端时保留后端原文件；失败恢复使用旧发布的 Compose/文件。待上传归档和 SDK 策略快照不能手改；替换快照时重新打包。已部署 Node 后端挂载的 `.env.runtime` 可按[部署指引](../hai-deploy/SKILL.md#后端运行配置重载)修改后重启，注意上层 JSON 优先级；不会自动重写 Nginx 或策略文件。镜像/配置回退不能撤销数据库和业务效果。
 

@@ -17,7 +17,7 @@ description: "接入或排查 @h-ai/api-client typed API、登录 Token、自动
 
 ## 使用路径
 
-1. 读取服务端 contract、apiPrefix、CORS、Cookie 与 transport 配置。自定义客户端从[共享应用契约](../hai-api-contract/reference.md#use-with-client)取得操作签名，再传给 `apiClient.create(contract)`。
+1. 读取服务端契约、API 前缀、CORS、Cookie 与传输配置。需要独立或自定义客户端时，从应用契约包导入服务端已挂载的路由树，并传给 `apiClient.create(contract)`。 [创建客户端示例](reference.md#使用步骤)
 2. 浏览器使用 Cookie/内存；SSR 按请求创建客户端，原生使用安全 TokenStorage，不跨用户复用单例。
 3. 检查 init 与标准业务调用的 `success`。自定义裸值或流先排除失败分支。在 `init` 中提供 `auth` 后，再使用 `createAuthActions` 连接认证界面并保存凭据。
 4. 同步服务端与客户端的刷新、加密和错误处理。仅在明确的认证拒绝后按原身份恢复。退出时调用服务端接口撤销会话和 Cookie，再清理本地凭据。

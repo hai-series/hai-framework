@@ -525,6 +525,8 @@ hai_ai_knowledge is live at generation-42 with dimension 3. A new generation inv
 
 A2A uses the shared storage clock for deadlines and checks the record version when saving events. Completed message receipts have no automatic expiry.
 
+The executor reads the current key ID, scopes, and effective permissions through `ai.a2a.getCallerIdentity(context)`. These fields live in the SDK request context, while tasks and messages are associated with the verified caller ID. [A2A executor authorization](../function/ai.en.md#a2a-http-example)
+
 <a id="progress-of-an-agent-task"></a>
 
 #### Example · Progress of an agent task

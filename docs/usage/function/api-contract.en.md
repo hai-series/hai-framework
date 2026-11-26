@@ -176,6 +176,19 @@ const reportUrl = '/api/v1' + template.replace('{id}', encodeURIComponent('r-42'
 
 `apiContract.pathOf(apiContract.iam.auth.login)` returns `/auth/login`. With the typed client, pass the ID to `client.reports.get({ id: 'r-42' })` and let it fill the placeholder.
 
+<a id="resolve-audio-ws-path"></a>
+
+### `apiContract.resolveAudioWebSocketPath` · Resolve the report audio WebSocket path
+
+The reports service uses `/backoffice/api/v2`. When audio follows the API prefix, Serv and the deployment gateway both use `/backoffice/api/v2/ai/audio`. When the gateway publishes audio separately at `/voice/reports`, pass that complete site path.
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+
+const defaultPath = apiContract.resolveAudioWebSocketPath('/backoffice/api/v2')
+const dedicatedPath = apiContract.resolveAudioWebSocketPath('/backoffice/api/v2', '/voice/reports')
+```
+
 <a id="use-with-serv"></a>
 
 ### Mount the contract in a standalone service with `@h-ai/serv`
@@ -244,7 +257,7 @@ export function mountIam(iam: IamFunctions) {
   const contract = apiContract.create({ iam: apiContract.iam })
   const procedures = { iam: serv.createIamProcedures({ iam }) }
   // Authenticate requests with the initialized IAM instance and mount the endpoints under /api/v1.
-  return serv.createApp({ contract, procedures, iam, http: { apiPrefix: '/api/v1' } })
+  return serv.createApp({ contract, procedures, auth: { iam }, http: { apiPrefix: '/api/v1' } })
 }
 ```
 
@@ -414,16 +427,19 @@ Select existing route groups from the root module. Each domain owns its business
 - **Payment**. Use the channels configured on the server to create or query an order. An acknowledged Alipay notification returns HTTP 200 and plain text `success`. [Alipay notification acknowledgment](payment.en.md#alipay-notification-ack)
 - **Feedback**. Users call `reports.listMine` to view their reports. Staff call `reports.list` for authorized reports. Both sides read `reports.listMessages` and reply through `reports.addMessage`. [@h-ai/feedback](feedback.en.md#api-reference)
 
+Import `FeedbackContext` and `FeedbackHttpOperations` from `@h-ai/api-contract/feedback` to type a custom HTTP adapter. The server derives `scopeId`, `userId`, and optional `permissions` in `FeedbackContext` from a verified session. `FeedbackHttpOperations` covers the service state, budget, and feedback operations used by the adapter. Applications using `@h-ai/feedback` can still import `FeedbackContext` from that package and pass the initialized `feedback` instance to the adapter directly.
+
 <a id="feedback-budget"></a>
 
 ### Declare feedback transport limits
 
-Import `apiContract.feedbackTransportRoutes(apiPrefix?)` from `@h-ai/api-contract/feedback`. It returns a route-to-byte mapping under the API prefix, which defaults to `/api`. Merge it into the host’s `routePlaintextBytes`.
+Import `apiContract.feedbackTransportRoutes(apiPrefix?, maxTotalFileBytes?)` from `@h-ai/api-contract/feedback`. The first argument is the actual API prefix and defaults to `/api`. The second is the feedback setting for the total raw file size per write and defaults to 10 MiB. Merge the result into the host’s `routePlaintextBytes`. Submission and reply budgets include room for Base64 and JSON. Attachment reads use 16 MiB.
 
 ```ts
 import { apiContract } from '@h-ai/api-contract/feedback'
 
-const routePlaintextBytes = apiContract.feedbackTransportRoutes('/api')
+// Allow 12 MiB of raw files per feedback write. Submission and reply routes get a 17 MiB plaintext budget.
+const routePlaintextBytes = apiContract.feedbackTransportRoutes('/api/v1', 12 * 1024 * 1024)
 void routePlaintextBytes
 ```
 

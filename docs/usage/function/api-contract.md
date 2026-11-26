@@ -176,6 +176,19 @@ const reportUrl = '/api/v1' + template.replace('{id}', encodeURIComponent('r-42'
 
 读取内置路径时同样传单个端点，例如 `apiContract.pathOf(apiContract.iam.auth.login)` 得到 `/auth/login`。typed client 会根据输入组装参数，直接调用 `client.reports.get({ id: 'r-42' })` 即可。
 
+<a id="resolve-audio-ws-path"></a>
+
+### `apiContract.resolveAudioWebSocketPath` · 解析报表语音的 WebSocket 路径
+
+报表服务使用 `/backoffice/api/v2`。语音沿用业务前缀时，Serv 和部署网关都使用 `/backoffice/api/v2/ai/audio`。入口网关将语音单独发布到 `/voice/reports` 时，填写完整路径，前缀无需重复。
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+
+const defaultPath = apiContract.resolveAudioWebSocketPath('/backoffice/api/v2')
+const dedicatedPath = apiContract.resolveAudioWebSocketPath('/backoffice/api/v2', '/voice/reports')
+```
+
 <a id="use-with-serv"></a>
 
 ### 在独立服务中挂载契约：`@h-ai/serv`
@@ -244,7 +257,7 @@ export function mountIam(iam: IamFunctions) {
   const contract = apiContract.create({ iam: apiContract.iam })
   const procedures = { iam: serv.createIamProcedures({ iam }) }
   // 使用初始化完毕的 IAM 验证请求身份，路由挂载到 /api/v1。
-  return serv.createApp({ contract, procedures, iam, http: { apiPrefix: '/api/v1' } })
+  return serv.createApp({ contract, procedures, auth: { iam }, http: { apiPrefix: '/api/v1' } })
 }
 ```
 
@@ -414,16 +427,19 @@ console.info(parsed.data.data.total) // 1
 - **Payment**。应用按服务端支持的渠道创建或查询订单。支付宝通知按渠道要求成功返回 HTTP 200 和纯文本 `success`。[支付宝通知回执](payment.md#alipay-notification-ack)
 - **Feedback**. 普通用户通过 `reports.listMine` 查自己的反馈，处理人员通过 `reports.list` 查有权限的反馈。消息由 `reports.listMessages` 读取，双方通过 `reports.addMessage` 回复。 [@h-ai/feedback](feedback.md#api-reference)
 
+从 `@h-ai/api-contract/feedback` 可导入 `FeedbackContext` 和 `FeedbackHttpOperations`，用于为自定义 HTTP 适配器标注可信服务端身份及反馈操作。`FeedbackContext` 包含 `scopeId`、`userId` 和可选的 `permissions`，由服务端从已验证的会话解析。`FeedbackHttpOperations` 描述适配器所需的服务状态、反馈预算和领域方法。应用使用 `@h-ai/feedback` 时可继续从该包导入 `FeedbackContext`，并将已初始化的 `feedback` 实例直接交给适配器。
+
 <a id="feedback-budget"></a>
 
 ### 声明反馈传输容量
 
-从 `@h-ai/api-contract/feedback` 导入 `apiContract.feedbackTransportRoutes(apiPrefix?)`。路径以 API 前缀为起点，默认 `/api`，返回供宿主合并到 `routePlaintextBytes` 的字节数映射。
+从 `@h-ai/api-contract/feedback` 导入 `apiContract.feedbackTransportRoutes(apiPrefix?, maxTotalFileBytes?)`。第一个参数是宿主的实际 API 前缀，默认 `/api`。第二个参数是反馈配置的单次原始文件总大小，默认 10 MiB。合并返回值到宿主的 `routePlaintextBytes`。报告提交和消息写入会为 Base64 与 JSON 预留空间，附件读取使用 16 MiB。
 
 ```ts
 import { apiContract } from '@h-ai/api-contract/feedback'
 
-const routePlaintextBytes = apiContract.feedbackTransportRoutes('/api')
+// 运营台允许每次反馈带 12 MiB 原始文件，提交和消息端点因此使用 17 MiB 明文额度。
+const routePlaintextBytes = apiContract.feedbackTransportRoutes('/api/v1', 12 * 1024 * 1024)
 void routePlaintextBytes
 ```
 

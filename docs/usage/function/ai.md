@@ -2280,25 +2280,87 @@ async function maintain_acp_agents(definition: Parameters<typeof ai.acp.agents.r
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `ai.a2a.registerExecutor(executor)` | 注册任务执行器 | `executor: AgentExecutor` | `void` | `ai.a2a.registerExecutor(executor)` |
-| `ai.a2a.getAgentCard()` | 提供标准发现文档 | 无参数。读取配置中的 Agent Card | `A2AAgentCardDocument (A2A 1.0 ProtoJSON)` | `ai.a2a.getAgentCard()` |
-| `ai.a2a.handleRequest(requestBody, context?)` | 处理认证的协议请求 | `requestBody: unknown, context?: Record<string, unknown>`。`requestBody` 为收到的 A2A JSON-RPC 请求值，由入口校验 | `direct Promise<A2AHandleResult>; JSON-RPC/SSE outcome` | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })` |
-| `ai.a2a.listMessages(filter)` | 可信管理查询 | `filter: A2ATaskFilter` | `StorePage<A2AMessageRecord>` | `ai.a2a.listMessages(messageFilter)` |
-| `ai.a2a.callRemoteAgent(remoteUrl, message, options?)` | 调用获准远端 | `remoteUrl: string, message: string, options?: A2ACallOptions` | `A2ACallResult` | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "请分析订单")` |
+| `ai.a2a.createHttpHandler(options)` | 为 Serv 或 Kit 创建 A2A HTTP 入口 | `A2AHttpOptions` 中的 `authenticate` 必填。发现路径默认 `/.well-known/agent-card.json`，RPC 默认 `/a2a` | `A2AHttpHandler`。先初始化 AI、配置 A2A 并注册执行器。路径或认证选项无效时抛出 `TypeError`。 | `ai.a2a.createHttpHandler({ authenticate })` |
+| `ai.a2a.registerExecutor(executor)` | 注册任务执行器 | `executor: AgentExecutor` | `HaiResult<void>` | `ai.a2a.registerExecutor(executor)` |
+| `ai.a2a.getAgentCard()` | 读取 Agent Card | 无参数。读取配置中的 Agent Card | `HaiResult<A2AAgentCardDocument>` | `ai.a2a.getAgentCard()` |
+| `ai.a2a.handleRequest(requestBody, caller?)` | 处理已验证调用方的 JSON-RPC 请求 | `requestBody: unknown, caller?: A2AHttpIdentity` | `Promise<A2AHandleResult>` | `ai.a2a.handleRequest(body, { agentId: trustedAgentId })` |
+| `ai.a2a.getCallerIdentity(context)` | 在执行器中读取可信调用方 | `context: RequestContext` | `A2AHttpIdentity \| undefined` | `ai.a2a.getCallerIdentity(context)?.permissions` |
+| `ai.a2a.listMessages(filter)` | 查询已授权的消息记录 | `filter: A2ATaskFilter` | `Promise<HaiResult<StorePage<A2AMessageRecord>>>` | `ai.a2a.listMessages(messageFilter)` |
+| `ai.a2a.callRemoteAgent(remoteUrl, message, options?)` | 调用获准的远端智能体 | `remoteUrl: string, message: string, options?: A2ACallOptions` | `Promise<HaiResult<A2ACallResult>>` | `ai.a2a.callRemoteAgent("https://agent.example.com/a2a", "请分析订单")` |
 
 #### A2A 请求、分页与调用参数
 
 | 对象或方法 | 字段 | 默认值、条件及作用 |
 | --- | --- | --- |
-| `registerExecutor`、`handleRequest` | `executor`、`requestBody`、`context` | 执行器来自应用，框架将协议任务交给它。入口接收原始 JSON-RPC 值及可选由服务端确认的调用上下文，协议校验失败返回协议错误 |
+| `A2AHttpOptions` | `cardPath`、`rpcPath` | 分别精确匹配 GET Agent Card 和 POST JSON-RPC，请填写带实际挂载前缀的站点根绝对路径。Agent Card 的 `supportedInterfaces` 应声明外部可访问的完整 RPC URL。 |
+| `A2AHttpOptions` | `authenticate` | 自定义回调接收 Fetch `Request`，成功返回可信 `{ agentId }`，空值返回 401。传 `{ verifyApiKey }` 时验证 Agent Card 声明的请求头或查询参数，未声明时读 `x-api-key`。只有显式传 `false` 才允许匿名。 |
+| `A2AHttpIdentity` | `agentId`, `apiKeyId`, `scopes`, `permissions` | 有效权限取当前主体授权与 Key 范围的交集，业务授权读取 `permissions`。 |
+| `A2AHttpHandler` | `cardPath`、`rpcPath`、`handleRequest(request, requestId?)` | 记录实际挂载路径，返回 `Response` 或继续宿主路由的 `null`。RPC 支持 JSON 和 SSE，HTTP 正文上限 2 MiB。SSE 连接断开时释放订阅，业务任务由 `CancelTask` 取消。 |
+| `registerExecutor`、`handleRequest` | `executor`、`requestBody`、`caller` | 执行器来自应用，框架将协议任务交给它。入口接收原始 JSON-RPC 值及可选由服务端确认的调用上下文，协议校验失败返回协议错误 |
 | `A2ATaskFilter` | `status`、`contextId`、`callerId`、`since`、`limit`、`offset` | 可按 `user/agent` 消息角色、上下文及可信调用方过滤。`since` 是起始 Unix 毫秒值。分页默认偏移 0、50 条 |
 | `callRemoteAgent`、`A2ACallOptions` | `remoteUrl`、`message`、`timeout`、`headers` | 远端地址和文本必填。超时默认 60000 毫秒。可从服务端传额外请求头，同名字段不区分大小写地覆盖 |
 
 例如 `{ callerId: 'docs-reader', status: 'agent', limit: 10 }` 查询该调用方的最多十条智能体消息，任务最终状态仍从各自的任务结果读取。
 
-#### 场景：发布与调用远程智能体
+<a id="a2a-http-example"></a>
 
-getAgentCard 输出公开能力文档，handleRequest 输入协议请求输出 JSON 或事件流；callRemoteAgent 输出远程结果，listMessages 只读取有权访问的任务消息。构建协议对象不自动授予调用权限。
+#### 场景：向合作方发布订单助手
+
+合作方系统通过 Agent Card 发现积压订单助手。启用 IAM 的 `login.apikey`，为合作方账户授予 `orders:read`，再签发 `scopes: [orders:read]` 的 Key。配置 `_ai.yml` 中的 `a2a.agentCard.url: https://orders.example.com/partners/orders` 和 `a2a.security.apiKey: { in: header, name: x-api-key }`。
+
+AI 与 IAM 初始化后，把应用按合作方 ID 查询订单的业务函数传给下方工厂。执行器在读取订单前检查有效权限。
+
+```ts
+import { randomUUID } from 'node:crypto'
+import { ai } from '@h-ai/ai'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+
+export function createPartnerA2A(loadBacklogSummary: (partnerId: string) => Promise<string>) {
+  const registered = ai.a2a.registerExecutor({
+    async execute(context, bus) {
+      const caller = ai.a2a.getCallerIdentity(context)
+      const text = caller && core.auth.matchPermission('orders:read', caller.permissions ?? [])
+        ? await loadBacklogSummary(caller.agentId)
+        : '该合作方没有读取积压订单的权限。'
+      bus.publish(ai.AgentEvent.message(ai.Message.fromJSON({
+        messageId: randomUUID(),
+        role: 'ROLE_AGENT',
+        parts: [{ text }],
+      })))
+      bus.finished()
+    },
+    async cancelTask(_taskId, bus) {
+      bus.finished()
+    },
+  })
+  if (!registered.success)
+    throw new Error(registered.error.message)
+
+  return ai.a2a.createHttpHandler({
+    rpcPath: '/partners/orders',
+    authenticate: { verifyApiKey: key => iam.apiKey.verifyApiKey(key) },
+  })
+}
+```
+
+把返回值传给 Serv 或 Kit 的 `a2a` 选项。合作方先读取 `GET /.well-known/agent-card.json`，再向 Card 公布的 RPC 地址发送带 `X-API-Key` 的 `SendMessage`。无效凭据和停用账户返回 401，验证服务故障返回 503。已认证但缺少读权限时，执行器返回拒绝消息。 [Serv 挂载与调用](serv.md#shared-a2a-http) · [Kit 挂载与调用](kit.md#kit-a2a)
+
+合作方的服务端也可以直接用 AI 客户端发起同一次查询。先调用 `ai.init()`，把从密钥保管处读出的 Key 传给函数。
+
+```ts
+import { ai } from '@h-ai/ai'
+import { core } from '@h-ai/core'
+
+export async function requestBacklog(rawKey: string) {
+  const result = await ai.a2a.callRemoteAgent(
+    'https://orders.example.com/partners/orders',
+    '请汇总我的积压订单',
+    { headers: { 'x-api-key': rawKey } },
+  )
+  return result.success ? core.ok(result.data.responseText ?? '') : result
+}
+```
 
 #### 场景：构造协议消息
 
@@ -2327,7 +2389,7 @@ const event = ai.AgentEvent.message(message) // 包装成可交给执行器事�
 
 远端调用的自定义请求头按名称大小写不敏感地覆盖。固定 JSON-RPC 地址拒绝 HTTP 重定向，认证头不会被转发到重定向目标。
 
-`ai.a2a.getAgentCard()` 返回可直接用于 HTTP 发现响应的标准 A2A 1.0 ProtoJSON，含 `supportedInterfaces`、MIME 和 streaming 能力；Kit 默认发现路径为 `/.well-known/agent-card.json`。`handleRequest()` 始终返回 JSON-RPC/SSE 处理结果，未初始化返回 JSON-RPC 错误。可信 HTTP 认证上下文的 `agentId` 映射为 executor 的 `context.user.userName`。当前支持 JSON-RPC/SSE，不声明 push notifications、gRPC 或 REST 支持；业务资源授权仍由应用负责。
+`ai.a2a.getAgentCard()` 返回可直接用于 HTTP 发现响应的标准 A2A 1.0 ProtoJSON，含 `supportedInterfaces`、MIME 和 streaming 能力；Serv 与 Kit 的默认发现路径为 `/.well-known/agent-card.json`。`handleRequest()` 始终返回 JSON-RPC/SSE 处理结果，未初始化返回 JSON-RPC 错误。可信传输层的 `agentId` 映射为 SDK 的 `requestContext.context.user.userName`。执行器通过 `ai.a2a.getCallerIdentity(requestContext)` 读取凭据身份和有效权限。当前支持 JSON-RPC/SSE，不声明 push notifications、gRPC 或 REST 支持；业务资源授权仍由应用负责。
 
 A2A 的 journal、context 归属与消息表在 `ai.init()` 阶段初始化。任务按可信 `agentId` 隔离（含获取、取消和续接）；匿名请求共享匿名主体，生产应在可信传输层认证。`listMessages` 是服务端管理接口，支持 `callerId`、`contextId`、`since`，不能向未授权客户端暴露。
 

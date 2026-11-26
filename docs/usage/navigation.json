@@ -25,6 +25,8 @@
       "children": [
         { "id": "getting-started-create", "title": "创建项目并首次运行", "titles": { "en-US": "Create and run a project", "ja-JP": "プロジェクトの作成と起動" }, "path": "getting-started/create.md" },
         { "id": "getting-started-develop", "title": "配置环境与实现功能", "titles": { "en-US": "Configure and develop an app", "ja-JP": "環境設定と機能開発" }, "path": "getting-started/develop.md" },
+        { "id": "getting-started-serv", "title": "用 Serv 搭建订单运营台 API", "titles": { "en-US": "Build the order console API with Serv", "ja-JP": "Serv で注文運用コンソールの API を作る" }, "path": "getting-started/serv.md" },
+        { "id": "getting-started-kit", "title": "用 Kit 搭建订单运营台", "titles": { "en-US": "Build the order console with Kit", "ja-JP": "Kit で注文運用コンソールを作る" }, "path": "getting-started/kit.md" },
         { "id": "getting-started-build", "title": "编译、镜像与原生打包", "titles": { "en-US": "Compile, build images and package native apps", "ja-JP": "コンパイル・イメージ作成・ネイティブパッケージ" }, "path": "getting-started/build.md" },
         { "id": "getting-started-upgrade", "title": "升级框架与验证迁移", "titles": { "en-US": "Upgrade the framework and verify the migration", "ja-JP": "フレームワークの更新と移行確認" }, "path": "getting-started/upgrade.md" }
       ]

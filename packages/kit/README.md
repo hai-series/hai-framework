@@ -6,25 +6,32 @@
 
 `@h-ai/kit` 为 SvelteKit 项目处理请求、校验身份和编写 API。页面和 API 由同一站点提供时，可以直接通过当前网站地址调用 API。
 
-在 SvelteKit 服务端从 `@h-ai/kit` 导入 `kit`，用 `kit.createHandle()` 创建请求处理函数。浏览器从同一包导入时，可以创建客户端、使用列表和表单工具、读取页面令牌和设置默认语言。为这些对象标注类型时，服务端使用 `KitFunctions`，浏览器使用 `BrowserKitFunctions`。`AuthCookieWriter` 描述服务端认证需要的 Cookie 写入方法，例如登录后设置当前请求响应里的 Cookie。
+在 SvelteKit 服务端从 `@h-ai/kit` 导入 `kit`，用 `kit.createHandle()` 创建请求处理函数。浏览器代码从 `@h-ai/kit/client` 导入客户端、列表和表单工具、页面令牌操作和语言设置。根入口的命名空间类型为服务端 `KitFunctions` 和浏览器 `BrowserKitFunctions`。`AuthCookieWriter` 描述服务端认证需要的 Cookie 写入方法，例如登录后设置当前请求响应里的 Cookie。
 
 - `kit.createHandle()`：会话解析、路由守卫、中间件链、可选传输加密与 Cookie 加密
 - `kit.handler()`：API 端点异常边界
 - `kit.guard` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client` / `kit.crud`
+- `kit.guard.matchPermission()` 用于页面判断是否显示操作。服务端通过 `kit.guard.require()` 校验请求权限。
+- `kit.crud.resolveText()` 和 `kit.crud.resolveOptions()` 在渲染列表和表单时解析文案与选项。
+- A2A 由服务端将 `ai.a2a.createHttpHandler()` 交给 `kit.createHandle({ a2a })`；`kit.crypto` 从服务端调用，`@h-ai/kit/adapter` 用于构建。
 
-> 公共跨端 HTTP API contract 统一放在 `@h-ai/api-contract`，由 `@h-ai/serv` 挂载，客户端通过 `@h-ai/api-client` typed client 调用；`@h-ai/kit` 不定义也不承载业务 API contract。
+独立的跨端 HTTP 服务可用 `@h-ai/api-contract` 声明契约、`@h-ai/serv` 装配路由，再由 `@h-ai/api-client` 提供类型化调用。
 
 ## 快速开始
 
 使用 pnpm 安装：`pnpm add @h-ai/kit`。
 
-[跟着最小示例完成接入](../../docs/usage/function/kit.md#quick-start)。 [依赖与接入顺序](../../docs/usage/function/kit.md#module-dependencies)。
+[跟着最小示例完成接入](../../docs/usage/getting-started/kit.md#quick-start)。 [依赖与接入顺序](../../docs/usage/function/kit.md#module-dependencies)。
 
 ## 配置清单
 
-生成的项目将监听地址和端口写在 `config/_kit.yml`。服务启动时把访问检查与加密设置传给 `kit.createHandle(options)`，并在 SvelteKit 的服务端 hook 中使用它返回的处理函数。
+生成项目的 Node 服务从 `HOST` 和 `PORT` 读取监听地址和端口。应用从 `config/_kit.yml` 读取 `http` 和 `transport`，传给 `kit.createHandle({ http, transport })`。启用传输时，服务端注入已初始化的 Crypto、密钥环和共享密钥登记存储。其中 `http` 包含可信代理与访问控制，`transport.keyExchangePath` 使用从站点根开始的绝对路径。
 
-在[模块配置清单](../../docs/usage/configuration/kit.md)中查阅配置入口、默认值、取值限制和生效条件。
+在[模块配置清单](../../docs/usage/configuration/kit.md)中查阅监听、可信代理、访问控制和传输加密的字段与部署示例。配置独立 HTTP 服务时，参见 [Serv 配置清单](../../docs/usage/configuration/serv.md)。
+
+Kit 的请求访问、可信代理与限流均通过 `http` 配置。启用 `http.rateLimit` 时，应用提供计数存储。 [限流与恢复示例](../../docs/usage/function/kit.md#rate-limit-example)
+
+启用传输后，Kit 自动加密挂载的契约 API。使用自定义前缀时，把同一完整路径交给浏览器安装器。 [子目录中的报告示例](../../docs/usage/function/kit.md#kit-custom-contract-transport)
 
 ## 功能说明
 

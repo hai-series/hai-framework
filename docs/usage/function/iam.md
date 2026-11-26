@@ -1186,11 +1186,11 @@ async function forceSignOut(userId: string) {
 
 #### 场景：页面离开时尽力请求撤销
 
-`session.endOnPageHide` 默认关闭。开启后，在浏览器页面加载时调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })`，卸载时执行它返回的函数，移除监听器。标准 admin、H5 和 fullstack 模板已接好此步骤。这里的 `actions` 来自 `apiClient.createAuthActions(...)` 或 SvelteKit 的 `kit.client.createAuthActions(...)`。配置从登录页使用的公开认证接口读取。
+`session.endOnPageHide` 默认关闭。开启后，SvelteKit 的服务端布局用 `kit.auth.sessionFingerprint(locals.accessToken)` 从已验证会话取得指纹，只把指纹交给页面。页面调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide, sessionFingerprint })`。使用 Bearer 的 typed client 直接调用 `actions.bindPageExit({ enabled })`。卸载时调用返回的清理函数。
 
 浏览器触发 `pagehide` 时会尝试调用 `POST /auth/session/close`。这包括刷新或整页导航，但页面进入往返缓存（BFCache）时会跳过。请求沿用 CSRF 防护和已启用的传输加密，并使用 `keepalive` 争取在页面关闭后完成。该请求不会刷新会话，响应也不会清除 Cookie 或本地凭据，以免较早的请求清掉新的登录状态。
 
-浏览器可能根本没有发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，应正常调用应用的 logout 接口，让服务端撤销凭据，并清除客户端保存的登录状态。
+Cookie 中的令牌已更换或请求缺少指纹时，Kit 跳过撤销。浏览器也可能来不及发出请求。服务端仍需用 `idleTimeout` 或 `absoluteTimeout` 限制会话寿命。用户主动退出时，调用应用的 logout 接口撤销凭据并清除登录状态。
 
 标准 `/auth/me` 也检查 `iam.profile.update` / `iam.profile.avatar`；混合修改优先选取已启用的资料用途，否则使用头像用途。`authz.getSensitiveOperations(operation?)` 可只查询一个操作；未传则列出全部有效数据库规则。超管身份每次从共享角色读取，默认种子允许并发创建冲突后重读，并传播权限分配失败。
 
@@ -1273,7 +1273,7 @@ async function rotateThenRevoke(refreshToken: string) {
 | `iam.apiKey.listApiKeys(userId, options?)` | 分页列出用户程序凭据 | `userId: string` 目标用户 ID · `options?: ListApiKeysOptions` · 筛选、排序和分页列出该用户的密钥 · [对象参数](#api-keys-arguments) | `PaginatedResult<ApiKey>` | `await iam.apiKey.listApiKeys(userId, { page: 1, pageSize: 20 })` |
 | `iam.apiKey.getApiKey(keyId)` | 按 ID 查询安全凭据信息 | `keyId: string` API Key 元数据 ID | `ApiKey \| null` | `await iam.apiKey.getApiKey(keyId)` |
 | `iam.apiKey.revokeApiKey(keyId)` | 撤销程序凭据 | `keyId: string` API Key 元数据 ID | `void` | `await iam.apiKey.revokeApiKey(keyId)` |
-| `iam.apiKey.verifyApiKey(rawKey)` | 校验程序凭据 | `rawKey: string` 签发时一次性返回的原始 API Key | `ApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
+| `iam.apiKey.verifyApiKey(rawKey)` | 校验程序凭据、所属账户和当前权限 | `rawKey: string` 签发时一次性返回的原始 API Key | `VerifiedApiKey` | `await iam.apiKey.verifyApiKey(rawKey)` |
 
 <a id="api-keys-arguments"></a>
 
@@ -1300,6 +1300,7 @@ async function rotateThenRevoke(refreshToken: string) {
 
 - **`ApiKeyOperations`** — API Key 操作接口：`createApiKey` / `listApiKeys` / `getApiKey` / `revokeApiKey` / `verifyApiKey`
 - **`ApiKey`** — API Key 实体（公开字段）：`{ id, userId, name, keyPrefix, enabled, expiresAt, scopes }`
+- **`VerifiedApiKey`** 包含 `ApiKey` 的元数据和当前 `permissions`。
 - **`CreateApiKeyResult`** — 创建结果：`{ apiKey, rawKey }`（明文密钥仅返回一次）
 
 #### 场景：签发与撤销程序凭据
@@ -1308,7 +1309,7 @@ async function rotateThenRevoke(refreshToken: string) {
 
 #### API Key 与主体权限的关系
 
-`scopes` 与主体权限取交集，支持 `*` 和命名空间 `:*`；默认空数组只保留身份，不授予操作权限。受限 key 的会话 `roles` 为空，通过 permission 守卫访问，显式 `*` 也不能超出主体授权。API Key 登录绑定 key ID，派生会话的 get/verifyToken/refresh 每次检查持久化 key，撤销、禁用、过期或 DB 读取失败即拒绝。单独 verifyApiKey 仅返回验证后的 key 元数据，仍需主体与操作授权。
+`scopes` 与主体权限取交集，支持 `*` 和命名空间 `:*`。空范围相当于没有操作权限。受限 Key 的会话 `roles` 为空，操作由权限守卫判断。API Key 登录绑定 Key ID，后续读取和刷新会话都校验凭据。服务间调用可以改用 `verifyApiKey`，验证 Key 与账户状态并返回当前有效权限，无需签发会话。
 
 #### 密钥验证顺序
 
@@ -1316,13 +1317,10 @@ async function rotateThenRevoke(refreshToken: string) {
 
 ```
 verifyApiKey(rawKey)
-  → 以 SHA-256(rawKey) 指纹读取共享代际缓存，命中时校验有效期并返回
-  → 冷读从 rawKey 提取前缀（prefix + 前 8 字符）
-  → 按前缀从 DB 检索候选 API Key 列表（缩小范围）
-  → 逐候选项进行 hash 验证（同步操作）
-  → 验证通过 → 检查是否过期/禁用
-  → 异步更新 lastUsedAt（不阻塞返回）
-  → 返回 ApiKey 实体
+  → 检查 Key 是否启用及是否过期，缓存未命中时按前缀查找并验证哈希
+  → 查验所属账户是否仍可用
+  → 读取当前用户权限，与 Key scopes 取交集
+  → 返回 VerifiedApiKey
 ```
 
 #### 场景：签发受限 Key、登录与撤销
@@ -1412,7 +1410,7 @@ async function revokeKey(keyId: string) {
 }
 ```
 
-创建后只有 `rawKey` 能用于 Key 登录；`apiKey.id` 是管理 ID，`keyPrefix` 仅用于显示/检索，均不能代替 rawKey。`verifyApiKey(rawKey)` 仅验证 Key 并返回元数据，不能代替用户状态、scopes 与操作授权。
+签发时保存 `rawKey` 用于程序认证。`apiKey.id` 用于管理，`keyPrefix` 用于显示与检索。报表服务用 `verifyApiKey(rawKey)` 读取有效 `permissions`，检查其中是否授予 `orders:read`，并按 `userId` 查询该主体可访问的报表。 [A2A 执行器用例](ai.md#a2a-http-example)
 
 Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不会丢失该绑定或扩大 scopes。撤销成功后，已有 accessToken 的 get/verify 以及 refreshToken 的 refresh 都会失败；过期、禁用及持久化读取失败同样拒绝。角色撤权由 `iam.auth.verifyToken` 读取当前授权生效。改 scope 使用创建新 Key 后撤销旧 Key，当前 API 不提供 scope 更新操作。
 

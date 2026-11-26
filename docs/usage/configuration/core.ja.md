@@ -28,7 +28,7 @@ Node の起動時に `core.init({ configDir: './config' })` を実行すると�
 
 ### HTTP リクエストのアクセス制御
 
-Serv では `config/_serv.yml` の `http.access`、SvelteKit では `config/_kit.yml` の最上位にある `access` に設定します。サービスが HTTP アプリやリクエストハンドラーを作るとき、Core の機能でルールを確認します。`_core.yml` は `access` や `global` を受け付けません。
+Serv では `config/_serv.yml` の `http.access`、SvelteKit では `config/_kit.yml` の `http.access` に設定します。サービスが HTTP アプリやリクエストハンドラーを作るとき、Core の機能でルールを確認します。`_core.yml` は `access` や `global` を受け付けません。
 
 `access` を省略するか `false` にするとアクセスルールは無効です。有効にするには `access` に `global` または `rules` を書きます。別ファイルを使う場合は `access.file` で指定し、ファイルの最上位に `global` または `rules` を書きます。起動時に作業ディレクトリから相対パスを解決して読み込みます。上限は 1 MiB です。
 
@@ -76,20 +76,21 @@ http:
             end: '18:00'
 ```
 
-`global` はヘルスチェックを含め、サービスが受け付けるすべてのリクエストに適用されます。この例では、許可ネットワーク内の `192.0.2.7` も拒否されます。`192.0.2.10` から注文パスにアクセスする場合は、平日の時間条件にも従います。18:00 ちょうどで許可時間が終わります。SvelteKit では `access` のブロック全体を `_kit.yml` の最上位に置きます。
+`global` はヘルスチェックを含め、サービスが受け付けるすべてのリクエストに適用されます。この例では、許可ネットワーク内の `192.0.2.7` も拒否されます。`192.0.2.10` から注文パスにアクセスする場合は、平日の時間条件にも従います。18:00 ちょうどで許可時間が終わります。SvelteKit では `_kit.yml` にも同じ `http.access` ブロックを指定します。
 
 #### SvelteKit のリクエストを営業時間に制限する
 
-時間帯の設定は `config/_kit.yml` の最上位に書きます。この例では、上海時間の平日 09:00 から 18:00 になるまで、SvelteKit のハンドラーに届いたリクエストを許可します。対象を API に限定するにはパスルールに設定し、ログイン画面へのアクセスを妨げないようにします。
+時間帯の設定は `config/_kit.yml` の `http.access`に書きます。この例では、上海時間の平日 09:00 から 18:00 になるまで、SvelteKit のハンドラーに届いたリクエストを許可します。対象を API に限定するにはパスルールに設定し、ログイン画面へのアクセスを妨げないようにします。
 
 ```yaml schema=@h-ai/kit:KitConfigSchema
-access:
-  global:
-    timezone: Asia/Shanghai
-    windows:
-      - days: [1, 2, 3, 4, 5]
-        start: '09:00'
-        end: '18:00'
+http:
+  access:
+    global:
+      timezone: Asia/Shanghai
+      windows:
+        - days: [1, 2, 3, 4, 5]
+          start: '09:00'
+          end: '18:00'
 ```
 
 #### 別ファイルにポリシーを保存する
@@ -112,8 +113,9 @@ http:
 SvelteKit では `config/_kit.yml` から参照します。
 
 ```yaml schema=@h-ai/kit:KitConfigSchema
-access:
-  file: ./config/security/request-access.yml
+http:
+  access:
+    file: ./config/security/request-access.yml
 ```
 
 `file` を使う場合はすべてのルールを参照先に書きます。別の Node HTTP フレームワークでは、起動時に `core.access.createRequestCheck({ file: './config/security/request-access.yml' })` を呼び出します。返された関数にリクエストのパス、メソッド、確認済みのクライアント IP を渡します。

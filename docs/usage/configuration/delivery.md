@@ -213,7 +213,7 @@ finally {
 
 Fullstack Web的运行配置先于应用模块加载。未指定固定目录时，模板中的`./runtime-config.js`与Vite `base: './'`允许页面挂在`/yyy/`下；网关将该前缀剥离后交给根目录静态服务。访问入口应规范为带末尾斜杠的`/yyy/`，hash导航和刷新保持在这个目录。
 
-Web的API地址按显式`baseUrl`、`runtime-config.js`、构建时`PUBLIC_API_BASE`、当前`origin`的顺序选择；只提供`origin`时补`/api/v1`。独立托管Web时，在公开运行配置中设置实际API的完整地址及前缀，不放密钥。用 SDK 部署 Fullstack 时，SDK 按 `_serv.yml` 的 `http.apiPrefix` 写入前端可读取的 API 地址。加装自己的网关时，也要转发这个前缀。网站在`/yyy/`，并不自动把API改为`/yyy/api/v1`。详见[HTTP与客户端配置](http.md)。
+Web的API地址按显式`baseUrl`、`runtime-config.js`、构建时`PUBLIC_API_BASE`、当前`origin`的顺序选择；只提供`origin`时补`/api/v1`。独立托管Web时，在公开运行配置中设置实际API的完整地址及前缀，不放密钥。用 SDK 部署 Fullstack 时，SDK 按 `_serv.yml` 的 `http.apiPrefix` 写入 `apiBase`，并为启用加密的后端发布 `apiKeyExchangePath`。自管网关应将业务前缀和密钥交换的完整路径转发到同一个后端。网站部署在 `/yyy/` 时，API 和密钥交换仍使用各自配置的公开路径。详见[HTTP与客户端配置](http.md)。
 
 ![前后端分离应用的子目录入口](../images/subpath-vite-login.png)
 
@@ -481,6 +481,8 @@ docker exec hai-orders-prod-serv node -e 'require("node:dns").lookup("db.intrane
 ## 外部 HTTPS 网关
 
 已有网关负责证书和域名时，在 `provider.expose` 一起填写 `hostAddress`、`hostPort` 和 `publicUrl`。例如同机网关把 `https://app.example.com/` 转发到 `http://127.0.0.1:18070`。网关不在同机时，选网关可达的具体私网地址，并用防火墙限制其访问。完整配置见[Rootless Docker 与外部 HTTPS 示例](deploy.md#rootless-docker-external-https)。
+
+例如报表服务在 `_serv.yml` 配置 `audio: { path: /voice/orders }` 时，外层网关也应转发 `/voice/orders` 的 WebSocket `Upgrade`，并从访问日志中省略该请求的查询参数。受管 Fullstack 内层网关自动生成对应规则。浏览器领取票据后应收到 `101 Switching Protocols` 和音频帧。 [取票与播放](../function/serv.md#audio-ticket-example)
 
 1. 由网关配置 DNS、TLS 和相应的 Web、API、健康路径。网关覆盖客户端提交的 Host、X-Forwarded-For 和单值 X-Forwarded-Proto。确认部署侧看见的网关地址后，再填入 `trustedEdgeProxies`。确认其它机器无法直连内部端口或伪造协议与客户地址。
 2. 用 `hai deploy --env prod --plan` 检查监听地址和公开域名，再执行全量发布。服务器用内部监听检查应用启动和恢复。在线部署从操作机检查公开入口。若结果为「服务器已完成发布，但公开入口未通过」，排查网关的证书与路由，再核对发布结果。离线脚本完成后由运维从网关外部检查。

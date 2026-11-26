@@ -22,7 +22,7 @@
 | --- | --- | --- |
 | API 地址 | 前端或运行时配置提供 `baseUrl` | 浏览器与 API 同源时可使用 `/api/v1` 这样的根相对路径。Node.js 或没有浏览器来源的原生运行时使用 HTTP(S) 绝对地址。地址包含 API 挂载前缀，省略用户信息、查询参数和片段。 |
 | 刷新凭据 | 客户端选择 `auth.storage`。采用 Cookie 模式时，服务端设置、轮换和清除 HttpOnly Cookie。 | 省略 `auth` 时不启用自动认证，传入 `auth: {}` 时默认使用浏览器 Cookie 模式。跨源部署时核对服务端允许的具体 Origin、凭据和 Cookie 属性。 |
-| 应用层加密 | 客户端传入已初始化的 Crypto。服务端管理私钥、密钥协商路由和加密策略。 | 省略客户端 `transport` 时不启用应用层加密。启用时，`baseUrl` 与客户端 `transport.keyExchangePath` 拼接出的地址必须对应服务端协商端点。 |
+| 应用层加密 | 客户端传入已初始化的 Crypto。服务端管理私钥、密钥协商路由和加密策略。 | 省略客户端 `transport` 时不启用应用层加密。启用时，用 `baseUrl` 的源解析客户端 `transport.keyExchangePath` 得到的地址必须对应服务端协商端点。 |
 
 Serv 的 API 前缀和传输设置可来自应用的 `config/_serv.yml`，由启动代码传给 `serv.createApp`。使用浏览器刷新 Cookie 时在该调用中提供已初始化的 `iam` 和 `refreshCookie`。见 [Serv 配置](serv.md)、[应用装配选项](../function/serv.md#host-options)和 [Serv 认证与 Cookie](../function/serv.md#authentication)。
 

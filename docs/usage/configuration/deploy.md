@@ -154,6 +154,12 @@ provider:
 }
 ```
 
+<a id="http-rate-limit-deployment"></a>
+
+### 部署启用了 HTTP 限流的 Serv 或 Kit
+
+设置后端 `config/_serv.yml` 或 `config/_kit.yml` 的 `http.rateLimit`。部署读取 YAML 与环境覆盖后校验窗口和次数。各应用实例启动时注入原子存储。多实例连接同一 Redis，并使用相同命名空间与上限。受管私有入口通过 `http.trustedProxies: auto` 识别代理，自管入口声明实际代理 IP 或 CIDR。通过实际域名从同一客户端连续请求不同实例，确认它们共享剩余额度。 [Serv 配置示例](serv.md#rate-limit-config-example) · [Kit 配置示例](kit.md#rate-limit-config-example)
+
 <a id="rootless-docker-external-https"></a>
 
 ### 用 Rootless Docker 发布到现有 HTTPS 网关

@@ -20,7 +20,7 @@ description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像
 - 先选择完整结果还是流式 API；不要对 AsyncIterable 取 `.success`。流取消/错误须结束播放器和连接。
 - Memory/Context 用 objectId/sessionId 隔离主体；Context scope 必填，跨节点读先 reload/restore，manual pending 可跨节点按 turnId 幂等提交实际文本。共享 Store 必须实现版本 CAS/存储端期限；过期生成不自动重放外部副作用。
 - Mem0 生产须实际映射持久 Qdrant；内存回退开关不能绕过。列表/条件清理最多 1000 条主体原始候选，超限检查 `MEMORY_LIST_INCOMPLETE`；禁止把截断结果当完整 total。
-- HTTP AI 使用 `@h-ai/api-client` 的 typed 领域方法；A2A 由应用定义并绑定自己的 contract；`@h-ai/ai/client` 只提供独立 `ai.createAudioClient`，不再封装字符串路径 HTTP 或重复 SSE helper。
+- HTTP AI 使用 `@h-ai/api-client` 的 typed 领域方法。配置 AI 并注册业务执行器后，用 `ai.a2a.createHttpHandler()` 发布 A2A，Serv 与 Kit 都通过 `a2a` 选项挂载。执行器从 `ai.a2a.getCallerIdentity(context)` 读取已经核验的身份和有效权限。`@h-ai/ai/client` 提供独立的 `ai.createAudioClient`。
 - 浏览器工作台使用受管 ACP 的 `session.submit` 与 `tasks.events` 重连，轻量语音录制可用 `@h-ai/ai/client` 的 `ai.createAudioRecorder` 和 `ai.blobToWav` 管理录音并转换 WAV。
 - 语音客户端用一次性 ticket，不能把 IAM access token 放 URL；按 segment_started 的真实格式解码。
 - 压缩超过硬预算须停止模型请求；不能失败后发送原始超长消息。

@@ -296,7 +296,7 @@ const payload: unknown = JSON.parse(text)
 
 常规应用优先使用上层封装：
 - serv：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`
-- kit：`kit.createHandle({ crypto: { crypto, transport: { serverKeyRing, keyStore } } })` + `kit.client.create({ transport: { crypto } })`
+- kit：`kit.createHandle({ transport: { crypto, serverKeyRing, keyStore } })` + `kit.client.create({ transport: { crypto } })`
 - api-client：`apiClient.init({ transport: { crypto } })`
 
 ## 错误码 — `HaiCryptoError`

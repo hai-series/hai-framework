@@ -28,6 +28,7 @@ AI 能力模块，提供统一的 `ai` 服务对象，覆盖 LLM 对话、文生
 私有文件可在 [Node 本地解析](../../docs/usage/function/ai.md#bounded-local-files)。模型流可预览指定 JSON 字段，[浏览器录音](../../docs/usage/function/ai.md#browser-recording)支持麦克风生命周期和有界 WAV 转换。
 
 - 用共享 HTTP 契约提供聊天流、记忆编辑、图像和语音。 [扩展 HTTP 契约](../../docs/usage/function/ai.md#http-contract-extensions)
+- 注册执行器后用 Serv 或 Kit 发布 A2A。订单助手从 `ai.a2a.getCallerIdentity(context)` 读取合作方身份和当前有效权限，再按该主体查询订单。 [发布与调用订单助手](../../docs/usage/function/ai.md#a2a-http-example)
 
 ## 数据结构
 
