@@ -15,6 +15,15 @@ const HISTORY = 'hai_feedback_history'
 const JOBS = 'hai_feedback_jobs'
 const QUOTAS = 'hai_feedback_quotas'
 
+const ReportPayloadSchema = FeedbackReportSchema.pick({
+  description: true,
+  category: true,
+  contact: true,
+  url: true,
+  buildId: true,
+  commit: true,
+})
+
 // 仅允许本模块静态身份列；不能把外部输入拼成 SQL 标识符。
 const identityColumns = [
   'id',
@@ -438,10 +447,18 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
 
   report(row: FeedbackReportRow) {
     return FeedbackReportSchema.parse({
-      ...FeedbackReportSchema.parse(readFeedbackJson(row.payload)),
+      ...ReportPayloadSchema.parse(readFeedbackJson(row.payload)),
+      id: row.id,
+      number: row.number,
+      appId: row.app_id,
+      scopeId: row.scope_id,
+      userId: row.user_id,
+      appVersion: row.app_version ?? undefined,
+      summary: row.summary,
       status: row.status,
       collectionStatus: row.collection_status,
       notificationStatus: row.notification_status,
+      createdAt: Number(row.created_at),
       updatedAt: Number(row.updated_at),
       version: Number(row.version),
       evidenceRevision: Number(row.revision),
