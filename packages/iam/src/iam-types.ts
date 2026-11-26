@@ -275,7 +275,7 @@ export interface IamFunctions {
 
 // ─── 子功能类型 re-export ───
 
-export type { ApiKey, ApiKeyOperations, ApiKeySortDirection, ApiKeySortField, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions } from './authn/apikey/iam-authn-apikey-types.js'
+export type { ApiKey, ApiKeyOperations, ApiKeySortDirection, ApiKeySortField, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions, VerifiedApiKey } from './authn/apikey/iam-authn-apikey-types.js'
 export type { ApiKeyCredentials, AuthnOperations, AuthRequestContext, AuthStrategy, CaptchaOperation, Credentials, IamCaptchaChallenge, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
 export type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 export type { AuthzOperations, Permission, PermissionQueryOptions, PermissionType, Role } from './authz/iam-authz-types.js'

@@ -20,6 +20,7 @@ import type {
   A2ACallOptions,
   A2ACallResult,
   A2AHandleResult,
+  A2AHttpIdentity,
   A2AMessageRecord,
   A2AOperations,
   A2ATaskFilter,
@@ -33,10 +34,12 @@ import { core } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { buildAgentCard, buildAgentCardDocument } from './ai-a2a-card.js'
-import { SharedA2ARequestHandler } from './ai-a2a-runtime.js'
+import { createA2AHttpHandler } from './ai-a2a-http.js'
+import { A2A_SUBSCRIPTION_SIGNAL_KEY, SharedA2ARequestHandler } from './ai-a2a-runtime.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
 const DEFAULT_A2A_CALL_TIMEOUT_MS = 60_000
+const A2A_CALLER_IDENTITY_KEY = 'hai.a2a.callerIdentity'
 
 /**
  * 校验通过的真实远端地址与去除查询和片段后的诊断标签。
@@ -253,7 +256,8 @@ export interface A2ACreateOptions {
  * }
  * ```
  */
-export interface A2AImplementation extends A2AOperations {
+export interface A2AImplementation extends Omit<A2AOperations, 'createHttpHandler' | 'getCallerIdentity'> {
+  handleRequest: (body: unknown, caller?: A2AHttpIdentity, signal?: AbortSignal) => Promise<A2AHandleResult>
   close: () => Promise<void>
 }
 
@@ -304,16 +308,25 @@ export function createA2AOperations(
       return core.ok(buildAgentCardDocument(agentCardConfig))
     },
 
-    async handleRequest(requestBody: unknown, context?: Record<string, unknown>): Promise<A2AHandleResult> {
+    async handleRequest(requestBody, caller, subscriptionSignal) {
       // 身份只能来自可信传输层认证结果，不能从 JSON-RPC 参数中读取。
-      const agentId = typeof context?.agentId === 'string'
-        ? context.agentId
-        : undefined
+      const state = new Map<string, unknown>()
+      if (caller) {
+        state.set(A2A_CALLER_IDENTITY_KEY, Object.freeze({
+          agentId: caller.agentId,
+          apiKeyId: caller.apiKeyId,
+          scopes: caller.scopes && Object.freeze([...caller.scopes]),
+          permissions: caller.permissions && Object.freeze([...caller.permissions]),
+        } satisfies A2AHttpIdentity))
+      }
+      if (subscriptionSignal)
+        state.set(A2A_SUBSCRIPTION_SIGNAL_KEY, subscriptionSignal)
       const serverContext = new ServerCallContextImpl({
         requestedVersion: '1.0',
-        user: agentId
-          ? { isAuthenticated: true, userName: agentId }
+        user: caller
+          ? { isAuthenticated: true, userName: caller.agentId }
           : undefined,
+        state,
       })
 
       // SDK 接收 JSON 对象或原始字符串；其它输入交由固定的非法请求对象处理。
@@ -418,7 +431,25 @@ export interface A2ALazyProxyDeps {
  * ```
  */
 export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
-  return {
+  const operations: A2AOperations = {
+    createHttpHandler(options) {
+      if (!deps.isInitialized())
+        throw new Error(aiM('ai_notInitialized'))
+      if (!deps.getA2AConfig())
+        throw new Error(aiM('ai_a2aNotConfigured'))
+      if (!deps.getA2AImpl())
+        throw new Error(aiM('ai_a2aExecutorRequired'))
+      return createA2AHttpHandler(options, {
+        getAgentCard: () => deps.getA2AImpl()?.getAgentCard()
+          ?? core.err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aExecutorRequired')),
+        handleRequest: (body, caller, signal) => deps.getA2AImpl()?.handleRequest(body, caller, signal)
+          ?? operations.handleRequest(body, caller),
+      })
+    },
+    getCallerIdentity(request) {
+      // 该 SDK 状态项只由上面的可信传输层适配器写入。
+      return request.context.state.get(A2A_CALLER_IDENTITY_KEY) as A2AHttpIdentity | undefined
+    },
     registerExecutor(executor: AgentExecutor): HaiResult<void> {
       if (!deps.isInitialized()) {
         return deps.notInitializedResult()
@@ -458,10 +489,10 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       return core.err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
     },
 
-    async handleRequest(requestBody: unknown, context?: Record<string, unknown>) {
+    async handleRequest(requestBody, caller) {
       const impl = deps.getA2AImpl()
       if (impl)
-        return impl.handleRequest(requestBody, context)
+        return impl.handleRequest(requestBody, caller)
       const id = asRecord(requestBody)?.id
       return {
         streaming: false,
@@ -498,4 +529,5 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       return executeRemoteAgentCall(remoteUrl, message, options)
     },
   }
+  return operations
 }

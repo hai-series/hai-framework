@@ -219,6 +219,47 @@ describe('iam.apiKey（启用）', () => {
     // =========================================================================
 
     describe('verifyApiKey', () => {
+      it('验证当前账户和有效权限，且不为程序调用创建会话', async () => {
+        const owner = await registerUser('apikey_partner_reports')
+        const permission = await getIam().authz.createPermission({ code: 'reports:read', name: 'Read reports', type: 'api' })
+        if (!permission.success)
+          throw new Error(permission.error.message)
+        const role = await getIam().authz.createRole({
+          code: 'partner-report-reader',
+          name: 'Partner report reader',
+          permissionIds: [permission.data.id],
+        })
+        if (!role.success)
+          throw new Error(role.error.message)
+        expect(await getIam().authz.assignRole(owner.id, role.data.id)).toMatchObject({ success: true })
+        const scopes = ['reports:read', 'reports:write']
+        const key = await getIam().apiKey.createApiKey(owner.id, { name: 'partner-reports', scopes })
+        if (!key.success)
+          throw new Error(key.error.message)
+        expect(await getIam().apiKey.verifyApiKey(key.data.rawKey)).toMatchObject({
+          success: true,
+          data: {
+            id: key.data.apiKey.id,
+            userId: owner.id,
+            scopes,
+            permissions: ['reports:read'],
+          },
+        })
+        expect(await getIam().session.deleteByUserId(owner.id)).toEqual({ success: true, data: 0 })
+
+        expect(await getIam().authz.removeRole(owner.id, role.data.id)).toMatchObject({ success: true })
+        expect(await getIam().apiKey.verifyApiKey(key.data.rawKey)).toMatchObject({
+          success: true,
+          data: { scopes, permissions: [] },
+        })
+
+        expect(await getIam().user.updateUser(owner.id, { accountStatus: 'dormant' })).toMatchObject({ success: true })
+        expect(await getIam().apiKey.verifyApiKey(key.data.rawKey)).toMatchObject({
+          success: false,
+          error: { code: HaiIamError.ACCOUNT_UNAVAILABLE.code },
+        })
+      })
+
       it('有效 key 应返回 ApiKey 实体', async () => {
         const user = await registerUser('apikey_verify_user')
         const createResult = await getIam().apiKey.createApiKey(user.id, { name: 'verify-key' })

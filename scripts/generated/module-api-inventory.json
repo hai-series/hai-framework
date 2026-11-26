@@ -4120,6 +4120,24 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "A2AHttpHandler",
+              "kind": "type",
+              "declaration": "A2AHttpHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "A2AHttpIdentity",
+              "kind": "type",
+              "declaration": "A2AHttpIdentity",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "A2AHttpOptions",
+              "kind": "type",
+              "declaration": "A2AHttpOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "A2AMessageRecord",
               "kind": "type",
               "declaration": "A2AMessageRecord",
@@ -6344,6 +6362,24 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "A2AHttpHandler",
+              "kind": "type",
+              "declaration": "A2AHttpHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "A2AHttpIdentity",
+              "kind": "type",
+              "declaration": "A2AHttpIdentity",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "A2AHttpOptions",
+              "kind": "type",
+              "declaration": "A2AHttpOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "A2AMessageRecord",
               "kind": "type",
               "declaration": "A2AMessageRecord",
@@ -8565,6 +8601,24 @@
               "name": "A2AHandleResult",
               "kind": "type",
               "declaration": "A2AHandleResult",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "A2AHttpHandler",
+              "kind": "type",
+              "declaration": "A2AHttpHandler",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "A2AHttpIdentity",
+              "kind": "type",
+              "declaration": "A2AHttpIdentity",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "A2AHttpOptions",
+              "kind": "type",
+              "declaration": "A2AHttpOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -24917,6 +24971,12 @@
               "kind": "type",
               "declaration": "UserSortField",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "VerifiedApiKey",
+              "kind": "type",
+              "declaration": "VerifiedApiKey",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -25432,6 +25492,12 @@
               "kind": "type",
               "declaration": "UserSortField",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "VerifiedApiKey",
+              "kind": "type",
+              "declaration": "VerifiedApiKey",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -25952,6 +26018,12 @@
               "kind": "type",
               "declaration": "UserSortField",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "VerifiedApiKey",
+              "kind": "type",
+              "declaration": "VerifiedApiKey",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -26472,6 +26544,12 @@
               "kind": "type",
               "declaration": "UserSortField",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "VerifiedApiKey",
+              "kind": "type",
+              "declaration": "VerifiedApiKey",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -26992,6 +27070,12 @@
               "kind": "type",
               "declaration": "UserSortField",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "VerifiedApiKey",
+              "kind": "type",
+              "declaration": "VerifiedApiKey",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         }

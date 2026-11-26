@@ -104,7 +104,7 @@ function tests(getIam: () => IamFunctions) {
       data: { writers: 0 },
     })
   })
-  it('aPI Key 重复验证命中共享缓存且撤销后立即失败，不重复数据库/哈希读取', async () => {
+  it('缓存复用 API Key 凭据和权限，每次检查所属账户且撤销后立即失败', async () => {
     const iam = await initIam({
       login: { apikey: true },
     })
@@ -126,7 +126,9 @@ function tests(getIam: () => IamFunctions) {
     try {
       for (let index = 0; index < 5; index++)
         expect((await iam.apiKey.verifyApiKey(issued.data.rawKey)).success).toBe(true)
-      expect(get).not.toHaveBeenCalled()
+      expect(get).toHaveBeenCalledTimes(5)
+      for (const [sql] of get.mock.calls)
+        expect(sql).toContain('FROM hai_iam_users WHERE id =')
       expect(query).not.toHaveBeenCalled()
     }
     finally {

@@ -46,6 +46,24 @@ export interface ApiKey {
 }
 
 /**
+ * 验证通过的 API Key 和所属用户当前允许该 Key 使用的权限。
+ * @example
+ * ```ts
+ * import { iam } from '@h-ai/iam'
+ * async function authorizeReportDelivery(partnerKey: string): Promise<string | undefined> {
+ *   const verified = await iam.apiKey.verifyApiKey(partnerKey)
+ *   if (verified.success && verified.data.permissions.includes('report:read'))
+ *     return verified.data.userId
+ *   return undefined
+ * }
+ * ```
+ */
+export interface VerifiedApiKey extends ApiKey {
+  /** 所属用户当前授权与 Key scopes 的交集。 */
+  permissions: string[]
+}
+
+/**
  * 数据库中存储的 API Key（含哈希）
  * @internal
  * @example 模块内部上下文
@@ -199,10 +217,10 @@ export interface ApiKeyOperations {
   revokeApiKey: (keyId: string) => Promise<HaiResult<void>>
 
   /**
-   * 验证 API Key 并返回关联用户 ID
+   * 验证 API Key 和所属账户，并读取当前可用权限。此操作不创建会话。
    *
    * @param rawKey - 明文 API Key
-   * @returns 成功返回 API Key 实体（含用户 ID），失败返回错误码
+   * @returns 成功返回 Key 元数据及有效权限，账户停用或凭据失效时返回失败。
    */
-  verifyApiKey: (rawKey: string) => Promise<HaiResult<ApiKey>>
+  verifyApiKey: (rawKey: string) => Promise<HaiResult<VerifiedApiKey>>
 }

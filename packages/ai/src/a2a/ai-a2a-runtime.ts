@@ -16,6 +16,25 @@ import { core } from '@h-ai/core'
 import { aiM } from '../ai-i18n.js'
 
 /**
+ * 在可信 SDK 调用上下文中传递断连信号，只结束当前订阅。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * function bindOrderSubscription(signal: AbortSignal) {
+ *   return new CallContext({ state: new Map([[A2A_SUBSCRIPTION_SIGNAL_KEY, signal]]) })
+ * }
+ * ```
+ */
+export const A2A_SUBSCRIPTION_SIGNAL_KEY = 'hai.a2a.subscriptionSignal'
+
+function subscriptionSignal(context: ServerCallContext): AbortSignal | undefined {
+  const signal = context.state.get(A2A_SUBSCRIPTION_SIGNAL_KEY)
+  return signal instanceof AbortSignal
+    ? signal
+    : undefined
+}
+
+/**
  * Task、稳定消息回执及事件的单文档权威状态；历史不自动删除，防止旧重试重新执行。
  *
  * @example
@@ -571,22 +590,29 @@ export class SharedA2ARequestHandler implements A2ARequestHandler {
     const run = await this.begin(params, context)
     if (params.configuration?.returnImmediately === true)
       return structuredClone((await this.inspect(run.id, run.owner)).task)
-    for await (const _event of this.watch(run.id, run.owner)) { /* 共享journal完成后返回最终权威结果。 */ }
+    const signal = subscriptionSignal(context)
+    for await (const _event of this.watch(run.id, run.owner, signal)) { /* 共享journal完成后返回最终权威结果。 */ }
+    signal?.throwIfAborted()
     const final = await this.inspect(run.id, run.owner)
     return structuredClone(final.result ?? final.task)
   }
 
   async* sendMessageStream(params: SendMessageRequest, context: ServerCallContext): AsyncGenerator<StreamResponse, void, undefined> {
+    const signal = subscriptionSignal(context)
+    if (signal?.aborted)
+      return
     const run = await this.begin(params, context)
     yield streamResponse(AgentEvent.task(structuredClone((await this.inspect(run.id, run.owner)).task)))
-    for await (const event of this.watch(run.id, run.owner)) yield streamResponse(event)
+    for await (const event of this.watch(run.id, run.owner, signal)) yield streamResponse(event)
   }
 
   /** 每个订阅有独立游标，无本地bus依赖；取消订阅不会谎称业务执行已取消。 */
-  private async* watch(id: string, owner: string): AsyncGenerator<AgentExecutionEvent, void, undefined> {
+  private async* watch(id: string, owner: string, signal?: AbortSignal): AsyncGenerator<AgentExecutionEvent, void, undefined> {
     let cursor = 0
     let executionId: string | undefined
     while (!this.closed) {
+      if (signal?.aborted)
+        return
       const value = await this.inspect(id, owner)
       if (executionId && executionId !== value.executionId)
         throw new A2AError(aiM('ai_a2aSubscriptionAdvanced'))
@@ -598,7 +624,14 @@ export class SharedA2ARequestHandler implements A2ARequestHandler {
           yield AgentEvent.task(structuredClone(value.task))
         return
       }
-      await delay(this.options.pollIntervalMs)
+      try {
+        await delay(this.options.pollIntervalMs, undefined, { signal })
+      }
+      catch (error) {
+        if (signal?.aborted)
+          return
+        throw error
+      }
     }
     throw new A2AError(aiM('ai_a2aRuntimeClosed'))
   }
@@ -631,9 +664,12 @@ export class SharedA2ARequestHandler implements A2ARequestHandler {
   }
 
   async* resubscribe(params: SubscribeToTaskRequest, context: ServerCallContext): AsyncGenerator<StreamResponse, void, undefined> {
+    const signal = subscriptionSignal(context)
+    if (signal?.aborted)
+      return
     const owner = principal(context)
     yield streamResponse(AgentEvent.task(structuredClone((await this.inspect(params.id, owner)).task)))
-    for await (const event of this.watch(params.id, owner)) {
+    for await (const event of this.watch(params.id, owner, signal)) {
       if (event.kind !== 'message')
         yield streamResponse(event)
     }

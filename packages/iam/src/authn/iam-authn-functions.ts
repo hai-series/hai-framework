@@ -213,6 +213,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         apikeyConfig: apiKeyConfig,
         userRepository,
         apiKeyRepository,
+        getUserAuthorization: authzFunctions.getUserAuthorization,
       })
       apiKeyStrategy = apiKeyResult.strategy
       apiKeyFunctions = apiKeyResult.apiKeyFunctions

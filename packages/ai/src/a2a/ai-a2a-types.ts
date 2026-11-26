@@ -6,7 +6,7 @@
  */
 
 import type { TaskState } from '@a2a-js/sdk'
-import type { AgentExecutor } from '@a2a-js/sdk/server'
+import type { AgentExecutor, RequestContext } from '@a2a-js/sdk/server'
 import type { HaiResult } from '@h-ai/core'
 
 import type { StorePage } from '../store/ai-store-types.js'
@@ -139,7 +139,7 @@ export interface A2AContextInfo {
 /**
  * A2A 认证器接口
  *
- * 纯接口设计，由应用层实现，Kit 模块做胶水集成。
+ * 由应用层实现。
  * 用于验证入站 A2A 请求的身份。
  *
  * @example
@@ -159,6 +159,70 @@ export interface A2AAuthenticator {
    * @returns 成功返回调用方身份信息，失败返回错误
    */
   authenticate: (headers: Record<string, string | undefined>) => Promise<HaiResult<A2ACallerIdentity>>
+}
+
+/**
+ * HTTP 认证器为 JSON-RPC 请求验证过的调用方身份。
+ *
+ * @example
+ * ```ts
+ * import type { A2AHttpIdentity } from '@h-ai/ai'
+ * function identity(userId: string): A2AHttpIdentity {
+ *   return { agentId: userId }
+ * }
+ * ```
+ */
+export interface A2AHttpIdentity {
+  /** 可信认证器确认的调用方 ID。 */
+  readonly agentId: string
+  /** IAM API Key ID（使用 API Key 时）。 */
+  readonly apiKeyId?: string
+  /** IAM API Key 上配置的权限范围。 */
+  readonly scopes?: readonly string[]
+  /** 认证器核验后的有效权限；IAM 验证器取当前主体授权与 Key 范围的交集。 */
+  readonly permissions?: readonly string[]
+}
+
+/**
+ * A2A HTTP 发布配置。两条路径均从站点根开始，使用精确匹配。
+ *
+ * @example
+ * ```ts
+ * import { type A2AHttpOptions, ai } from '@h-ai/ai'
+ * function publish(authenticate: A2AHttpOptions['authenticate']) {
+ *   return ai.a2a.createHttpHandler({ rpcPath: '/partners/orders/a2a', authenticate })
+ * }
+ * ```
+ */
+export interface A2AHttpOptions {
+  /** Agent Card 的 GET 路径，默认 /.well-known/agent-card.json。 */
+  cardPath?: `/${string}`
+  /** JSON-RPC 的 POST 路径，默认 /a2a。 */
+  rpcPath?: `/${string}`
+  /**
+   * 显式传 false 才允许匿名。自定义验证器返回空值时拒绝；API Key 验证器按 Agent Card 查找凭据。
+   */
+  authenticate:
+    | false
+    | ((request: Request) => Promise<A2AHttpIdentity | null | undefined>)
+    | { verifyApiKey: (key: string) => Promise<HaiResult<{ id: string, userId: string, scopes: readonly string[], permissions: readonly string[] }>> }
+}
+
+/**
+ * 由 HTTP 宿主挂载的 A2A 处理器。
+ *
+ * @example
+ * ```ts
+ * import type { A2AHttpHandler } from '@h-ai/ai'
+ * function dispatch(a2a: A2AHttpHandler, request: Request, requestId: string) {
+ *   return a2a.handleRequest(request, requestId) // null 交给宿主继续匹配。
+ * }
+ * ```
+ */
+export interface A2AHttpHandler {
+  readonly cardPath: `/${string}`
+  readonly rpcPath: `/${string}`
+  handleRequest: (request: Request, requestId?: string) => Promise<Response | null>
 }
 
 // ─── A2A 任务过滤器 ───
@@ -214,6 +278,25 @@ export interface A2ATaskFilter {
  */
 export interface A2AOperations {
   /**
+   * 创建一个可挂到 Serv 或 Kit 的 Agent Card 与 JSON-RPC 处理器。
+   *
+   * @throws 未初始化 AI、未配置 A2A、未注册执行器、非法路径、路径重复或未指定认证策略时抛出配置错误。
+   */
+  createHttpHandler: (options: A2AHttpOptions) => A2AHttpHandler
+
+  /**
+   * 在 AgentExecutor 中读取来自可信传输层的调用方；匿名调用返回 undefined。
+   * @example
+   * ```ts
+   * import { ai, type RequestContext } from '@h-ai/ai'
+   * function canReadPartnerOrders(context: RequestContext): boolean {
+   *   return ai.a2a.getCallerIdentity(context)?.permissions?.includes('orders:read') ?? false
+   * }
+   * ```
+   */
+  getCallerIdentity: (context: RequestContext) => A2AHttpIdentity | undefined
+
+  /**
    * 注册 Agent 执行器
    *
    * 需要先调用 `ai.init()` 并配置 `a2a` 后才能注册。
@@ -239,10 +322,10 @@ export interface A2AOperations {
    * 将 HTTP 请求体路由到 SDK 的 JsonRpcTransportHandler。
    *
    * @param requestBody - JSON-RPC 请求体
-   * @param context - 可信 HTTP 层认证上下文；agentId 映射为 SDK user.userName
+   * @param caller - 可信传输层认证结果，可由执行器通过 getCallerIdentity 读取。
    * @returns JSON-RPC 响应（单条或流式）；未初始化也返回 JSON-RPC 错误，不混入 HaiResult
    */
-  handleRequest: (requestBody: unknown, context?: Record<string, unknown>) => Promise<A2AHandleResult>
+  handleRequest: (requestBody: unknown, caller?: A2AHttpIdentity) => Promise<A2AHandleResult>
 
   /**
    * 查询 A2A 消息列表（服务端管理接口，不自动推断调用方权限）

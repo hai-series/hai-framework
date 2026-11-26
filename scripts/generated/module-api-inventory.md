@@ -6,9 +6,9 @@
 | --- | --- | --- |
 | @h-ai/ai | `. (browser/default)` | 335 |
 | @h-ai/ai | `. (browser/types)` | 335 |
-| @h-ai/ai | `. (default)` | 369 |
-| @h-ai/ai | `. (import)` | 369 |
-| @h-ai/ai | `. (types)` | 369 |
+| @h-ai/ai | `. (default)` | 372 |
+| @h-ai/ai | `. (import)` | 372 |
+| @h-ai/ai | `. (types)` | 372 |
 | @h-ai/ai | `./client (import)` | 7 |
 | @h-ai/ai | `./client (types)` | 7 |
 | @h-ai/api-client | `. (default)` | 14 |
@@ -54,11 +54,11 @@
 | @h-ai/deploy | `. (types)` | 36 |
 | @h-ai/feedback | `. (import)` | 23 |
 | @h-ai/feedback | `. (types)` | 23 |
-| @h-ai/iam | `. (browser/default)` | 84 |
-| @h-ai/iam | `. (browser/types)` | 84 |
-| @h-ai/iam | `. (default)` | 85 |
-| @h-ai/iam | `. (import)` | 85 |
-| @h-ai/iam | `. (types)` | 85 |
+| @h-ai/iam | `. (browser/default)` | 85 |
+| @h-ai/iam | `. (browser/types)` | 85 |
+| @h-ai/iam | `. (default)` | 86 |
+| @h-ai/iam | `. (import)` | 86 |
+| @h-ai/iam | `. (types)` | 86 |
 | @h-ai/kit | `. (browser/default)` | 34 |
 | @h-ai/kit | `. (browser/types)` | 34 |
 | @h-ai/kit | `. (import)` | 69 |

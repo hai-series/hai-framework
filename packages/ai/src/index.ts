@@ -1,5 +1,5 @@
 export type { AgentCapabilities, AgentCard, AgentExecutor, AgentInterface, AgentProvider, AgentSkill, Artifact, CancelTaskRequest, ExecutionEventBus, GetTaskRequest, StreamResponse, SubscribeToTaskRequest, TaskPushNotificationConfig } from './a2a/ai-a2a-types.js'
-export type { A2AAgentCardConfig, A2AAgentCardDocument, A2AApiKeySecurity, A2AAuthenticator, A2ACallerIdentity, A2ACallOptions, A2ACallResult, A2AContextInfo, A2AHandleResult, A2AMessageRecord, A2AOperations, A2ASecurityConfig, A2ATaskFilter } from './a2a/ai-a2a-types.js'
+export type { A2AAgentCardConfig, A2AAgentCardDocument, A2AApiKeySecurity, A2AAuthenticator, A2ACallerIdentity, A2ACallOptions, A2ACallResult, A2AContextInfo, A2AHandleResult, A2AHttpHandler, A2AHttpIdentity, A2AHttpOptions, A2AMessageRecord, A2AOperations, A2ASecurityConfig, A2ATaskFilter } from './a2a/ai-a2a-types.js'
 export { Role, TaskState } from './a2a/ai-a2a-types.js'
 export type { ACPConfig, ACPConfigInput } from './acp/ai-acp-config.js'
 export { ACPAgentSchema, ACPConfigSchema, ACPPublishSchema, ACPRepositorySchema, ACPWorkspaceSchema } from './acp/ai-acp-config.js'

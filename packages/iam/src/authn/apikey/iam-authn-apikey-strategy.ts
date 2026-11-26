@@ -6,11 +6,12 @@
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
+import type { AuthzOperations } from '../../authz/iam-authz-types.js'
 import type { ApiKeyConfig } from '../../iam-config.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-types.js'
 import type { ApiKeyRepository } from './iam-authn-apikey-repository.js'
-import type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions } from './iam-authn-apikey-types.js'
+import type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions, VerifiedApiKey } from './iam-authn-apikey-types.js'
 import { createHash, randomBytes } from 'node:crypto'
 import { core } from '@h-ai/core'
 import { crypto as haiCrypto, HaiCryptoError } from '@h-ai/crypto'
@@ -21,6 +22,7 @@ import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 import { isUserActive, toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, mapPasswordWorkError } from '../iam-authn-utils.js'
+import { applyApiKeyScopes } from './iam-authn-apikey-scope.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'apikey-strategy' })
 
@@ -29,8 +31,8 @@ const logger = core.logger.child({ module: 'iam', scope: 'apikey-strategy' })
  * @internal
  * @example 模块内部上下文
  * ```ts
- * function configure(userRepository: UserRepository, apiKeyRepository: ApiKeyRepository) {
- *   const config: ApiKeyStrategyConfig = { userRepository, apiKeyRepository }
+ * function configure(userRepository: UserRepository, apiKeyRepository: ApiKeyRepository, authz: AuthzOperations) {
+ *   const config: ApiKeyStrategyConfig = { userRepository, apiKeyRepository, getUserAuthorization: authz.getUserAuthorization }
  *   return createApiKeyStrategy(config)
  * }
  * ```
@@ -42,6 +44,8 @@ export interface ApiKeyStrategyConfig {
   userRepository: UserRepository
   /** API Key 存储 */
   apiKeyRepository: ApiKeyRepository
+  /** 读取所属用户当前的角色和权限 */
+  getUserAuthorization: AuthzOperations['getUserAuthorization']
 }
 
 /**
@@ -125,7 +129,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
     ? ApiKeyConfigSchema.parse(config.apikeyConfig)
     : ApiKeyConfigSchema.parse({})
 
-  const { userRepository, apiKeyRepository } = config
+  const { userRepository, apiKeyRepository, getUserAuthorization } = config
 
   /**
    * 内部：验证明文 API Key 并返回 ApiKey 实体
@@ -204,6 +208,30 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
     })
   }
 
+  async function authenticateKey(rawKey: string): Promise<HaiResult<{ user: AuthenticatedUser, apiKey: ApiKey }>> {
+    const verified = await verifyRawKey(rawKey)
+    if (!verified.success)
+      return verified
+    const apiKey = verified.data
+
+    const userResult = await userRepository.findById(apiKey.userId)
+    if (!userResult.success)
+      return core.err(HaiIamError.REPOSITORY_ERROR, userResult.error.message, userResult.error)
+    if (!userResult.data)
+      return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+    if (!isUserActive(userResult.data))
+      return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+
+    logger.debug('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })
+    return core.ok({
+      user: {
+        ...toUser(userResult.data),
+        credentialVersion: userResult.data.credentialVersion ?? '',
+      },
+      apiKey,
+    })
+  }
+
   // ─── AuthStrategy 实现 ───
 
   const strategy: ApiKeyStrategyResult['strategy'] = {
@@ -212,40 +240,9 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
 
     async authenticate(credentials: Credentials) {
       const credentialResult = ensureCredentialType(credentials, 'apikey')
-      if (!credentialResult.success) {
+      if (!credentialResult.success)
         return credentialResult
-      }
-
-      const { key } = credentialResult.data
-
-      // 验证 API Key
-      const verifyResult = await verifyRawKey(key)
-      if (!verifyResult.success) {
-        return verifyResult
-      }
-
-      const apiKey = verifyResult.data
-
-      // 通过用户 ID 查找关联用户
-      const userResult = await userRepository.findById(apiKey.userId)
-      if (!userResult.success) {
-        return core.err(HaiIamError.REPOSITORY_ERROR, userResult.error.message, userResult.error)
-      }
-      if (!userResult.data) {
-        return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
-      }
-      if (!isUserActive(userResult.data)) {
-        return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
-      }
-
-      logger.debug('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })
-      return core.ok({
-        user: {
-          ...toUser(userResult.data),
-          credentialVersion: userResult.data.credentialVersion ?? '',
-        },
-        apiKey,
-      })
+      return authenticateKey(credentialResult.data.key)
     },
   }
 
@@ -340,8 +337,16 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       return core.ok(undefined)
     },
 
-    async verifyApiKey(rawKey: string): Promise<HaiResult<ApiKey>> {
-      return verifyRawKey(rawKey)
+    async verifyApiKey(rawKey: string): Promise<HaiResult<VerifiedApiKey>> {
+      const verified = await authenticateKey(rawKey)
+      if (!verified.success)
+        return verified
+      const { user, apiKey } = verified.data
+      const authorization = await getUserAuthorization(user.id)
+      if (!authorization.success)
+        return authorization
+      const { permissions } = applyApiKeyScopes(authorization.data, apiKey.scopes)
+      return core.ok({ ...apiKey, permissions })
     },
   }
 
