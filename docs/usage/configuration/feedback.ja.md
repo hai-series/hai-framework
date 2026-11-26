@@ -1,57 +1,91 @@
 # @h-ai/feedback 設定
 
-<!-- translation: partial -->
+[简体中文](feedback.md) · [English](feedback.en.md)
 
-[原文（中国語）](feedback.md) · [データ構造](../data/feedback.ja.md) · [API リファレンス](../function/feedback.ja.md)
+[設定ガイド](README.ja.md) · [データ構造](../data/feedback.ja.md) · [API リファレンス](../function/feedback.ja.md)
 
-## 設定の読み込み
+## 設定の入口
 
-フィードバックサービスを `_feedback.yml` で設定します。証跡の収集はサーバーで制御し、アプリ外へ送れる項目を選びます。通知と Webhook は個別に設定します。
+アプリは起動時に `config/_feedback.yml` を読み、`feedback.init(config, options)` に渡します。設定を変更したらアプリを再起動します。環境変数の名前は設定のパスに対応します。たとえば `notification.mode` は `HAI_FEEDBACK_NOTIFICATION_MODE`、`limits.maxTotalBytes` は `HAI_FEEDBACK_LIMITS_MAXTOTALBYTES` です。[設定の優先順位](runtime.md#配置从哪里来)
+
+<a id="configuration-fields"></a>
 
 ## 設定一覧
 
+### 基本設定
 
-| 項目 | 既定値・必須条件 | 用途 |
+生成したプロジェクトは `console` を明示的に指定します。問題票を送信し、サーバーログに番号が出ることを確認してください。
+
+| パス | 既定値と制約 | 用途 |
 | --- | --- | --- |
-| `appId`, `appVersion`, `buildId`, `commit` | Required app ID, other values optional | 報告をアプリとビルドに関連付ける。 |
-| `notificationMode`, `consoleContent`, `notificationProvider`, `recipients` | `reach`, `metadata`, `email`, `[]` | 通知経路と共有する情報を選択。 |
-| `collectionTimeoutMs`, `businessCollectionTimeoutMs` | `60000`, `30000` | 収集期限（ミリ秒）。 |
-| `webhookUrl`, `webhookSecret`, `webhookTimeoutMs` | `""`, `""`, `10000` | Webhook の宛先、署名用の秘密値と期限。 |
-| `workerIntervalMs`, `leaseMs`, `maxAttempts` | `1000`, `30000`, `5` | ワーカー間隔、リース期間、引き受けた処理の最大試行回数。引き受け後にワーカーが終了した場合も含みます。削除ジョブは再試行を続けます。 |
-| `retentionDays`, `exportRetentionHours`, `maxExportsPerReport` | `30`, `24`, `5` | 報告の保存期間、出力の保存期間、出力件数の上限。報告へのアクセスと出力はデータベースの保持期限で終了し、削除はバックグラウンドで行います。 |
-| `envAllowlist`, `maxTotalBytes`, `maxAttachmentBytes`, `maxEvidenceBytes`, `maxEvidenceCount` | `[]`, `33554432`, `5242880`, `4194304`, `2000` | 環境変数名の許可リスト、送信サイズと件数の上限。`maxEvidenceCount` に 1–10000 を指定でき、有効な上限は 2000 件です。サーバー環境と追加収集の容量を確保します。 |
-
-未翻訳：クォータ、証拠、Webhook の再試行、保持期間の項目別設定。[中国語の該当節](feedback.md#configuration-fields)を参照してください。
-
-## 設定例
+| `appId` | 必須、1–128 文字 | ブラウザーと API のアプリ ID に合わせます。 |
+| `notification.mode` | `reach`。ほかに `disabled`、`console` | 通知停止、サーバーログ出力、Reach 配信を選びます。 |
+| `retention.days` | 30、1–3650 日 | 期限切れ後はアクセスと出力を停止し、タスクが証拠とオブジェクトを削除します。 |
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
-notificationMode: console
-consoleContent: metadata
+notification:
+  mode: console
 ```
 
-### 新しいフィードバックを担当者にメールで知らせる
+### オプション機能
 
-`config/_feedback.yml` に記述します。`email` には、初期化済みで実際に送信できる Reach 通知先の名前を指定します。Console はログに出すだけです。`adminUrl` は通知に載せる管理画面のリンクで、ページやアクセス権を作成するものではありません。
+| パス | 既定値と制約 | 用途 |
+| --- | --- | --- |
+| `notification.consoleContent` | `metadata` または `summary` | 識別情報を記録します。`summary` を選ぶとマスク済みの要約を追加します。 |
+| `notification.recipients` | `[]`、最大 20 件、各 1–320 文字 | Reach では 1 件以上が必要です。配信先はプロバイダーが検証します。 |
+| `notification.provider` | `email`、空でない文字列 | 初期化済みの Reach プロバイダー名です。 |
+| `notification.adminUrl` | 省略可、HTTP(S) URL | 通知と Webhook に含める管理画面リンクです。 |
+| `webhook.url` | 空文字列、最大 2048 文字 | 信頼できる HTTP(S) 宛先を設定すると配信します。URL の認証情報とフラグメントは拒否します。 |
+| `webhook.secret` | 空文字列、最大 4096 文字 | サーバー専用の `HAI_FEEDBACK_WEBHOOK_SECRET` で署名キーを渡します。 |
+| `collection.envAllowlist` | `[]`、最大 100 件、各 1–128 文字 | 収集を許可するサーバー環境変数名です。機密名は引き続き除外します。 |
+| `build.appVersion`、`build.buildId`、`build.commit` | 省略可、各最大 128 文字 | アプリのバージョン、ビルド識別子、ソースのコミットです。生成プロジェクトには実際のビルド情報が入ります。 |
+
+担当者にメールを送るには、`email` という Reach プロバイダーを初期化し、問題票を送信して配信とリンクを確認します。
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
-notificationMode: reach
-notificationProvider: email
-recipients: [support@example.com]
-adminUrl: https://admin.example.com/feedback
+notification:
+  mode: reach
+  provider: email
+  recipients: [support@example.com]
+  adminUrl: https://admin.example.com/feedback
 ```
 
-### 添付サイズと保存期間を抑える
+業務証拠の収集関数は `feedback.init(config, { collectEvidence })` で登録します。Webhook の受信側はイベント ID で受信を追跡できます。[業務収集と Webhook](../function/feedback.ja.md#service)
 
-添付は 1 件 2 MiB、ユーザーごとの受付は 1 日 10 件に制限します。報告は 7 日、エクスポートした ZIP は 12 時間保存します。`disabled` は通知を止める設定で、報告は保存されます。期限切れのファイルを削除するバックグラウンド処理は稼働させておきます。
+### 運用調整
+
+| パス | 既定値と制約 | 用途 |
+| --- | --- | --- |
+| `limits.maxTotalBytes` | 32 MiB、4–40 MiB をバイトで指定 | 非圧縮出力の予算です。添付と暗号化通信の上限に反映します。 |
+| `limits.maxAttachmentBytes` | 5 MiB、1 バイト–5 MiB | 1 添付の上限です。合計予算も適用します。 |
+| `limits.maxEvidenceBytes` | 4 MiB、1024 バイト–4 MiB | 1 問題票の証拠合計サイズです。 |
+| `limits.maxEvidenceCount` | 2000、1–10000 | 実際の上限は 2000 件です。サーバー環境と追加収集の容量を確保します。 |
+| `limits.maxReportsPerUserDay` | 20、1–10000 件 | データベースの UTC 日、アプリ、範囲、ユーザーごとに受理を数えます。再送は 1 回分です。 |
+| `limits.maxBytesPerUserDay` | 2 GiB、4 MiB–1 TiB をバイトで指定 | ユーザーの日次予約枠です。問題票と過去の出力を含みます。 |
+| `limits.maxStoredBytesPerScope` | 10 GiB、4 MiB–1 TiB をバイトで指定 | アプリ内の範囲ごとの予約枠です。期限切れの問題票を削除すると空きを戻します。 |
+| `limits.maxExportsPerReport` | 5、1–20 回 | 1 問題票の出力上限です。有効なスナップショットの再利用は追加で数えません。 |
+| `retention.exportHours` | 24、1–720 時間 | 期限後は ZIP の取得を停止し、タスクが削除します。 |
+| `collection.timeoutMs` | 60000、0–300000 ms | ブラウザーからの証拠追加を待つ時間です。 |
+| `collection.businessTimeoutMs` | 30000、1–300000 ms | 1 回の業務収集コールバックの制限時間です。 |
+| `webhook.timeoutMs` | 10000、1–60000 ms | 1 回の Webhook の制限時間です。失敗は再試行します。 |
+| `worker.intervalMs` | 1000、0–60000 ms | タスク確認間隔です。0 の場合は `feedback.runJobs()` を明示的に呼びます。 |
+| `worker.leaseMs` | 30000、1000–300000 ms | 別のワーカーが引き継ぐまでのリース期間です。 |
+| `worker.maxAttempts` | 5、1–20 回 | 通常タスクの取得上限です。途中終了も含み、期限切れの削除は再試行を続けます。 |
+
+1 問題票に `limits.maxTotalBytes × (1 + limits.maxExportsPerReport)` を予約します。既定では 192 MiB ずつ予約するため、日次の 2 GiB 枠で受理できるのは 10 件です。変更後は添付付きの問題票を送信して ZIP を出力し、アプリとプロキシの上限を確認します。
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
-notificationMode: disabled
-maxAttachmentBytes: 2097152
-maxReportsPerUserDay: 10
-retentionDays: 7
-exportRetentionHours: 12
+notification:
+  mode: disabled
+retention:
+  days: 7
+  exportHours: 12
+limits:
+  maxAttachmentBytes: 2097152
+  maxReportsPerUserDay: 10
 ```
+
+[フィードバックの運用](../operations/feedback.md)

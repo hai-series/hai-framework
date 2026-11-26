@@ -65,7 +65,7 @@
 
 管理台提交的 config/_feedback.yml 默认启用问题反馈。启动时复用数据库、存储和 Reach，管理员通知使用配置的 email Provider；生产配置私有 S3、真实 SMTP 和通知地址。
 
-业务异步补采使用 feedback.init(config, { collectEvidence })，可返回 text/data 与文本或 ZIP/GZIP 附件；同 appId 的每个实例都要注册。_feedback.yml 可配置 HAI_FEEDBACK_WEBHOOKURL/WEBHOOKSECRET/WEBHOOKTIMEOUTMS 与 BUSINESSCOLLECTIONTIMEOUTMS；密钥保存在服务端私有环境。详情展示 Webhook 状态及尝试次数，管理员重试失败项。使用方式见 [feedback](../../packages/feedback/README.md)。
+业务异步补采使用 feedback.init(config, { collectEvidence })，可返回 text/data 与文本或 ZIP/GZIP 附件；同 appId 的每个实例都要注册。_feedback.yml 可配置 `HAI_FEEDBACK_WEBHOOK_URL`、`HAI_FEEDBACK_WEBHOOK_SECRET`、`HAI_FEEDBACK_WEBHOOK_TIMEOUTMS` 与 `HAI_FEEDBACK_COLLECTION_BUSINESSTIMEOUTMS`；密钥保存在服务端私有环境。详情展示 Webhook 状态及尝试次数，管理员重试失败项。使用方式见 [feedback](../../packages/feedback/README.md)。
 
 普通 user 角色获得 feedback:create，可从顶栏直接提交空说明或附带图片；窄屏仍保留带可访问名称的入口。business_operator 角色获得 feedback:create/read/process/reopen/export，可打开 /admin/feedback，分页筛选、查看材料、处理或撤销并导出诊断包。创建者可读取自己的报告/续传材料；普通用户不能列出管理记录或执行管理操作。无角色且未授权的用户不显示提交入口，服务端仍拒绝请求。
 
@@ -264,7 +264,7 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 
 反馈入口默认预览当前页面，支持换页补图、拖选标注与无声短录屏（60秒/5 MiB，原始录屏需自行避开敏感信息）。展开“收集材料”查看日志和实际环境；“保存反馈到本地”下载ZIP。管理员在详情的“页面回放”播放页面操作，在“操作现场”查看录屏。离线分析运行 `hai feedback view <zip>`。
 
-反馈示例默认 notificationMode: console，不要求邮箱或 Reach。服务端反馈预算同时用于传输设置；客户端从 /api/feedback/policy 读取有效容量，使用 SDK 的 getView、比例标注、saveDraft 和 createFeedbackReview；退出账号清理草稿与观察器。初始化使用 core.module.createRuntime，模块自己的迁移在仓库初始化前执行。
+反馈示例默认使用 `notification.mode: console`，不要求邮箱或 Reach。服务端反馈预算同时用于传输设置；客户端从 /api/feedback/policy 读取有效容量，使用 SDK 的 getView、比例标注、saveDraft 和 createFeedbackReview；退出账号清理草稿与观察器。初始化使用 core.module.createRuntime，模块自己的迁移在仓库初始化前执行。
 
 ## 界面设计与交互示例
 

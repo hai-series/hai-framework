@@ -4,84 +4,90 @@
 
 [English](feedback.en.md) · [日本語](feedback.ja.md)
 
-[配置手册](README.md)
+[配置手册](README.md) · [数据结构](../data/feedback.md) · [功能说明](../function/feedback.md)
 
 ## 配置入口
 
-生成的项目将反馈相关设置写在 `config/_feedback.yml`。应用启动时从 `core.config.get('feedback')` 取出配置并传给 `feedback.init()`。用环境变量覆盖时使用 `HAI_FEEDBACK_` 前缀。见[配置来源和覆盖顺序](runtime.md#配置从哪里来)。
-
-服务端保存报告、执行后台任务并发送通知。应用要把自己的业务日志一并附在报告中时，可以在 `feedback.init(config, { collectEvidence })` 中传入收集函数。同一次部署的页面和服务端应使用同一构建标识，便于把用户反馈对应到具体版本。
+应用启动时从 `config/_feedback.yml` 读取配置，传给 `feedback.init(config, options)`。修改配置后重新启动应用。环境变量按字段路径覆盖，例如 `notification.mode` 对应 `HAI_FEEDBACK_NOTIFICATION_MODE`，`limits.maxTotalBytes` 对应 `HAI_FEEDBACK_LIMITS_MAXTOTALBYTES`。见[配置来源和覆盖顺序](runtime.md#配置从哪里来)。
 
 <a id="configuration-fields"></a>
 
 ## 配置清单
 
-例如，省略 `notificationMode` 默认使用 `reach` 发送通知，因此需要为该模式设置收件方。下例显式改为 `console`，开发时只在服务端日志中看到反馈编号等基本信息。
+### 基础接入
 
-| 配置项                        | 默认值/必填   | 说明                                                                                                             |
-| ----------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `appId`                       | 必填          | 反馈所属应用标识；应与浏览器及 API 入口配置一致。可填字符串，1–128 个字符                                        |
-| `appVersion`                  | 可省略        | 当前应用版本，作为默认诊断信息保存。可填字符串，最多 128 个字符                                                  |
-| `buildId`                     | 可省略        | 构建标识，帮助定位发布产物。可填字符串，最多 128 个字符                                                          |
-| `commit`                      | 可省略        | 源码提交标识，帮助定位对应代码。可填字符串，最多 128 个字符                                                      |
-| `notificationMode`            | `"reach"`     | disabled 不通知，console 默认仅输出元数据，reach 使用已有通知通道。可填 `"disabled"`、`"console"`、`"reach"`     |
-| `consoleContent`              | `"metadata"`  | console 通知内容；metadata 只输出定位和采集状态，summary 显式加入通用脱敏摘要。可填 `"metadata"`、`"summary"`    |
-| `recipients`                  | `[]`          | Reach 接收方，由实际 Provider 校验邮箱、手机号或业务目的地。可填数组（元素为字符串，1–320 个字符），最多 20 项   |
-| `notificationProvider`        | `"email"`     | 已初始化 Reach Provider 的唯一名称，不限制为邮件。可填字符串，至少 1 个字符                                      |
-| `adminUrl`                    | 可省略        | 管理员通知中的反馈管理页面地址。可填字符串，URL                                                                  |
-| `collectionTimeoutMs`         | `60000`       | 补充材料收集超时，单位毫秒；超时后冻结为完整或部分材料。可填整数，0–300000                                       |
-| `businessCollectionTimeoutMs` | `30000`       | 业务 collectEvidence 异步回调的等待上限，单位毫秒；超时后重试采集任务。可填整数，1–300000                        |
-| `webhookUrl`                  | `""`          | 反馈采集结束后的 Webhook 地址；空字符串禁用，只允许可信 HTTP(S) 地址且不跟随重定向。可填字符串，最多 2048 个字符 |
-| `webhookSecret`               | `""`          | Webhook HMAC-SHA256 签名密钥；空字符串不签名，仅服务端私有环境配置。可填字符串，最多 4096 个字符                 |
-| `webhookTimeoutMs`            | `10000`       | 单次 Webhook 请求超时，单位毫秒；非 2xx 或超时均进入持久重试。可填整数，1–60000                                  |
-| `workerIntervalMs`            | `1000`        | 持久任务扫描间隔，单位毫秒；设为 0 后不会自动扫描，应用可按需手动运行后台任务。可填整数，0–60000                 |
-| `leaseMs`                     | `30000`       | 持久任务执行租约时长，单位毫秒；过期后允许其他实例接管。可填整数，1000–300000                                    |
-| `maxAttempts`                 | `5`           | 采集、通知、Webhook 和导出任务的最大领取尝试次数，含领取后退出的情况。到期清理持续重试。可填整数，1–20                                     |
-| `retentionDays`               | `30`          | 已受理反馈及对象附件的保留天数。达到数据库时钟计算的截止时间即停止查询和导出，后台继续物理清理。可填整数，1–3650                                                                 |
-| `maxReportsPerUserDay`        | `20`          | 单个用户按数据库 UTC 日累计受理上限；幂等重试不重复计数。可填整数，1–10000                                       |
-| `maxBytesPerUserDay`          | `2147483648`  | 单个用户每日预留存储字节（报告与最多历史导出）。可填整数，4194304–1099511627776                                  |
-| `maxStoredBytesPerScope`      | `10737418240` | 应用内单个 scope 的持久材料预留容量；到期清理成功后释放，默认 10 GiB。可填整数，4194304–1099511627776            |
-| `maxExportsPerReport`         | `5`           | 单份报告最多历史导出数；已有有效快照复用，不重复计数。可填整数，1–20                                             |
-| `exportRetentionHours`        | `24`          | 已完成导出的有效小时数；过期禁止下载，后台删除对象，默认 24 小时。可填整数，1–720                                |
-| `envAllowlist`                | `[]`          | 允许采集的服务端环境变量名；凭据类名称仍按敏感信息策略排除。可填数组（元素为字符串，1–128 个字符），最多 100 项  |
-| `maxTotalBytes`               | `33554432`    | 未压缩导出总预算；客户端、附件总量和传输预算由此派生。可填整数，4194304–41943040                                 |
-| `maxAttachmentBytes`          | `5242880`     | 单个附件允许的最大字节数；同时受总预算约束。可填整数，1–5242880                                                  |
-| `maxEvidenceBytes`            | `4194304`     | 单份反馈累计证据允许的最大字节数。可填整数，1024–4194304                                                         |
-| `maxEvidenceCount`            | `2000`        | 单份反馈累计证据允许的最大条数。可填整数，1–10000，实际最大值为 2000，服务端优先保留环境与补采容量。                                                                |
+生成工程显式选择 `console`。启动后提交一条反馈，在服务端日志中用反馈编号确认 Console 通知。
 
-## 配置示例
+| 路径 | 默认值与约束 | 用途 |
+| --- | --- | --- |
+| `appId` | 必填，1–128 字符 | 与浏览器及 API 的应用 ID 一致。 |
+| `notification.mode` | `reach`，可选 `disabled`、`console`、`reach` | 分别关闭反馈通知、输出服务端日志、通过 Reach 投递。 |
+| `retention.days` | 30，1–3650 天 | 报告到期后停止访问和导出。后台清理证据与对象。 |
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
-notificationMode: console
-consoleContent: metadata
+notification:
+  mode: console
 ```
 
-### 把反馈通知发给值班邮箱
+### 按需能力
 
-写入 `config/_feedback.yml`。`email` 必须是已经初始化、能够真实投递的 Reach 渠道名；Console 渠道只会打印日志。`adminUrl` 是通知里的管理页链接，配置它不会创建页面或授予访问权限。
+| 路径 | 默认值与约束 | 用途 |
+| --- | --- | --- |
+| `notification.consoleContent` | `metadata`，或 `summary` | Console 记录定位元数据，选 `summary` 时加入经过脱敏的摘要。 |
+| `notification.recipients` | `[]`，最多 20 项，每项 1–320 字符 | Reach 模式至少填一项，由实际渠道校验目的地。 |
+| `notification.provider` | `email`，非空字符串 | 已初始化的 Reach 渠道名称。 |
+| `notification.adminUrl` | 可省略，HTTP(S) URL | 通知和 Webhook 使用的管理页链接。 |
+| `webhook.url` | 空字符串，最多 2048 字符 | 配置可信 HTTP(S) 接收端后启用 Webhook，禁止 URL 凭据和片段。 |
+| `webhook.secret` | 空字符串，最多 4096 字符 | 配置后对回调签名，通过服务端私有变量 `HAI_FEEDBACK_WEBHOOK_SECRET` 注入。 |
+| `collection.envAllowlist` | `[]`，最多 100 项，每项 1–128 字符 | 允许采集的服务端环境变量名。敏感名称仍会被过滤。 |
+| `build.appVersion`、`build.buildId`、`build.commit` | 可省略，每项最多 128 字符 | 报告的应用版本、构建标识和源码提交，生成工程从实际产物注入。 |
+
+向值班团队发邮件时，先初始化名为 `email` 的 Reach 发送渠道，再提交反馈验证收件人与管理链接。
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
-notificationMode: reach
-notificationProvider: email
-recipients: [support@example.com]
-adminUrl: https://admin.example.com/feedback
+notification:
+  mode: reach
+  provider: email
+  recipients: [support@example.com]
+  adminUrl: https://admin.example.com/feedback
 ```
 
-### 限制附件大小并缩短保存时间
+业务材料收集函数通过 `feedback.init(config, { collectEvidence })` 注册。配置 Webhook 后可让外部系统按事件 ID 确认收到通知。见[业务补采和 Webhook](../function/feedback.md#service)。
 
-每个附件最多 2 MiB，每个用户每天最多受理 10 份反馈，反馈保存 7 天，导出的 ZIP 保存 12 小时。设为 `disabled` 只关闭通知，仍会保存反馈；到期对象由后台清理任务回收，需要让后台任务保持运行。
+### 运维调优
+
+| 路径 | 默认值与约束 | 用途 |
+| --- | --- | --- |
+| `limits.maxTotalBytes` | 32 MiB，4–40 MiB，填写字节 | 未压缩导出总预算。材料和加密传输容量从此派生。 |
+| `limits.maxAttachmentBytes` | 5 MiB，1 字节–5 MiB | 单个附件上限，同时受总预算约束。 |
+| `limits.maxEvidenceBytes` | 4 MiB，1024 字节–4 MiB | 单份反馈的证据总字节上限。 |
+| `limits.maxEvidenceCount` | 2000，允许 1–10000 | 实际最多 2000 条，服务端为环境与补采预留容量。 |
+| `limits.maxReportsPerUserDay` | 20，1–10000 条 | 按数据库 UTC 日和应用、范围、用户计量受理条数。幂等重试只计一次。 |
+| `limits.maxBytesPerUserDay` | 2 GiB，4 MiB–1 TiB，填写字节 | 用户每日的报告及历史导出预留额。 |
+| `limits.maxStoredBytesPerScope` | 10 GiB，4 MiB–1 TiB，填写字节 | 应用内范围累计预留额。过期反馈清理成功后释放。 |
+| `limits.maxExportsPerReport` | 5，1–20 | 每份报告的导出次数上限，复用有效快照不重复计次。 |
+| `retention.exportHours` | 24，1–720 小时 | 导出 ZIP 到期后禁止下载，由后台删除。 |
+| `collection.timeoutMs` | 60000，0–300000 毫秒 | 等候客户端补传材料的时限。 |
+| `collection.businessTimeoutMs` | 30000，1–300000 毫秒 | 单次业务收集回调的时限。 |
+| `webhook.timeoutMs` | 10000，1–60000 毫秒 | 单次 Webhook 请求时限，失败进入后台重试。 |
+| `worker.intervalMs` | 1000，0–60000 毫秒 | 任务扫描间隔，设为 0 时由宿主调用 `feedback.runJobs()`。 |
+| `worker.leaseMs` | 30000，1000–300000 毫秒 | 任务领取租期，到期后允许其他实例接手。 |
+| `worker.maxAttempts` | 5，1–20 次 | 普通任务的领取上限，含领取后退出。到期清理持续重试。 |
+
+每份反馈预留 `limits.maxTotalBytes × (1 + limits.maxExportsPerReport)`。按默认值每份预留 192 MiB，用户日容量 2 GiB 可受理 10 份。改动配额后，提交带附件的报告并在管理端生成 ZIP，核对生效的限制与代理的材料请求容量。
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
-notificationMode: disabled
-maxAttachmentBytes: 2097152
-maxReportsPerUserDay: 10
-retentionDays: 7
-exportRetentionHours: 12
+notification:
+  mode: disabled
+retention:
+  days: 7
+  exportHours: 12
+limits:
+  maxAttachmentBytes: 2097152
+  maxReportsPerUserDay: 10
 ```
 
-### 生效与核对
-
-开发可用 `console` 在日志中记下反馈编号等信息。用 `reach` 时，需要填收件人，并提供实际能投递的邮件、短信或 API 渠道。填入 `webhookUrl` 后，服务端还会调用该地址。回调密钥在服务端读取。修改容量限制后，提交一份带附件的测试报告，再核对是否能在管理端查询和导出。[反馈通知、采集和保留](operations.md#feedback通知采集和保留)
+[反馈通知、采集和保留](operations.md#feedback通知采集和保留)

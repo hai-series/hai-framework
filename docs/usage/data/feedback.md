@@ -48,15 +48,19 @@
 | `created_at` | `BIGINT` | 否 | — | 提交时间。 | `1794873600000` |
 | `updated_at` | `BIGINT` | 否 | — | 最近更新时间。 | `1794873600000` |
 | `version` | `INTEGER` | 否 | — | 主单版本，用于检查并发修改。 | `1` |
-| `revision` | `INTEGER` | 否 | — | 证据修订号，用于关联同一份证据快照。 | `1` |
-| `evidence_count` | `INTEGER` | 否 | — | 当前关联的证据条数。 | `0` |
+| `revision` | `INTEGER` | 否 | — | 证据修订号，用于关联同一份证据快照。 | `2` |
+| `evidence_count` | `INTEGER` | 否 | — | 当前关联的证据条数。 | `1` |
 | `evidence_bytes` | `BIGINT` | 否 | — | 当前证据占用的字节数。 | `0` |
 | `collect_deadline` | `BIGINT` | 否 | — | 接受补充证据的截止时间。 | `1794873630000` |
 | `expires_at` | `BIGINT` | 否 | — | 反馈的保留截止时间。 | `1797465600000` |
-| `payload` | `JSON` | 否 | — | 分类和问题详情等业务资料，示例只展示分类。 | `{"category":"bug"}` |
+| `payload` | `JSON` | 否 | — | 问题描述、类别、联系方式、页面 URL、构建标识和提交号。状态、版本、用户和时间从各自的列读取。 | `{"category":"bug"}` |
 | `deleting` | `INTEGER` | 否 | — | 进入删除流程时为 `1`，普通查询只读 `0` 的记录。 | `0` |
 
 按 `(scope_id, created_at)`、`(scope_id, status, created_at)` 建索引，支持范围内查询。
+
+提交键由范围、用户、应用和客户端提交 ID 计算。同一个键重试时，用请求摘要核对内容，原样重试返回原反馈，修改内容会返回冲突。
+
+管理员改处理状态时，`version` 加一，用于拦住基于旧版本的并发修改。写入一批新证据或首次确认附件可读时，`revision` 加一。导出同时记录这两个值。
 
 <a id="example-data"></a>
 
@@ -76,15 +80,14 @@
   "status": "pending",
   "collection_status": "collecting",
   "version": 1,
-  "revision": 1,
-  "evidence_count": 0,
-  "evidence_bytes": 0,
+  "revision": 2,
+  "evidence_count": 1,
   "created_at": 1794873600000,
   "updated_at": 1794873600000
 }
 ```
 
-这是反馈主单的字段节选。`feedback-42` 属于 `team-1` 的 `user-42`，尚待处理且仍在收集材料；`evidence_count:0` 表示此时还没有关联证据，不代表后面步骤也没有。`created_at` 和 `updated_at` 是 Unix 毫秒。
+这是受理后的字段节选。`team-1` 的 `user-42` 提交了 `feedback-42`，报告待处理。第一条环境证据已随受理事务入库，证据修订号为 2，其他材料仍可补传。
 
 类别早已保存在报告的 `payload.category`，例如 `"bug"`。本人列表以 `scope_id`、`user_id` 等现有字段限定范围。本人和管理列表均排除已过期或正在删除的报告，详情、附件及导出也在数据库时钟到达 `expires_at` 时失效。
 
@@ -107,7 +110,7 @@
 | `timestamp` | `BIGINT` | 否 | — | 事件发生时间。 | `1794873600000` |
 | `request_id` | `TEXT` | 是 | — | 关联请求 ID。 | `req-42` |
 | `error_id` | `TEXT` | 是 | — | 关联错误 ID。 | `err-42` |
-| `revision` | `INTEGER` | 否 | — | 证据所在的修订版本。 | `1` |
+| `revision` | `INTEGER` | 否 | — | 证据所在的修订版本。 | `3` |
 | `bytes` | `INTEGER` | 否 | — | 证据占用的字节。 | `24` |
 | `expires_at` | `BIGINT` | 否 | — | 到期后可清理。 | `1797465600000` |
 | `payload` | `JSON` | 否 | — | 脱敏后的事件内容节选。 | `{"message":"Request failed"}` |
@@ -127,7 +130,7 @@
   "app_id": "orders",
   "sequence": 1,
   "timestamp": 1794873600000,
-  "revision": 1,
+  "revision": 3,
   "bytes": 24
 }
 ```
@@ -233,8 +236,10 @@ attachment-42 指向 feedback-42 的一个5字节对象；checksum 用来核对�
 | `created_at` | `BIGINT` | 否 | — | 登记时间。 | `1794873600000` |
 | `updated_at` | `BIGINT` | 否 | — | 最近更新时间。 | `1794873600000` |
 | `last_error` | `TEXT` | 是 | — | 最近一次处理失败的错误信息。 | `NULL` |
-| `payload` | `JSON` | 否 | — | 任务执行所需的输入。采集任务还记录客户端完成确认、材料缺失和服务端日志是否已经保存，供重试续用。 | `{}` |
+| `payload` | `JSON` | 否 | — | 任务输入及进度。导出登记证据修订号和条数，另固定报告、附件元数据和处理历史。 | `{}` |
 | `result` | `JSON` | 是 | — | 任务完成后记录的结果。 | `NULL` |
+
+导出任务在受理时固定 `snapshot_revision`、`snapshot_version` 和 `payload.evidenceCount`。执行时读取该修订及之前的证据，核对条数后生成 ZIP。反馈到期或证据不完整时，任务不会生成成功的 ZIP。
 
 <a id="提交之后还要做的后台工作"></a>
 
@@ -287,17 +292,17 @@ job-42 属于 feedback-42，尚未尝试、没有领取 token；next_run_at 表�
   "id": "quota-42",
   "app_id": "orders",
   "scope_id": "team-1",
-  "user_id": "user-42",
+  "user_id": "",
   "period": 0,
   "report_count": 1,
-  "reserved_bytes": 1024,
+  "reserved_bytes": 201326592,
   "report_bytes": 0,
   "export_limit": 0,
   "updated_at": 1794873600000
 }
 ```
 
-period:0 表示范围累计计量，当前计1条反馈、预留1024字节。它是配额账本，不是用户提交内容。
+`period=0` 表示应用内范围累计计量，`user_id` 为空字符串。正值表示数据库 UTC 日的起点，并按用户分别计量。`period=-1` 的记录以反馈 ID 为主键。默认每份反馈预留 192 MiB，范围容量在到期反馈清理成功后释放。[配额设置](../configuration/feedback.md#configuration-fields)
 
 <a id="storage"></a>
 
@@ -306,6 +311,10 @@ period:0 表示范围累计计量，当前计1条反馈、预留1024字节。它
 ## 对象存储
 
 模块不创建 Redis 键。附件、导出和截图通过私有 [storage](storage.md) 管理，业务表记录附件校验和与状态。对象路径使用 `feedback/<范围 SHA-256 前 16 位>/<反馈 ID>/` 前缀，后接附件 ID、`business/<行 ID>-<校验和>` 或 `exports/<任务 ID>.zip`。ZIP 含 `manifest.json`、反馈、证据和处理历史，以及允许导出的附件。导出对象默认保留 24 小时。
+
+范围段取服务端 `scopeId` 的 UTF-8 字节的 SHA-256，再截取前 16 个十六进制字符。比如 `team-1` 为 `7e2a2d5f9a3050f8`，`team-2` 为 `7774b28c6138ba1a`，`华东/客服` 为 `6d306a1b1891f5e8`。同一反馈的对象集中在一个前缀下，便于后台清理。文件读取仍检查报告权限。
+
+例如，同一范围内反馈 `feedback-42` 的导出对象键形如 `feedback/7e2a2d5f9a3050f8/feedback-42/exports/<任务 ID>.zip`。
 
 <a id="browser-storage"></a>
 

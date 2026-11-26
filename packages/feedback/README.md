@@ -14,7 +14,7 @@
 
 ## 配置清单
 
-生成的项目在 `config/_feedback.yml` 中设置应用标识和反馈通知设置。应用启动代码读取该文件，把配置对象传给 `feedback.init(config, options)`。
+生成项目的基础配置位于 `config/_feedback.yml`，包含 `appId` 和 `notification.mode`。常见扩展集中在 `webhook`、`collection` 和 `retention`，容量与任务参数分别设置在 `limits` 和 `worker`。应用启动代码读取该文件，把配置对象传给 `feedback.init(config, options)`。
 
 在[模块配置清单](../../docs/usage/configuration/feedback.md)中查阅配置入口、默认值、取值限制和生效条件。
 

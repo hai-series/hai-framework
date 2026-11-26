@@ -15,20 +15,20 @@ description: "接入 @h-ai/feedback 用户反馈、业务异步证据、Webhook�
 | 输出 | HaiResult、受理编号、独立材料/通知状态、受权证据及离线 ZIP |
 | 限制 | 采集与 UI 解耦；默认不保存凭证或全量 Cookie/环境变量；页面回放不等同重新执行；不依赖通用 telemetry |
 
-普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明由已校验反馈配置派生的 `maxTransportBytes`，不依赖反馈初始化/重试状态。路径中的 `*` 仅匹配一个完整路径段；宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
+普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明由已校验反馈配置的 `limits` 派生的 `maxTransportBytes`，不依赖反馈初始化/重试状态。路径中的 `*` 仅匹配一个完整路径段；宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
 
-宿主启动时用 `@h-ai/api-contract/feedback` 的 `apiContract.resolveFeedbackBudget(已校验反馈配置)` 预计算材料路由容量，不读取未就绪反馈模块的默认 `budget`；可选反馈失败/重试不改变普通业务上限或已配置材料容量。
+宿主启动时用 `@h-ai/api-contract/feedback` 的 `apiContract.resolveFeedbackBudget(已校验反馈配置.limits)` 预计算材料路由容量，不读取未就绪反馈模块的默认 `budget`；可选反馈失败/重试不改变普通业务上限或已配置材料容量。
 
 ## 使用路径
 
-1. 先初始化 core、reldb 和私有 storage。notificationMode 选择 disabled/console/reach；console 默认仅输出 metadata，摘要需 consoleContent: summary 显式启用，无邮箱或 Reach 依赖；reach 模式才要求已初始化 Provider/recipients。默认 reach，生成项目显式 console。DND 由 feedback 自己的 outbox 等待，不进入 Reach 延迟队列，也不改全局通知策略。最后 feedback.init(config, { collectEvidence? })，关闭先于依赖。
+1. 先初始化 core、reldb 和私有 storage。`notification.mode` 选择 disabled/console/reach；console 默认仅输出 metadata，摘要需 `notification.consoleContent: summary` 显式启用，无邮箱或 Reach 依赖；reach 模式才要求已初始化 Provider 和 `notification.recipients`。默认 reach，生成项目显式 console。DND 由 feedback 自己的 outbox 等待，不进入 Reach 延迟队列，也不改全局通知策略。最后 feedback.init(config, { collectEvidence? })，关闭先于依赖。
 2. 用 `serv.createFeedbackProcedures` 与 `apiContract.feedback` 挂载反馈路由。`resolveContext` 从服务端确定 scopeId、userId、permissions，不能相信客户端的租户、requestId 或 S3 key。创建者可补自己的材料，管理操作另检查 read/process/reopen/export。
 3. 用 `feedback.createClient()` 创建收集器。actions 接 typed API，policy 读取 reports.policy({})。prepare 后打开 FeedbackModal。getView() 提供附件 URL、证据和预算。annotate 支持 coordinateSpace: ratio，saveDraft 负责跨端保存，业务不自行解码图片或管理 Blob URL。onfileschange 接 addFiles 后刷新视图。首次提交时冻结包络，重试遇到编辑冲突时保留输入。
 4. FeedbackModal 内材料独立滚动、操作栏常驻；FeedbackList 不重复显示标题，由宿主提供页面标题。复用 FeedbackList/FeedbackDetail，服务端分页并按需加载材料；setStatus 带 expectedVersion。处理、材料、通知状态分别展示，上传或通知失败不抹掉已受理反馈。
 
 作者用 `feedback.listMine({ category: 'bug', page: 1 }, context)` 或已认证的 `feedback.reports.listMine` 路由查看自己在当前应用和作用域下、尚未过期的报告。Kit 和 Serv 均挂载本人列表，使用 `/api` 前缀时为 `GET /api/feedback/my-reports`。作用域和作者来自可信服务端身份。管理列表 `feedback.list` 要求 `feedback:read`，两种列表都可按原始类别精确筛选。检查结果的 `success` 后再读取分页数据。
 5. 同一 submissionId 和证据来源/序号重试，持久化 ACK 前不释放待传材料。附件取实际 checksum，不保存公开 URL；数据库、对象存储与外部通知通道无共同事务，依靠持久任务和补偿核对。Reach API 接收方按 `extra.notificationId` 去重，同一通知任务重试沿用其任务 ID。
-6. 普通界面导出只传 id，由服务端当前事务固定证据快照；只有用户显式选择历史修订时才传 evidenceRevision，不沿用列表中的陈旧修订。导出固定证据修订；getExport 仅在有效快照 pending/running 时返回 CONFLICT/409，调用方只对此状态有界轮询；failed 为 OPERATION_FAILED/500，缺失/归属不符/未完成快照过期为 NOT_FOUND/404，缺少导出权限为 FORBIDDEN/403。当前修订快照过期可重新 export。离线包包含附件/查看器/索引/checksum，开发侧不持有生产凭据。用 hai feedback summary/inspect/evidence/view 或 /bundle 入口读取，不能执行导入包自带的任意脚本。
+6. 普通界面导出只传 id，由服务端当前事务固定证据修订号、条数和其他快照数据；只有用户显式选择历史修订时才传 evidenceRevision，不沿用列表中的陈旧修订。导出固定证据修订；getExport 仅在有效快照 pending/running 时返回 CONFLICT/409，调用方只对此状态有界轮询；failed 为 OPERATION_FAILED/500，缺失/归属不符/未完成快照过期为 NOT_FOUND/404，缺少导出权限为 FORBIDDEN/403。当前修订快照过期可重新 export。离线包包含附件/查看器/索引/checksum，开发侧不持有生产凭据。用 hai feedback summary/inspect/evidence/view 或 /bundle 入口读取，不能执行导入包自带的任意脚本。
 7. 验证正常、越权、容量、崩溃、断线、重复提交、租约接管和离线查看；明确真实 S3/SMTP 与 mock 的不同证据。
 8. errorId 按锚点 source/request/sequence 查询前后各100条日志，重叠窗口共享日志上下文。报告到达数据库时间计算的期限时，从本人和管理列表移除，详情、材料及导出立即失效。后台删除报告、证据、附件、历史及含快照的任务，按前缀清扫孤立对象；只保留前缀和 24 小时截止的最小墓碑清扫迟到对象，完成后删除，清理失败持续重试。
 
@@ -54,12 +54,12 @@ captureConsole/persistDraft/keyScreenshots 默认 false；持久化启用时由�
 
 ## 业务补采与 Webhook
 
-- 用 init 的第二参数 collectEvidence({ report, signal })，直接返回或 await `{ text?, data?, attachments?: [{ id, name, contentType, bytes: Uint8Array }] }`。持久 collect 任务在受理后执行，无须进程内事件总线或另建通知队列；所有同 appId 实例必须注册相同函数。按 report.id 幂等并将 signal 传给异步 I/O；businessCollectionTimeoutMs 默认 30000ms（1–300000），关闭/超时停止等待。
+- 用 init 的第二参数 collectEvidence({ report, signal })，直接返回或 await `{ text?, data?, attachments?: [{ id, name, contentType, bytes: Uint8Array }] }`。持久 collect 任务在受理后执行，无须进程内事件总线或另建通知队列；所有同 appId 实例必须注册相同函数。按 report.id 幂等并将 signal 传给异步 I/O；`collection.businessTimeoutMs` 默认 30000ms（1–300000），关闭/超时停止等待。
 - text/data 作为 server:business 来源的 business 证据，FeedbackDetail 的“业务信息”页签分页展示。先持久化日志收集阶段，重试回调时复用已保存的日志；附件全部保存后在持有租约的同一事务关联，详情和离线包均可读取。达到 maxAttempts 时采集任务和报告一起进入 failed，允许 Webhook 继续发送。租约接管按数据库已领取次数计数，管理员可 retry target: collect。附件 ID 稳定且 1–100 字符，server:business: 前缀由框架保留；所有附件共用 20 项和容量预算。TXT 全文脱敏；ZIP/GZIP 不解压、执行或内部脱敏，业务须压缩前脱敏。
-- webhookUrl 默认空（禁用）；配置可信 HTTP(S) 目的地后独立持久 webhook 任务等待采集终态（包括失败），发送 feedback.created。notificationMode/Reach/DND 不控制 Webhook。webhookSecret 用服务端私有环境；webhookTimeoutMs 默认 10000ms（1–60000）。只接受 2xx，不跟随重定向，失败指数退避到 60s、最多 maxAttempts。
+- `webhook.url` 默认空（禁用）；配置可信 HTTP(S) 目的地后独立持久 webhook 任务等待采集终态（包括失败），发送 feedback.created。`notification.mode`、Reach 和 DND 不控制 Webhook。`webhook.secret` 用服务端私有环境；`webhook.timeoutMs` 默认 10000ms（1–60000）。只接受 2xx，不跟随重定向，失败指数退避到 60s、最多 `worker.maxAttempts` 次。
 - FeedbackWebhookEvent 包含 event/eventId/createdAt/report/evidence/detailUrl?；evidence 只有修订、业务采集成功和附件元数据，无正文、存储 key 或配置凭据。首次发送冻结载荷，重试/重启复用正文及 Idempotency-Key: eventId，接收方按此持久去重；至少一次投递。旧任务的 URL 与新配置不一致会失败，不自动转投。
 - 署名头 X-Hai-Feedback-Signature = sha256=HMAC-SHA256(secret, X-Hai-Feedback-Timestamp + '.' + 原始正文)，时间戳为 Unix 秒；接收方验证原始字节、恒定时间比较、时间偏差并防重放。get().jobs 提供 webhook 状态/attempts/安全 lastError；FeedbackDetail.webhook 传对应任务，管理员 retry target: webhook，需要 feedback:process 权限。
-- YAML/环境映射同步 HAI_FEEDBACK_BUSINESSCOLLECTIONTIMEOUTMS、HAI_FEEDBACK_WEBHOOKURL、HAI_FEEDBACK_WEBHOOKSECRET、HAI_FEEDBACK_WEBHOOKTIMEOUTMS。函数不放 YAML 或 PUBLIC_；示例见已安装模块 README 的业务证据与 Webhook 章节。
+- YAML/环境映射同步 `HAI_FEEDBACK_COLLECTION_BUSINESSTIMEOUTMS`、`HAI_FEEDBACK_WEBHOOK_URL`、`HAI_FEEDBACK_WEBHOOK_SECRET`、`HAI_FEEDBACK_WEBHOOK_TIMEOUTMS`。函数不放 YAML 或 PUBLIC_；示例见已安装模块 README 链接的配置和功能参考。
 
 Web 使用 `@h-ai/feedback/client`。桌面端从 `@h-ai/feedback/tauri` 导入 `feedback`，启动时调用 `feedback.configureSaving(feedback.saveTauriFile)`。移动端从 `@h-ai/feedback/capacitor` 导入 `feedback`，调用 `feedback.configureSaving(feedback.saveCapacitorFile)`。生成工程会自动配置。保存对话框、缓存与取消清理由对应平台处理。
 

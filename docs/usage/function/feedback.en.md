@@ -13,7 +13,7 @@
 | `@h-ai/core`, `@h-ai/api-contract` | Supply logging, result types, and feedback route contracts | Installed with Feedback | Load Core configuration first if the app uses it to configure the service. Use contracts directly |
 | `@h-ai/reldb` and a database | Store reports, status, and background jobs | Required on the server. RelDB is installed with Feedback | Connect to the database and initialize RelDB before `feedback.init()` |
 | `@h-ai/storage` and private storage | Store attachments and evidence | Required on the server. Storage is installed with Feedback | Initialize Storage before `feedback.init()`. Share the database and private object storage across instances |
-| `@h-ai/reach` and a notification provider | Deliver feedback notifications | When `notificationMode: 'reach'` | Initialize Reach with the provider named by `notificationProvider` before initializing Feedback |
+| `@h-ai/reach` and a notification provider | Deliver feedback notifications | When `notification.mode: 'reach'` | Initialize Reach with the provider named by `notification.provider` before initializing Feedback |
 | `@h-ai/kit` or `@h-ai/serv` | Mount feedback routes in SvelteKit or a standalone HTTP service | When using a framework adapter | Initialize Feedback, then pass it and a trusted context resolver to the adapter |
 | `@capacitor/filesystem`, `@capacitor/share` | Save and share offline diagnostic bundles in Capacitor | When using the Capacitor export entry point | Install and sync both plugins before calling the export adapter |
 | `@tauri-apps/plugin-dialog`, `@tauri-apps/plugin-fs` | Choose a destination and save offline diagnostic bundles in Tauri | When using the Tauri export entry point | Install and register the plugins, grant file permissions, and call the export adapter |
@@ -35,7 +35,7 @@ import { type FeedbackContext, feedback } from '@h-ai/feedback'
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
-  notificationMode: 'console',
+  notification: { mode: 'console' },
   adminUrl: 'https://app.example.test/admin/feedback',
 })
 if (!initialized.success)

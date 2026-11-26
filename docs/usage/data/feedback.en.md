@@ -44,15 +44,19 @@ The module uses 6 tables.
 | `created_at` | `BIGINT` | No | — | Submission time. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time. | `1794873600000` |
 | `version` | `INTEGER` | No | — | Report version used to detect concurrent changes. | `1` |
-| `revision` | `INTEGER` | No | — | Evidence revision used to identify a snapshot. | `1` |
-| `evidence_count` | `INTEGER` | No | — | Number of linked evidence records. | `0` |
+| `revision` | `INTEGER` | No | — | Evidence revision used to identify a snapshot. | `2` |
+| `evidence_count` | `INTEGER` | No | — | Number of linked evidence records. | `1` |
 | `evidence_bytes` | `BIGINT` | No | — | Bytes used by the evidence. | `0` |
 | `collect_deadline` | `BIGINT` | No | — | Deadline for accepting more evidence. | `1794873630000` |
 | `expires_at` | `BIGINT` | No | — | Time after which the report may be removed. | `1797465600000` |
-| `payload` | `JSON` | No | — | Business details including category. The example shows the category only. | `{"category":"bug"}` |
+| `payload` | `JSON` | No | — | Description, category, contact details, page URL, build ID and commit. Statuses, versions, identities and timestamps come from their own columns. | `{"category":"bug"}` |
 | `deleting` | `INTEGER` | No | — | `1` marks deletion in progress. Ordinary queries read rows with `0`. | `0` |
 
 Indexed by `(scope_id, created_at)` and `(scope_id, status, created_at)`.
+
+The submission key is derived from the scope, user, app and client submission ID. When the same key arrives again, the request digest checks the content. An identical retry returns the original report. Changed content returns a conflict.
+
+A handling status change increments `version` to reject concurrent updates based on stale state. A new batch of evidence or an attachment becoming available increments `revision`. The export records both values.
 
 <a id="example-data"></a>
 
@@ -73,15 +77,14 @@ Store the report, submitter and handling state as the entry point for evidence a
   "status": "pending",
   "collection_status": "collecting",
   "version": 1,
-  "revision": 1,
-  "evidence_count": 0,
-  "evidence_bytes": 0,
+  "revision": 2,
+  "evidence_count": 1,
   "created_at": 1794873600000,
   "updated_at": 1794873600000
 }
 ```
 
-This excerpt shows a pending `feedback-42` from `user-42` in `team-1`, still collecting evidence. Zero evidence describes this moment, before the later examples. `created_at` and `updated_at` are Unix milliseconds.
+This excerpt shows `feedback-42`, accepted from `user-42` in `team-1` and awaiting handling. The acceptance transaction already stored the first environment record, so the evidence revision is 2. More material can still arrive.
 
 The report already stores its category under `payload.category`, for example `"bug"`. The author’s list uses existing fields such as `scope_id` and `user_id`. Both author and administration lists exclude expired reports and reports being deleted. Details, attachments and exports also expire as soon as database time reaches `expires_at`.
 
@@ -104,7 +107,7 @@ Indexes support reading evidence by report, source, and sequence and cleaning up
 | `timestamp` | `BIGINT` | No | — | Time of the event. | `1794873600000` |
 | `request_id` | `TEXT` | Yes | — | Related request ID. | `req-42` |
 | `error_id` | `TEXT` | Yes | — | Related error ID. | `err-42` |
-| `revision` | `INTEGER` | No | — | Evidence revision containing this event. | `1` |
+| `revision` | `INTEGER` | No | — | Evidence revision containing this event. | `3` |
 | `bytes` | `INTEGER` | No | — | Size of the evidence in bytes. | `24` |
 | `expires_at` | `BIGINT` | No | — | Time after which the evidence can be removed. | `1797465600000` |
 | `payload` | `JSON` | No | — | Sanitized event content. The example shows an excerpt. | `{"message":"Request failed"}` |
@@ -124,7 +127,7 @@ Link logs, errors or page evidence by source and order to reconstruct a problem.
   "app_id": "orders",
   "sequence": 1,
   "timestamp": 1794873600000,
-  "revision": 1,
+  "revision": 3,
   "bytes": 24
 }
 ```
@@ -230,8 +233,10 @@ Claim jobs by `(app_id, status, next_run_at)` and locate snapshots by `(report_i
 | `created_at` | `BIGINT` | No | — | Registration time. | `1794873600000` |
 | `updated_at` | `BIGINT` | No | — | Last update time. | `1794873600000` |
 | `last_error` | `TEXT` | Yes | — | Error from the most recent failure. | `NULL` |
-| `payload` | `JSON` | No | — | Input to the job. The collection job also records whether the client completed collection, whether evidence is missing, and whether server logs were saved for retries. | `{}` |
+| `payload` | `JSON` | No | — | Task input and progress. Exports reference an evidence revision and count and freeze the report, attachment metadata and history. | `{}` |
 | `result` | `JSON` | Yes | — | Recorded outcome when the job finishes. | `NULL` |
+
+An export freezes `snapshot_revision`, `snapshot_version` and `payload.evidenceCount` when queued. Its worker reads evidence through that revision and checks the count before writing the ZIP. Expired reports or incomplete evidence cannot produce a successful export.
 
 <a id="background-work-after-submission"></a>
 
@@ -284,23 +289,27 @@ Check report, byte and export budgets before admission so one scope cannot consu
   "id": "quota-42",
   "app_id": "orders",
   "scope_id": "team-1",
-  "user_id": "user-42",
+  "user_id": "",
   "period": 0,
   "report_count": 1,
-  "reserved_bytes": 1024,
+  "reserved_bytes": 201326592,
   "report_bytes": 0,
   "export_limit": 0,
   "updated_at": 1794873600000
 }
 ```
 
-period:0 measures scope totals: one report and 1024 reserved bytes. This is accounting, not report content.
+For `period=0`, the counter covers the scope within the application and `user_id` is empty. A positive value is the start of a database UTC day and counts usage separately for each user. A row with `period=-1` is keyed by its report ID. Each report reserves 192 MiB by default. Scope capacity is released after successful cleanup. [Quota settings](../configuration/feedback.en.md#configuration-fields)
 
 <a id="storage"></a>
 
 ## Object storage
 
 Feedback creates no Redis keys. Private Storage uses `feedback/<first-16-scope-SHA-256-chars>/<report-id>/` plus an attachment ID, `business/<row-id>-<checksum>` or `exports/<job-id>.zip`. The ZIP contains `manifest.json`, the report, evidence, history and allowed attachments. Export objects expire after 24 hours by default.
+
+The scope segment is the first 16 hexadecimal characters of the SHA-256 of the UTF-8 `scopeId` supplied by the server. For example, `team-1` gives `7e2a2d5f9a3050f8`, `team-2` gives `7774b28c6138ba1a`, and `华东/客服` gives `6d306a1b1891f5e8`. A shared report prefix lets the worker clean up its objects together. Reading a file still requires access to the report.
+
+For example, an export for `feedback-42` in this scope has a key of the form `feedback/7e2a2d5f9a3050f8/feedback-42/exports/<job ID>.zip`.
 
 ## Browser storage
 

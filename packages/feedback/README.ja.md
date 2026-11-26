@@ -14,7 +14,7 @@
 
 ## 設定一覧
 
-生成したプロジェクトでは、アプリ ID とフィードバック通知の設定を `config/_feedback.yml` に記述します。アプリの起動コードがファイルを読み込み、設定オブジェクトを `feedback.init(config, options)` に渡します。
+生成したプロジェクトは `config/_feedback.yml` に `appId` と `notification.mode` を指定します。追加機能は `webhook`、`collection`、`retention` に、容量とタスクの調整は `limits` と `worker` にまとめます。アプリの起動コードがファイルを読み込み、設定オブジェクトを `feedback.init(config, options)` に渡します。
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/feedback.ja.md)を参照してください。
 

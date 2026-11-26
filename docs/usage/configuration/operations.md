@@ -12,19 +12,13 @@
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
-notificationMode: console
-consoleContent: metadata
-collectionTimeoutMs: 60000
-businessCollectionTimeoutMs: 30000
-workerIntervalMs: 1000
-leaseMs: 30000
-maxAttempts: 5
-retentionDays: 30
-webhookUrl: ''
-envAllowlist: [NODE_ENV]
+notification:
+  mode: console
+collection:
+  envAllowlist: [NODE_ENV]
 ```
 
-把 `notificationMode` 从 `console` 改为 `reach` 时，同时填写 `recipients` 和 `notificationProvider`，再发一条测试通知确认接收端收到。只改通知模式而不填收件人，会在初始化时校验失败。Webhook 单独配置，不依赖 Reach；系统等待材料采集结束后再投递通知载荷。
+把 `notification.mode` 从 `console` 改为 `reach` 时，同时填写 `notification.recipients` 和 `notification.provider`，再发一条测试通知确认接收端收到。只改通知模式而不填收件人，会在初始化时校验失败。Webhook 单独配置，不依赖 Reach；系统等待材料采集结束后再投递通知载荷。
 
 验证时提交一条测试反馈，保存受理编号，再查看材料采集状态及通知、Webhook 任务结果。已经受理表示记录已保存，不代表所有材料和通知任务都已完成；重试时只选失败的任务。
 
@@ -38,23 +32,26 @@ envAllowlist: [NODE_ENV]
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
-notificationMode: disabled
-maxTotalBytes: 16777216
-maxAttachmentBytes: 2097152
-maxEvidenceBytes: 2097152
-maxEvidenceCount: 1000
-maxReportsPerUserDay: 20
-maxBytesPerUserDay: 1073741824
-maxStoredBytesPerScope: 10737418240
-maxExportsPerReport: 3
-exportRetentionHours: 12
+notification:
+  mode: disabled
+limits:
+  maxTotalBytes: 16777216
+  maxAttachmentBytes: 2097152
+  maxEvidenceBytes: 2097152
+  maxEvidenceCount: 1000
+  maxReportsPerUserDay: 20
+  maxBytesPerUserDay: 1073741824
+  maxStoredBytesPerScope: 10737418240
+  maxExportsPerReport: 3
+retention:
+  exportHours: 12
 ```
 
 以上是更小预算示例，不是框架默认。验证超限材料被明确拒绝，普通提交/导出仍成功；同步检查服务路由、加密和反向代理大小限制。隐私区域使用`data-feedback-private`，提交前允许删除不适合上传的材料。
 
 ### 页面闲置、退出和重试
 
-页面闲置不会创建新的反馈任务。上传已有材料时，如断网或收到 5xx、408、429，客户端依次等待 1、2、4、8、16 秒再重试。连续 6 次失败或收到其他 4xx 时暂停，草稿仍保留。网络或登录恢复后，可调用客户端的 `flush()` 继续，也可重新打开反馈准备流程。这是客户端固定策略，不是`_feedback.yml.maxAttempts`服务端持久任务预算。
+页面闲置不会创建新的反馈任务。上传已有材料时，如断网或收到 5xx、408、429，客户端依次等待 1、2、4、8、16 秒再重试。连续 6 次失败或收到其他 4xx 时暂停，草稿仍保留。网络或登录恢复后，可调用客户端的 `flush()` 继续，也可重新打开反馈准备流程。这是客户端固定策略，不是`worker.maxAttempts`服务端持久任务预算。
 
 退出时先`await client.close({ discard: true })`，再切身份；等待已开始请求但不继续后续旧草稿操作，不能承诺撤销已经发出的请求。pause只暂停截图/DOM回放，不能替代身份清理。现场闲置错误仍需时间、失败请求和追踪编号确认根因。
 

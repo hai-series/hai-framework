@@ -46,15 +46,19 @@
 | `created_at` | `BIGINT` | 不可 | — | 提出時刻。 | `1794873600000` |
 | `updated_at` | `BIGINT` | 不可 | — | 最終更新時刻。 | `1794873600000` |
 | `version` | `INTEGER` | 不可 | — | 同時変更を検出する問題票のバージョン。 | `1` |
-| `revision` | `INTEGER` | 不可 | — | スナップショットを識別する証拠のリビジョン。 | `1` |
-| `evidence_count` | `INTEGER` | 不可 | — | 関連する証拠の件数。 | `0` |
+| `revision` | `INTEGER` | 不可 | — | スナップショットを識別する証拠のリビジョン。 | `2` |
+| `evidence_count` | `INTEGER` | 不可 | — | 関連する証拠の件数。 | `1` |
 | `evidence_bytes` | `BIGINT` | 不可 | — | 証拠が使用するバイト数。 | `0` |
 | `collect_deadline` | `BIGINT` | 不可 | — | 追加の証拠を受け付ける期限。 | `1794873630000` |
 | `expires_at` | `BIGINT` | 不可 | — | 問題票の保持期限。 | `1797465600000` |
-| `payload` | `JSON` | 不可 | — | 分類や問題の詳細などの業務データ。例は分類のみ。 | `{"category":"bug"}` |
+| `payload` | `JSON` | 不可 | — | 説明、カテゴリ、連絡先、ページ URL、ビルド ID とコミット。状態、バージョン、識別情報、時刻は各列から読み取ります。 | `{"category":"bug"}` |
 | `deleting` | `INTEGER` | 不可 | — | 削除処理中は `1`。通常の検索は `0` の行を対象とします。 | `0` |
 
 `(scope_id, created_at)` と `(scope_id, status, created_at)` にインデックスがあります。
+
+提出キーは範囲、ユーザー、アプリ、クライアントの提出 ID から生成します。同じキーで再送されたときは、リクエストのダイジェストで内容を確認します。同じ内容には既存の問題票を返し、内容が変わった場合は競合になります。
+
+処理状態を変更すると `version` が増え、古い状態に基づく同時更新を防ぎます。新しい証拠の一括追加や添付の初回保存確認で `revision` が増えます。出力には両方の値を記録します。
 
 <a id="example-data"></a>
 
@@ -74,15 +78,14 @@
   "status": "pending",
   "collection_status": "collecting",
   "version": 1,
-  "revision": 1,
-  "evidence_count": 0,
-  "evidence_bytes": 0,
+  "revision": 2,
+  "evidence_count": 1,
   "created_at": 1794873600000,
   "updated_at": 1794873600000
 }
 ```
 
-問題票の項目の抜粋です。`feedback-42` は `team-1` の `user-42` が提出し、未処理かつ収集中で、この時点の証拠は0件です。後続例とは別の段階です。`created_at` と `updated_at` は Unix ミリ秒です。
+受理済みの問題票の抜粋です。`feedback-42` は `team-1` の `user-42` が提出し、処理待ちです。最初の環境情報は受理と同じトランザクションで保存され、証拠の改訂番号は 2 です。追加の資料も受け付けます。
 
 カテゴリは既存の報告の `payload.category` に保存されます。例は `"bug"` です。本人一覧は `scope_id` と `user_id` などで対象を限定します。本人一覧と管理一覧は期限切れや削除中の報告を除外します。データベースの時刻が `expires_at` に達すると詳細、添付、出力も利用できなくなります。
 
@@ -105,7 +108,7 @@
 | `timestamp` | `BIGINT` | 不可 | — | イベントの発生時刻。 | `1794873600000` |
 | `request_id` | `TEXT` | 可 | — | 関連するリクエスト ID。 | `req-42` |
 | `error_id` | `TEXT` | 可 | — | 関連するエラー ID。 | `err-42` |
-| `revision` | `INTEGER` | 不可 | — | このイベントを含む証拠のリビジョン。 | `1` |
+| `revision` | `INTEGER` | 不可 | — | このイベントを含む証拠のリビジョン。 | `3` |
 | `bytes` | `INTEGER` | 不可 | — | 証拠のバイト数。 | `24` |
 | `expires_at` | `BIGINT` | 不可 | — | 証拠を削除できる時刻。 | `1797465600000` |
 | `payload` | `JSON` | 不可 | — | 機微情報を除いたイベント内容。例は抜粋。 | `{"message":"Request failed"}` |
@@ -125,7 +128,7 @@
   "app_id": "orders",
   "sequence": 1,
   "timestamp": 1794873600000,
-  "revision": 1,
+  "revision": 3,
   "bytes": 24
 }
 ```
@@ -231,8 +234,10 @@ user-42 が pending から handled に変更した例で、時刻は提出時で
 | `created_at` | `BIGINT` | 不可 | — | 登録時刻。 | `1794873600000` |
 | `updated_at` | `BIGINT` | 不可 | — | 最終更新時刻。 | `1794873600000` |
 | `last_error` | `TEXT` | 可 | — | 直近の失敗時のエラー情報。 | `NULL` |
-| `payload` | `JSON` | 不可 | — | ジョブの入力。収集ジョブにはクライアントによる収集完了、不足資料、サーバーログの保存状況も記録し、再試行で使用します。 | `{}` |
+| `payload` | `JSON` | 不可 | — | タスクの入力と進捗。出力は証拠の改訂番号と件数を参照し、問題票、添付のメタデータ、処理履歴を固定します。 | `{}` |
 | `result` | `JSON` | 可 | — | ジョブ完了後の結果。 | `NULL` |
+
+出力の登録時に `snapshot_revision`、`snapshot_version` と `payload.evidenceCount` を固定します。タスクは指定された改訂以前の証拠を読み、件数を照合してから ZIP を作成します。期限切れや証拠の欠落がある場合は成功として扱いません。
 
 <a id="提出後に進める裏側の作業"></a>
 
@@ -285,17 +290,17 @@ job-42 は未試行・未取得で、next_run_at は開始可能時刻であり�
   "id": "quota-42",
   "app_id": "orders",
   "scope_id": "team-1",
-  "user_id": "user-42",
+  "user_id": "",
   "period": 0,
   "report_count": 1,
-  "reserved_bytes": 1024,
+  "reserved_bytes": 201326592,
   "report_bytes": 0,
   "export_limit": 0,
   "updated_at": 1794873600000
 }
 ```
 
-period:0 は範囲の累計で、1件・1024バイト予約済みです。問題の本文ではありません。
+`period=0` はアプリ内の範囲ごとの累計で、`user_id` は空文字列です。正の値はデータベースの UTC 日の開始時刻を表し、利用者ごとに計測します。`period=-1` のキーは問題票 ID です。既定で 1 件につき 192 MiB を予約し、期限切れの削除に成功すると範囲の空き容量を戻します。[割り当て設定](../configuration/feedback.ja.md#configuration-fields)
 
 <a id="storage"></a>
 
@@ -304,6 +309,10 @@ period:0 は範囲の累計で、1件・1024バイト予約済みです。問題
 ## オブジェクトストレージ
 
 Feedback は Redis キーを作りません。非公開 Storage の `feedback/<範囲の SHA-256 の先頭16桁>/<報告ID>/` に添付 ID、`business/<行ID>-<チェックサム>` または `exports/<タスクID>.zip` を付けます。ZIP には `manifest.json`、報告、証拠、履歴、許可された添付が入ります。エクスポートは既定で 24 時間保持します。
+
+範囲の部分は、サーバーが指定した `scopeId` の UTF-8 バイト列を SHA-256 で計算した先頭 16 桁の 16 進文字です。`team-1` は `7e2a2d5f9a3050f8`、`team-2` は `7774b28c6138ba1a`、`华东/客服` は `6d306a1b1891f5e8` になります。問題票ごとに共通のプレフィックスを使って、タスクがまとめて削除します。ファイルの取得には問題票の権限が必要です。
+
+この範囲の `feedback-42` を出力したときのオブジェクトキーは、たとえば `feedback/7e2a2d5f9a3050f8/feedback-42/exports/<タスク ID>.zip` です。
 
 <a id="browser-storage"></a>
 

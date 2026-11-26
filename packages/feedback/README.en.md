@@ -14,7 +14,7 @@ Install with pnpm: `pnpm add @h-ai/feedback @h-ai/reldb @h-ai/storage`.
 
 ## Configuration Reference
 
-Generated projects define the application ID and feedback notification settings in `config/_feedback.yml`. At startup, the application reads the file and passes the settings object to `feedback.init(config, options)`.
+Generated projects set `appId` and `notification.mode` in `config/_feedback.yml`. Opt in through `webhook`, `collection` and `retention`, and tune capacity and jobs through `limits` and `worker`. At startup, the application reads the file and passes the settings object to `feedback.init(config, options)`.
 
 See the [configuration reference](../../docs/usage/configuration/feedback.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 

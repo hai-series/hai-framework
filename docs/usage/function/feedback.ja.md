@@ -13,7 +13,7 @@
 | `@h-ai/core`、`@h-ai/api-contract` | ログ、結果型、フィードバックの API 契約を提供 | Feedback とともにインストール | Core でサービス設定を読み込む場合は先に実行。契約はそのまま使用 |
 | `@h-ai/reldb` とデータベース | レポート、処理状態、バックグラウンドジョブを保存 | サーバーで必須。RelDB は Feedback とともにインストール | データベースに接続して RelDB を初期化してから `feedback.init()` を呼び出す |
 | `@h-ai/storage` と非公開ストレージ | 添付ファイルと証拠を保存 | サーバーで必須。Storage は Feedback とともにインストール | Storage を初期化してから `feedback.init()` を呼び出す。複数インスタンスでデータベースと非公開オブジェクトストレージを共有 |
-| `@h-ai/reach` と通知プロバイダー | フィードバックの通知を配信 | `notificationMode: 'reach'` の場合 | `notificationProvider` と同名のプロバイダーを設定して Reach を初期化した後、Feedback を初期化 |
+| `@h-ai/reach` と通知プロバイダー | フィードバックの通知を配信 | `notification.mode: 'reach'` の場合 | `notification.provider` と同名のプロバイダーを設定して Reach を初期化した後、Feedback を初期化 |
 | `@h-ai/kit` または `@h-ai/serv` | SvelteKit または独立した HTTP サービスでルートを公開 | フレームワークのアダプターを使う場合 | Feedback を初期化し、信頼できるコンテキスト解決関数とともにアダプターへ渡す |
 | `@capacitor/filesystem`、`@capacitor/share` | Capacitor でオフライン診断バンドルを保存して共有 | Capacitor エクスポートを使う場合 | 両方のプラグインを導入・同期してからエクスポート用アダプターを呼び出す |
 | `@tauri-apps/plugin-dialog`、`@tauri-apps/plugin-fs` | Tauri で保存先を選び、オフライン診断バンドルを保存 | Tauri エクスポートを使う場合 | プラグインを導入・登録し、ファイルのアクセス権限を設定してからエクスポート用アダプターを呼び出す |
@@ -37,7 +37,7 @@ import { type FeedbackContext, feedback } from '@h-ai/feedback'
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
-  notificationMode: 'console',
+  notification: { mode: 'console' },
   adminUrl: 'https://app.example.test/admin/feedback',
 })
 if (!initialized.success)
