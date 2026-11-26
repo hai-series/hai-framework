@@ -1,11 +1,13 @@
-import type { FeedbackAttachment, FeedbackListInput, FeedbackMessage, FeedbackReport } from '@h-ai/api-contract/feedback'
+import type { FeedbackAttachment, FeedbackAttachmentInput, FeedbackAttachmentKind, FeedbackListInput, FeedbackMessage, FeedbackReport } from '@h-ai/api-contract/feedback'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { FeedbackReportRepository } from './feedback-repository.js'
 import type { FeedbackContext, FeedbackFunctions } from './feedback-types.js'
+import { Buffer } from 'node:buffer'
 import {
   FeedbackAddMessageInputSchema,
   FeedbackAttachmentQuerySchema,
   FeedbackIdInputSchema,
+  feedbackLimits,
   FeedbackListInputSchema,
   FeedbackMessageQuerySchema,
   FeedbackSetStatusInputSchema,
@@ -54,7 +56,11 @@ function activityTime(updatedAt: number) {
   return Math.max(Date.now(), updatedAt + 1)
 }
 
-export function createFeedbackOperations(repo: FeedbackReportRepository, appId: string): FeedbackOperations {
+export function createFeedbackOperations(
+  repo: FeedbackReportRepository,
+  appId: string,
+  serverLogs: (context: FeedbackContext, remainingBytes: number) => FeedbackAttachmentInput | undefined,
+): FeedbackOperations {
   async function access(id: string, context: FeedbackContext, tx?: DmlWithTxOperations) {
     if (!validContext(context))
       return forbidden()
@@ -90,7 +96,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, appId: 
       const parsed = FeedbackSubmitInputSchema.safeParse(input)
       if (!parsed.success)
         return invalid()
-      const { id, body, attachments = [] } = parsed.data
+      const { id, body, attachments = [], capture } = parsed.data
       const saved = await repo.find(appId, context.scopeId, id)
       if (!saved.success)
         return saved
@@ -99,6 +105,28 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, appId: 
           ? core.ok(repo.report(saved.data))
           : conflict()
       }
+
+      const files: Array<FeedbackAttachmentInput & { kind?: FeedbackAttachmentKind }> = [...attachments]
+      if (capture) {
+        const sources = [
+          [capture.screenshot, 'screenshot'],
+          [capture.browserLogs, 'browser_logs'],
+          [capture.replay, 'replay'],
+          [capture.recording, 'recording'],
+        ] as const
+        for (const [file, kind] of sources) {
+          if (file)
+            files.push({ ...file, kind })
+        }
+        if (capture.includeServerLogs) {
+          const remainingBytes = feedbackLimits.maxTotalFileBytes - files.reduce((sum, file) => sum + Buffer.byteLength(file.dataBase64, 'base64'), 0)
+          const logs = serverLogs(context, remainingBytes)
+          if (logs)
+            files.push({ ...logs, kind: 'server_logs' })
+        }
+      }
+      if (!body && !files.length)
+        return invalid()
 
       const time = Date.now()
       const report = {
@@ -115,10 +143,10 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, appId: 
         const created = await repo.create(report, tx)
         if (!created.success)
           return created
-        const files = await repo.addFiles(id, null, attachments, tx)
-        return files.success
+        const storedFiles = await repo.addFiles(id, null, files, tx)
+        return storedFiles.success
           ? core.ok(repo.report(report))
-          : files
+          : storedFiles
       })
       if (stored.success)
         return stored

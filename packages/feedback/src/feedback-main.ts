@@ -7,11 +7,12 @@ import { reldb } from '@h-ai/reldb'
 import { FeedbackConfigSchema } from './feedback-config.js'
 import { createFeedbackOperations } from './feedback-functions.js'
 import { feedbackM } from './feedback-i18n.js'
+import { startFeedbackLogCapture } from './feedback-log-capture.js'
 import { FeedbackReportRepository } from './feedback-repository.js'
 import { HaiFeedbackError } from './feedback-types.js'
 
 const notInitialized = core.module.createNotInitializedKit(HaiFeedbackError.NOT_INITIALIZED, () => feedbackM('feedback_notInitialized'))
-let current: { operations: FeedbackOperations, config: FeedbackConfig } | null = null
+let current: { operations: FeedbackOperations, config: FeedbackConfig, capture: ReturnType<typeof startFeedbackLogCapture> } | null = null
 let initializing: Promise<HaiResult<void>> | null = null
 let closing: Promise<HaiResult<void>> | null = null
 const inFlight = new Set<Promise<unknown>>()
@@ -61,18 +62,22 @@ export const feedback: FeedbackFunctions = {
     if (!parsed.success || !reldb.isInitialized)
       return core.err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
 
+    const previous = current
     current = null
     initializing = (async () => {
       await Promise.allSettled([...inFlight])
+      previous?.capture.close()
       const repository = new FeedbackReportRepository()
       const ready = await repository.ready()
       if (!ready.success)
         return ready
       if (closing)
         return notInitialized.result<void>()
+      const capture = startFeedbackLogCapture()
       current = {
-        operations: createFeedbackOperations(repository, parsed.data.appId),
+        operations: createFeedbackOperations(repository, parsed.data.appId, capture.snapshot),
         config: parsed.data,
+        capture,
       }
       core.logger.info('Feedback module initialized', { module: 'feedback', appId: parsed.data.appId })
       return core.ok(undefined)
@@ -91,9 +96,11 @@ export const feedback: FeedbackFunctions = {
   close() {
     if (closing)
       return closing
+    const previous = current
     current = null
     closing = (async () => {
       await Promise.allSettled([...inFlight, initializing])
+      previous?.capture.close()
       return core.ok(undefined)
     })().finally(() => { closing = null })
     return closing

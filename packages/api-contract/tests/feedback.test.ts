@@ -51,4 +51,44 @@ describe('反馈契约', () => {
       expect(FeedbackSubmitInputSchema.safeParse({ id, body: '', attachments }).success).toBe(false)
     }
   })
+
+  it('首帖的现场独立分类并计入总量，消息和补充请求拒绝现场字段', () => {
+    const replay = { name: 'replay.json', contentType: 'application/json', dataBase64: 'W3t9XQ==' }
+    expect(FeedbackSubmitInputSchema.safeParse({
+      id,
+      body: '',
+      capture: { replay, includeServerLogs: true },
+    }).success).toBe(true)
+    expect(FeedbackSubmitInputSchema.safeParse({
+      id,
+      body: '',
+      capture: { screenshot: replay },
+    }).success).toBe(false)
+    expect(FeedbackAddMessageInputSchema.safeParse({
+      id,
+      messageId: randomUUID(),
+      body: 'More details',
+      kind: 'request_info',
+      capture: { replay },
+    }).success).toBe(false)
+    const full = {
+      ...file,
+      dataBase64: Buffer.alloc(5 * 1024 * 1024).toString('base64'),
+    }
+    expect(FeedbackSubmitInputSchema.safeParse({
+      id,
+      body: '',
+      attachments: [full, full],
+      capture: { replay },
+    }).success).toBe(false)
+    const logs = {
+      ...replay,
+      dataBase64: Buffer.alloc(512 * 1024 + 1).toString('base64'),
+    }
+    expect(FeedbackSubmitInputSchema.safeParse({
+      id,
+      body: '',
+      capture: { browserLogs: logs },
+    }).success).toBe(false)
+  })
 })

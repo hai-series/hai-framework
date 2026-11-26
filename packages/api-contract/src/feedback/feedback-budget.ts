@@ -5,6 +5,11 @@ export const feedbackLimits = Object.freeze({
   maxFileBytes: 5 * 1024 * 1024,
   maxTotalFileBytes: 10 * 1024 * 1024,
   maxPlaintextBytes: 16 * 1024 * 1024,
+  captureWindowMs: 5 * 60 * 1000,
+  maxLogEntries: 1000,
+  maxLogBytes: 512 * 1024,
+  maxReplayBytes: 2 * 1024 * 1024,
+  maxRecordingSeconds: 60,
 })
 
 /**

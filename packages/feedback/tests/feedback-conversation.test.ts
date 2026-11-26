@@ -1,7 +1,9 @@
 import type { FeedbackContext } from '../src/index.js'
+import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { feedback, HaiFeedbackError } from '../src/index.js'
 
 const author: FeedbackContext = {
@@ -39,6 +41,61 @@ afterEach(async () => {
 })
 
 describe('反馈会话', () => {
+  it('仅在勾选时保存同用户、同范围及窗口内的可信请求日志，附件按现场类型区分', async () => {
+    function log(message: string, userId: string, scopeId: string, requestId = 'previous-request') {
+      core.context.run({ userId, scopeId, requestId }, () => core.logger.warn(message))
+    }
+    const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now - 6 * 60 * 1000)
+    try {
+      log('expired-log', author.userId, author.scopeId)
+    }
+    finally {
+      clock.mockRestore()
+    }
+    log('eligible-log token=private-token', author.userId, author.scopeId)
+    log('wrong-user', otherUser.userId, author.scopeId)
+    log('wrong-scope', author.userId, otherScope.scopeId)
+    core.logger.warn('forged-context', { ...author, requestId: 'unverified' })
+    expect(await reldb.sql.get<{ count: number }>('SELECT COUNT(*) AS count FROM hai_feedback_attachments')).toMatchObject({
+      success: true,
+      data: { count: 0 },
+    })
+
+    const plain = randomUUID()
+    expect((await feedback.submit({ id: plain, body: 'Without diagnostics' }, author)).success).toBe(true)
+    expect(await feedback.get(plain, author)).toMatchObject({
+      success: true,
+      data: { attachments: [] },
+    })
+
+    const id = randomUUID()
+    const browserLogs = {
+      name: 'browser-logs.json',
+      contentType: 'application/json',
+      dataBase64: Buffer.from('[{"message":"Browser event"}]').toString('base64'),
+    }
+    expect((await feedback.submit({
+      id,
+      body: '',
+      capture: { screenshot, browserLogs, includeServerLogs: true },
+    }, author)).success).toBe(true)
+    const detail = await feedback.get(id, staff)
+    expect(detail.success).toBe(true)
+    if (!detail.success)
+      return
+    expect(detail.data.attachments.map(file => file.kind).sort()).toEqual(['browser_logs', 'screenshot', 'server_logs'])
+    const attachmentId = detail.data.attachments.find(file => file.kind === 'server_logs')!.id
+    const logs = await feedback.getAttachment({ id, attachmentId }, author)
+    expect(logs.success).toBe(true)
+    if (!logs.success)
+      return
+    const text = Buffer.from(logs.data.dataBase64, 'base64').toString()
+    expect(text).toContain('eligible-log')
+    expect(text).not.toMatch(/private-token|wrong-user|wrong-scope|forged-context|expired-log/)
+    expect(await feedback.getAttachment({ id, attachmentId }, otherUser)).toMatchObject({ success: false })
+  })
+
   it('双方发送附件、请求补充、提交结果，用户可以继续回复', async () => {
     const id = randomUUID()
     const submitted = await feedback.submit({

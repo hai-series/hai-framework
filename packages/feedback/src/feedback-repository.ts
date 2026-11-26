@@ -1,4 +1,4 @@
-import type { FeedbackAddMessageInput, FeedbackAttachment, FeedbackAttachmentData, FeedbackListInput, FeedbackMessage, FeedbackMessageQuery, FeedbackReport } from '@h-ai/api-contract/feedback'
+import type { FeedbackAddMessageInput, FeedbackAttachment, FeedbackAttachmentData, FeedbackAttachmentKind, FeedbackListInput, FeedbackMessage, FeedbackMessageQuery, FeedbackReport } from '@h-ai/api-contract/feedback'
 import type { HaiResult } from '@h-ai/core'
 import type { DmlOperations, DmlWithTxOperations } from '@h-ai/reldb'
 import { Buffer } from 'node:buffer'
@@ -23,7 +23,7 @@ const reportColumns = [
   'updated_at',
 ] as const
 const messageColumns = 'id, report_id, author_id, author_role, kind, body, created_at'
-const attachmentColumns = 'id, message_id, name, content_type, size'
+const attachmentColumns = 'id, message_id, kind, name, content_type, size'
 
 interface ReportRow {
   id: string
@@ -49,6 +49,7 @@ interface MessageRow {
 interface AttachmentRow {
   id: string
   message_id: string | null
+  kind: FeedbackAttachmentKind
   name: string
   content_type: string
   size: number
@@ -131,6 +132,7 @@ async function ensureIndex(index: typeof indexes[number]): Promise<HaiResult<voi
 function publicAttachment(row: AttachmentRow): FeedbackAttachment {
   return FeedbackAttachmentSchema.parse({
     id: row.id,
+    kind: row.kind,
     name: row.name,
     contentType: row.content_type,
     size: row.size,
@@ -191,6 +193,7 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<ReportRow>
         id VARCHAR(36) NOT NULL PRIMARY KEY,
         report_id VARCHAR(36) NOT NULL,
         message_id VARCHAR(36),
+        kind VARCHAR(24) NOT NULL,
         name VARCHAR(255) NOT NULL,
         content_type VARCHAR(128) NOT NULL,
         size INTEGER NOT NULL,
@@ -320,20 +323,26 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<ReportRow>
       : result
   }
 
-  async addFiles(reportId: string, messageId: string | null, files: FeedbackAttachmentData[], sql: DmlWithTxOperations) {
+  async addFiles(reportId: string, messageId: string | null, files: Array<FeedbackAttachmentData & { kind?: FeedbackAttachmentKind }>, sql: DmlWithTxOperations) {
     const stored: FeedbackAttachment[] = []
     for (const file of files) {
       const content = Buffer.from(file.dataBase64, 'base64')
+      const kind = file.kind ?? 'file'
+      const contentType = safeMediaType(file.contentType, kind, content)
+      if (kind !== 'file' && contentType === 'application/octet-stream')
+        return core.err(HaiFeedbackError.INVALID_INPUT, feedbackM('feedback_invalidInput'))
       const row: FeedbackAttachment = {
         id: randomUUID(),
+        kind,
         name: file.name,
-        contentType: safeMediaType(file.contentType, content),
+        contentType,
         size: content.length,
       }
-      const saved = await sql.execute(`INSERT INTO ${attachments} (id, report_id, message_id, name, content_type, size, content) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+      const saved = await sql.execute(`INSERT INTO ${attachments} (id, report_id, message_id, kind, name, content_type, size, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
         row.id,
         reportId,
         messageId,
+        kind,
         row.name,
         row.contentType,
         row.size,
@@ -371,8 +380,24 @@ const rasterSignatures: Record<string, (bytes: Buffer) => boolean> = {
   'image/webp': bytes => bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP',
 }
 
-function safeMediaType(declared: string, bytes: Buffer) {
+function safeMediaType(declared: string, kind: FeedbackAttachmentKind, bytes: Buffer) {
   const type = declared.toLowerCase()
+  if (kind === 'recording') {
+    if ((type === 'video/webm' && bytes.subarray(0, 4).toString('hex') === '1a45dfa3')
+      || (type === 'video/mp4' && bytes.toString('latin1', 4, 8) === 'ftyp')) {
+      return type
+    }
+    return 'application/octet-stream'
+  }
+  if (kind === 'browser_logs' || kind === 'server_logs' || kind === 'replay') {
+    try {
+      const data: unknown = JSON.parse(bytes.toString('utf8'))
+      if (type === 'application/json' && Array.isArray(data) && data.length)
+        return type
+    }
+    catch { /* 非 JSON 数据用普通二进制类型表示，调用方将拒绝诊断材料。 */ }
+    return 'application/octet-stream'
+  }
   return rasterSignatures[type]?.(bytes)
     ? type
     : 'application/octet-stream'

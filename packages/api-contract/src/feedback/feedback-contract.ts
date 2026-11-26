@@ -22,7 +22,7 @@ export const feedbackContract = {
       method: 'POST',
       path: '/feedback/reports',
       operationId: 'feedback.reports.submit',
-      summary: 'Submit feedback with selected files',
+      summary: 'Submit feedback with selected files and diagnostics',
       tags: ['feedback'],
     }).input(FeedbackSubmitInputSchema).output(haiResultSchema(FeedbackReportSchema)),
     list: route({

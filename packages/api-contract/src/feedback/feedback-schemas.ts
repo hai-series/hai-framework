@@ -17,6 +17,14 @@ const mediaType = z.string().min(1).max(128).regex(/^[\w!#$&^.+-]+\/[\w!#$&^.+-]
 
 export const FeedbackStatusSchema = z.enum(['pending', 'awaiting_user', 'handled'])
 export const FeedbackMessageKindSchema = z.enum(['reply', 'request_info'])
+export const FeedbackAttachmentKindSchema = z.enum([
+  'file',
+  'screenshot',
+  'browser_logs',
+  'server_logs',
+  'replay',
+  'recording',
+])
 
 /** 单次操作提交的文件，内容以 Base64 编码。 */
 export const FeedbackAttachmentInputSchema = z.strictObject({
@@ -25,13 +33,40 @@ export const FeedbackAttachmentInputSchema = z.strictObject({
   dataBase64: z.base64().min(4).max(maxBase64Length),
 })
 
+function decodedBytes({ dataBase64 }: FeedbackAttachmentInput) {
+  const padding = dataBase64.endsWith('==')
+    ? 2
+    : Number(dataBase64.endsWith('='))
+  return dataBase64.length / 4 * 3 - padding
+}
+
+function captureFile(types: string[], maxBytes: number) {
+  return FeedbackAttachmentInputSchema.refine(file => types.includes(file.contentType) && decodedBytes(file) <= maxBytes)
+}
+
+/** 仅首帖接受的现场材料。服务端日志由服务端按可信身份读取。 */
+export const FeedbackCaptureInputSchema = z.strictObject({
+  screenshot: captureFile(['image/png', 'image/jpeg', 'image/webp'], feedbackLimits.maxFileBytes).optional(),
+  browserLogs: captureFile(['application/json'], feedbackLimits.maxLogBytes).optional(),
+  replay: captureFile(['application/json'], feedbackLimits.maxReplayBytes).optional(),
+  recording: captureFile(['video/webm', 'video/mp4'], feedbackLimits.maxFileBytes).optional(),
+  includeServerLogs: z.boolean().optional(),
+})
+
 const messageContent = {
   body,
   attachments: z.array(FeedbackAttachmentInputSchema).max(feedbackLimits.maxFiles).optional(),
 }
 
-function validateContent(value: { body: string, attachments?: FeedbackAttachmentInput[] }, context: z.RefinementCtx) {
-  if (!value.body && !value.attachments?.length) {
+function validateContent(value: { body: string, attachments?: FeedbackAttachmentInput[], capture?: FeedbackCaptureInput }, context: z.RefinementCtx) {
+  const { screenshot, browserLogs, replay, recording, includeServerLogs } = value.capture ?? {}
+  const captures = [
+    screenshot,
+    browserLogs,
+    replay,
+    recording,
+  ].filter(file => file !== undefined)
+  if (!value.body && !value.attachments?.length && !captures.length && !includeServerLogs) {
     context.addIssue({
       code: 'custom',
       path: ['body'],
@@ -39,12 +74,9 @@ function validateContent(value: { body: string, attachments?: FeedbackAttachment
     })
   }
 
-  let totalBytes = 0
+  let totalBytes = captures.reduce((total, file) => total + decodedBytes(file), 0)
   for (const [index, file] of (value.attachments ?? []).entries()) {
-    const padding = file.dataBase64.endsWith('==')
-      ? 2
-      : Number(file.dataBase64.endsWith('='))
-    const bytes = file.dataBase64.length / 4 * 3 - padding
+    const bytes = decodedBytes(file)
     if (bytes > feedbackLimits.maxFileBytes) {
       context.addIssue({
         code: 'custom',
@@ -68,7 +100,11 @@ export const FeedbackListInputSchema = z.strictObject({
   ...page,
   status: FeedbackStatusSchema.optional(),
 })
-export const FeedbackSubmitInputSchema = z.strictObject({ id, ...messageContent }).superRefine(validateContent)
+export const FeedbackSubmitInputSchema = z.strictObject({
+  id,
+  ...messageContent,
+  capture: FeedbackCaptureInputSchema.optional(),
+}).superRefine(validateContent)
 export const FeedbackMessageQuerySchema = z.strictObject({ id, ...page })
 export const FeedbackAddMessageInputSchema = z.strictObject({
   id,
@@ -94,6 +130,7 @@ export const FeedbackReportSchema = z.strictObject({
 })
 export const FeedbackAttachmentSchema = z.strictObject({
   id,
+  kind: FeedbackAttachmentKindSchema,
   name: fileName,
   contentType: mediaType,
   size: z.number().int().min(1).max(feedbackLimits.maxFileBytes),
@@ -116,6 +153,8 @@ export const FeedbackMessageSchema = z.strictObject({
 
 export type FeedbackStatus = z.infer<typeof FeedbackStatusSchema>
 export type FeedbackAttachmentInput = z.infer<typeof FeedbackAttachmentInputSchema>
+export type FeedbackAttachmentKind = z.infer<typeof FeedbackAttachmentKindSchema>
+export type FeedbackCaptureInput = z.infer<typeof FeedbackCaptureInputSchema>
 export type FeedbackSubmitInput = z.infer<typeof FeedbackSubmitInputSchema>
 export type FeedbackListInput = z.infer<typeof FeedbackListInputSchema>
 export type FeedbackMessageQuery = z.infer<typeof FeedbackMessageQuerySchema>
