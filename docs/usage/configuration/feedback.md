@@ -10,43 +10,73 @@
 
 ## 配置清单
 
-| 字段 | 环境变量 | 类型和范围 | 必填 | 默认值 | 作用 |
-| --- | --- | --- | --- | --- | --- |
-| `appId` | `HAI_FEEDBACK_APPID` | 字符串，去掉首尾空白后长度为 1 至 128，不含 NUL | 是 | 无 | 随首帖写入 `app_id`，列表、详情、消息和附件的读取都限定在这个应用。 |
+**`appId`** 必填。首帖保存时写入 `app_id`，反馈列表、详情、消息和附件都在这个应用内查询。
+
+填去掉首尾空白后长度为 1 到 128 的字符串，且不能包含 NUL。环境变量 `HAI_FEEDBACK_APPID`。
 
 共用关系库的多个应用应使用各自的 `appId`。同一应用的多个实例如果共用数据库，应使用相同的值。例：`orders` 和 `inventory` 可共用一套数据库表，两边的反馈列表各自独立。把 `orders` 改成 `orders-v2` 后，新实例查询的是新标识，原记录仍属于 `orders`。
 
 ### 发送上限
 
-以下字段可省略，首帖、回复和补充请求使用同一组上限。文件容量按 Base64 编码前的原始字节计算。
+每次提交首帖、发回复或发送补充请求，都用这组配置单独检查。以下配置均为整数，省略时使用默认值。文件大小按 Base64 编码前的原始字节计算。
 
-| 字段 | 环境变量 | 默认值 | 范围与用途 |
-| --- | --- | --- | --- |
-| `limits.maxBodyLength` | `HAI_FEEDBACK_LIMITS_MAXBODYLENGTH` | 5000 | 1–20000 个 UTF-16 代码单元。 |
-| `limits.maxFiles` | `HAI_FEEDBACK_LIMITS_MAXFILES` | 5 | 1–20 个手动附件。 |
-| `limits.maxFileBytes` | `HAI_FEEDBACK_LIMITS_MAXFILEBYTES` | 5242880（5 MiB） | 1–10485760 字节。单个手动附件或首帖材料上限。 |
-| `limits.maxTotalFileBytes` | `HAI_FEEDBACK_LIMITS_MAXTOTALFILEBYTES` | 10485760（10 MiB） | 1–25165824 字节，且不小于单文件上限。手动附件和首帖现场共用。 |
+- **`limits.maxBodyLength`** 限制每次发送的正文长度，按 UTF-16 代码单元计数。例如「问题😀」计 4 个。只发文件时，表单正文可以留空，直接调用 API 时给 `body` 传空字符串。
+
+  默认 `5000`，可填 `1`–`20000`。环境变量 `HAI_FEEDBACK_LIMITS_MAXBODYLENGTH`。
+
+- **`limits.maxFiles`** 限制一次发送可手动添加的文件数。计数只包含用户选中的文件，包括图片。
+
+  默认 `5` 个，可填 `1`–`20`。环境变量 `HAI_FEEDBACK_LIMITS_MAXFILES`。
+
+- **`limits.maxFileBytes`** 每个文件能有多大。手动附件和每份首帖现场材料分别与此上限比较。
+
+  默认 `5242880` 字节（5 MiB），可填 `1`–`10485760` 字节。环境变量 `HAI_FEEDBACK_LIMITS_MAXFILEBYTES`。
+
+- **`limits.maxTotalFileBytes`** 限制一次发送的文件总大小。首帖合计手动附件与保留的截图、浏览器日志、回放和录屏。回复和补充请求分别合计各自的附件。
+
+  默认 `10485760` 字节（10 MiB），可填 `1`–`25165824` 字节，至少等于单文件上限。环境变量 `HAI_FEEDBACK_LIMITS_MAXTOTALFILEBYTES`。
+
+内置表单限制正文输入的长度，选文件或发送时超限会提示错误。直接调用 API 时，服务端也会拒绝超限的提交。
+
+例如，按默认配置，首帖只带两张手动添加的 4 MiB 图片和一段 3 MiB 的录屏。手动附件数为 2，单个文件都符合 5 MiB 上限。合计 11 MiB 会超过单次的 10 MiB 上限，移除录屏后剩下的 8 MiB 可以发送。
+
+勾选服务端日志时，服务端在首帖的剩余容量内取近期日志。放不下任何一条时省略这份日志。
 
 ### 首帖现场
 
-以下字段可省略。日志及回放的文件还受单文件上限和发送剩余容量约束。录屏时长在浏览器控制，服务端对收到的录屏校验文件容量及类型。
+这些字段决定首帖能带上多少现场信息，省略时使用默认值。每份日志和回放的容量上限取各自配置与单文件上限中较小的值，文件同样计入首帖发送的合计容量。
 
-| 字段 | 环境变量 | 默认值 | 范围与用途 |
-| --- | --- | --- | --- |
-| `capture.windowSeconds` | `HAI_FEEDBACK_CAPTURE_WINDOWSECONDS` | 300 | 1–1800 秒。浏览器日志、回放和服务端日志的回看窗口。 |
-| `capture.maxLogEntries` | `HAI_FEEDBACK_CAPTURE_MAXLOGENTRIES` | 1000 | 1–5000 条。每份浏览器或服务端日志的条数上限。 |
-| `capture.maxLogBytes` | `HAI_FEEDBACK_CAPTURE_MAXLOGBYTES` | 524288 | 1–2097152 字节。每份日志的字节上限。 |
-| `capture.maxReplayBytes` | `HAI_FEEDBACK_CAPTURE_MAXREPLAYBYTES` | 2097152 | 1–8388608 字节。页面回放的字节上限。 |
-| `capture.maxReplayEvents` | `HAI_FEEDBACK_CAPTURE_MAXREPLAYEVENTS` | 2000 | 1–10000 个页面回放事件。 |
-| `capture.maxRecordingSeconds` | `HAI_FEEDBACK_CAPTURE_MAXRECORDINGSECONDS` | 60 | 1–300 秒。上限到达或文件接近容量上限时停止录屏。 |
+- **`capture.windowSeconds`** 向前回看多久。浏览器日志和操作回放以打开反馈弹窗的时间为基准。勾选的服务端日志以提交首帖的时间为基准。
+
+  默认 `300` 秒（5 分钟），可填 `1`–`1800` 秒。环境变量 `HAI_FEEDBACK_CAPTURE_WINDOWSECONDS`。
+
+- **`capture.maxLogEntries`** 每份日志最多保留多少条。浏览器日志和服务端日志分别计数，优先保留较新的记录。
+
+  默认 `1000` 条，可填 `1`–`5000` 条。环境变量 `HAI_FEEDBACK_CAPTURE_MAXLOGENTRIES`。
+
+- **`capture.maxLogBytes`** 每份日志 JSON 文件能有多大。按整个 JSON 文件的字节数计算，日志条数较少时也可能先达到容量上限。
+
+  默认 `524288` 字节（512 KiB），可填 `1`–`2097152` 字节。环境变量 `HAI_FEEDBACK_CAPTURE_MAXLOGBYTES`。
+
+- **`capture.maxReplayBytes`** 操作回放 JSON 文件能有多大。一次完整页面快照和随后的操作为一个回放片段。超限时，浏览器从最旧的片段开始丢弃。
+
+  默认 `2097152` 字节（2 MiB），可填 `1`–`8388608` 字节。环境变量 `HAI_FEEDBACK_CAPTURE_MAXREPLAYBYTES`。
+
+- **`capture.maxReplayEvents`** 一份操作回放能保留多少事件。完整页面快照、视口信息和点击等操作都计数，超限时也按上述片段丢弃。
+
+  默认 `2000` 个事件，可填 `1`–`10000`。环境变量 `HAI_FEEDBACK_CAPTURE_MAXREPLAYEVENTS`。
+
+- **`capture.maxRecordingSeconds`** 用户授权、录屏开始后能录多久。浏览器到时自动停止，文件接近单文件上限时也会提前停止。服务端对上传的录屏检查大小和格式。
+
+  默认 `60` 秒，可填 `1`–`300` 秒。环境变量 `HAI_FEEDBACK_CAPTURE_MAXRECORDINGSECONDS`。
 
 ### 保留期限
 
-| 字段 | 环境变量 | 默认值 | 范围与用途 |
-| --- | --- | --- | --- |
-| `retention.days` | `HAI_FEEDBACK_RETENTION_DAYS` | 0 | 0–3650 的整数。0 表示长期保留；正数表示从最近一次消息或状态变更起保留的天数。首帖刚提交时从提交时间起算。 |
+- **`retention.days`** 反馈在最后一次活动后还能查看多少天。提交首帖时开始计时，有新消息或状态变更时重新计时。填 `0` 则长期保留。
 
-到期后，任何状态的反馈都无法通过列表或详情读取。服务启动时及每小时按应用分批清理到期反馈，消息和附件随反馈一起删除。同一应用的多个实例应使用相同的设置。重启后，新设置会作用于既有记录。 [数据保留](../data/feedback.md#retention)
+  默认 `0`，可填 `0`–`3650` 天。环境变量 `HAI_FEEDBACK_RETENTION_DAYS`。
+
+例如设为 `90`，一次回复会把该反馈的到期时间推到这次回复之后 90 天。到期后，任何状态的反馈都会从列表消失，详情也无法再打开。服务启动时及每小时按应用分批删除到期反馈和对应的消息、附件。同一应用的多个实例应使用相同的设置。重启后，新设置会作用于既有记录。 [数据保留](../data/feedback.md#retention)
 
 <a id="configuration-ownership"></a>
 
@@ -58,7 +88,7 @@
 | --- | --- | --- |
 | 数据库 | 宿主传给 `reldb.init` 的连接配置，管理台从 `config/_db.yml` 读取 | Feedback 启动后用宿主选定的 SQLite、PostgreSQL 或 MySQL 保存三张表。 |
 | 身份与业务范围 | 宿主在 `resolveContext` 中从可信会话提供 `userId`、`scopeId` 和权限。需要关联 Core 日志时，业务请求的 Core 上下文也要写入同一范围。 | 每次 API 请求按当前会话和范围鉴权。角色可由宿主调配。 |
-| 浏览器现场 | 宿主给登录后的 `FeedbackModal` 传入 `captureKey`。用户在首帖弹窗里查看、删除材料，授权录屏或勾选服务端日志。 | 组件挂载后开始在本页缓冲，打开弹窗时冻结部分材料。用户的选择对本次提交生效。 |
+| 浏览器现场 | 宿主给登录后的 `FeedbackModal` 传入 `captureKey`，用 `getLimits` 获取服务端配置。用户在首帖弹窗里查看、删除材料，授权录屏或勾选服务端日志。 | 组件取得限额后开始在本页缓冲，打开弹窗时截取近期浏览器日志和操作回放。用户的选择对本次提交生效。 |
 | HTTP 传输 | Kit 的 `_kit.yml` 或 Serv 的 `_serv.yml` 管理 `transport`，在加密传输开启时通过 `transport.routePlaintextBytes` 声明大文件路由容量。 | 宿主处理 HTTP 请求和响应时检查路径容量。 |
 | 保留期限 | `_feedback.yml` 的 `retention.days` | 到期后停止显示，并由服务分批清理。 |
 
@@ -90,7 +120,7 @@ appId: ${HAI_FEEDBACK_APPID:orders}
 
 ### 调整容量和保留天数
 
-例如，订单应用允许单次发送 12 MiB，并从最后一次活动起保留反馈 90 天。配置各项可独立省略，沿用对应默认值。
+例如，订单客服希望用户能在一次回复中补传两份各 6 MiB 的文件，并从最后一次活动起保留该反馈 90 天。本例也把首帖的现场回看窗口设为 3 分钟、录屏设为最长 45 秒。省略的字段使用默认值。
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
