@@ -6,6 +6,60 @@
 
 [模块 README](../../../packages/feedback/README.md) · [配置清单](../configuration/feedback.md) · [数据结构](../data/feedback.md) · [反馈运维](../operations/feedback.md)
 
+<a id="feedback-workflow"></a>
+
+## 完整流程
+
+下面以已登录的 Web 用户为例。浏览器负责准备和上传现场，服务端负责受理、补采、处理及清理。通知和 Webhook 按应用配置启用。
+
+![反馈从启动、准备草稿、受理和并行补传，到处理、导出与到期清理的流程](../images/function-feedback-collection.svg)
+
+例如，用户在订单页报错后提交，页面显示反馈编号 `FB-20261117-3A8D91C2`。管理员马上就能按编号打开反馈并处理，浏览器仍可继续上传截图。详情分别显示处理、采集和通知状态，Webhook 的投递结果在任务列表中查看。
+
+<a id="feedback-steps"></a>
+
+## 按步骤操作
+
+### 1. 启动服务并挂载接口
+
+先初始化 RelDB 和私有 Storage，再调用服务端 `feedback.init()`。选 `reach` 模式时也要先初始化通知渠道。用 `kit.createFeedbackHandler()` 或 `serv.createFeedbackProcedures()` 挂载接口，从已认证的会话解析 `scopeId`、`userId` 和权限。浏览器从 `@h-ai/feedback/client` 创建实例，用 `client.init({ appId, actions })` 绑定这些接口。[最小接入](#quick-start) · [Kit 路由接入](kit.md#protocol-integrations) · [Serv 路由接入](#reports) · [客户端配置](#feedback-client-config)
+
+### 2. 准备草稿并让用户检查
+
+用户点击「反馈问题」时先调用 `client.prepare()`。成功后用 `client.getView()` 填充反馈表单，显示可查看的证据、截图预览及缺项。`addFiles()` 可加入附件，`annotate()` 可标注或遮挡图片。用户想先留存材料时调用 `client.saveDraft()` 下载本地 ZIP。[浏览器草稿与操作示例](#browser-capture)
+
+### 3. 提交并展示反馈编号
+
+用户点击「提交」时调用 `client.submit({ description, category, contact })`，说明可留空。成功后展示 `report.number`，保留 `report.id` 供查询。首次发送会固定提交 ID 和内容，遇到响应丢失时原样重试。想修改已发送的内容时先保存现有草稿，由用户确认后开启新的一次反馈。[提交与查询](#reports)
+
+### 4. 补传材料并查看后台进度
+
+浏览器在受理后自动续传同一反馈的附件和证据，最后发送 `completeCollection`。网络或当前账号会话恢复后，可调用 `client.flush()` 重试待确认的材料。通过 `get()` 查看附件是否为 `available`、采集状态及失败任务。服务端 worker 同时处理补采，独立推进启用的通知和 Webhook。手动运行模式（`worker.intervalMs: 0`）由应用定期调用 `feedback.runJobs()`。[材料接口](#evidence) · [任务如何领取和接管](#feedback-job-execution)
+
+### 5. 让作者查询，让管理员处理
+
+作者通过「我的反馈」或 `listMine()` 查自己的报告。管理员按反馈编号搜索，从详情读取最新的 `version`，调用 `setStatus({ id, status: 'handled', expectedVersion }, context)` 标记处理。改为 `pending` 可重新打开。遇到版本冲突时先刷新详情再决定。处理变更同时写入历史。[处理历史如何保存](../data/feedback.md#table-hai-feedback-history) · [查询和处理示例](#reports)
+
+### 6. 按需导出，并在到期时回收
+
+具备导出权限的管理员用 `feedback.export({ id }, context)` 申请 ZIP，保存任务 ID，再用 `getExport()` 获取。申请时会固定报告版本和证据修订。如果需要尽量完整的材料，先看采集状态再申请。收到生成中的 `409` 就稍后再查，失败和过期按各自提示处理。所有报告及其 ZIP 到期后会停止访问，由后台回收。退出账号时调用 `client.close({ discard: true })`，服务端关机时先调用 `feedback.close()`。[诊断包操作](#exports)
+
+<a id="feedback-limits"></a>
+
+## 关键限制
+
+| 关注点 | 默认行为与边界 |
+| --- | --- |
+| 服务端会收集哪些日志？ | `feedback.init()` 监听 Core logger。只有带 `scopeId`、`userId` 和 `requestId` 上下文的记录才会进入近期内存缓冲。遇到 `error` 或 `fatal` 时，同请求错误前后各最多 100 条日志及错误本身可短暂进入共享库，默认保留 5 分钟，可能发生在用户提交前。报告补采时按应用、范围、用户和事件时间选取相关记录。 |
+| 浏览器会一直上传吗？ | 初始化时可读取服务端策略。近期 Core 日志、未捕获异常和应用传入的请求摘要先留在本机，默认最多 5 分钟、1000 项、2 MiB。用户提交时才发送 SDK 为该草稿筛选的证据，受理后再续传保留的附件和后续证据。原生控制台采集需开启 `captureConsole: true`，只覆盖 `debug/info/warn/error`。 |
+| 截图、回放和隐私 | 默认打开草稿时尝试当前页截图，后台关键截图和 DOM 回放需显式开启。默认不收集请求正文、完整 Cookie 或全部环境变量。用 `data-feedback-private` 标记业务敏感区域，提交前检查并移除附件。ZIP/GZIP 附件内部须在压缩前脱敏。 |
+| 大小和数量 | 默认单个附件 5 MiB，单份报告最多 20 个附件且合计 22 MiB，证据最多 2000 项且合计 4 MiB。首次提交最多带 1000 项客户端证据，服务端留有补采预算。表单以 `reports.policy({})` 返回的有效上限为准。 |
+| 提交额度 | 按 UTC 日计算，默认每用户最多受理 20 份反馈，预留材料与导出的预算最多 2 GiB。同一应用的单个业务范围默认有 10 GiB 的预留上限。相同提交重试只计一次。 |
+| 等待和重试 | 受理后，服务端等待客户端的完成确认，默认最多 60 秒，再按现有材料推进补采。材料可能不全，已受理的报告仍可处理。普通后台任务默认最多尝试 5 次。清理任务失败会继续重试。 |
+| 期限与访问 | 反馈默认保留 30 天。ZIP 生成成功后可下载，期限从申请时间起算，默认 24 小时，并且受报告到期时间限制。到期立即停止访问，后台再回收数据。本人只能操作自己且在当前范围内的反馈，管理操作分别校验权限。 |
+
+[日志如何关联到一份反馈](#server-log-collection) · [查看实际配置和限制](../configuration/feedback.md#configuration-fields)
+
 <a id="module-dependencies"></a>
 
 ## 依赖
@@ -31,23 +85,19 @@
 应用启动时初始化模块，存储凭据从服务端私有配置读取。下例的提交函数接收服务端生成的可信 `context` 和客户端为本次提交生成的 `submissionId`。关闭其他依赖前调用 `feedback.close()`。
 
 ```ts
-
 import { type FeedbackContext, feedback } from '@h-ai/feedback'
 
-// 为 orders 初始化反馈服务。本地开发通过日志查看受理状态。
 // 用 orders 1.0.0、控制台通知和下方管理页地址启动服务。成功无数据，初始化出错时不受理报告。
 const initialized = await feedback.init({
   appId: 'orders',
-  appVersion: '1.0.0',
-  notification: { mode: 'console' },
-  adminUrl: 'https://app.example.test/admin/feedback',
+  build: { appVersion: '1.0.0' },
+  notification: { mode: 'console', adminUrl: 'https://app.example.test/admin/feedback' },
 })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 export async function submitFeedback(context: FeedbackContext, submissionId: string) {
-  // 受理成功返回含编号的报告。遇到失败时，调用方读取 error。
-  // 用可信会话 context 和调用方的稳定 submissionId 为 orders 提交报告。返回含 ID 和编号的受理记录；鉴权或预算失败返回 error。
+  // 用可信会话和稳定的 submissionId 提交报告。成功返回 ID 和编号，鉴权或额度拒绝时返回失败。
   return feedback.submit({ appId: 'orders', submissionId }, context)
 }
 ```
@@ -71,8 +121,8 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
 | `feedback.init(config, options?)` | 准备反馈服务；先按快速开始连接数据库并准备依赖 | `config: FeedbackConfigInput`, `options?: FeedbackInitOptions` · [初始化参数](#feedback-init-options) | `Promise<HaiResult<void>>` | `await feedback.init(config)` |
-| `feedback.close()` | 停止本实例的反馈后台工作并清理模块状态；共享依赖由应用关闭 | 共享依赖由应用关闭；无 | `Promise<HaiResult<void>>` | `await feedback.close()` |
-| `feedback.runJobs()` | 执行当前可领取的后台任务 | 无参数 | `processed 处理数` | `await feedback.runJobs()` |
+| `feedback.close()` | 停止本实例的后台工作并清理模块状态 | 无参数 | `Promise<HaiResult<void>>` | `await feedback.close()` |
+| `feedback.runJobs()` | 执行一轮当前到期的后台任务 | 无参数 | `Promise<HaiResult<{ processed: number }>>` | `await feedback.runJobs()` |
 
 <a id="feedback-init-options"></a>
 
@@ -82,7 +132,9 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 可选的 `collectEvidence({ report, signal })` 在报告入库后运行。`report` 是只读反馈记录，`signal` 用于在超时或关闭时取消外部操作。回调同步或异步返回 `FeedbackCollectedEvidence`，可包含 `text: string`、结构化 `data: FeedbackEvidenceInput['data']` 或 `attachments`。每个附件传稳定的字符串 `id`、文件名 `name`、媒体类型 `contentType` 和 `bytes: Uint8Array`。下方异步采集示例展示如何用反馈编号给材料命名，并将取消信号传给文件读取。
 
-#### 场景：准备服务与接入采集任务
+#### 场景：由应用定时执行后台任务
+
+默认由 Feedback 自己调度。如果部署已经有统一的进程调度器，可设 `worker.intervalMs: 0`，在初始化后由应用定期执行下列代码。
 
 ```ts
 // 以下为应用异步业务函数体片段；失败时返回原结果。
@@ -90,21 +142,32 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 const jobsResult = await feedback.runJobs()
 if (!jobsResult.success)
   return jobsResult
-const jobs = jobsResult.data // 本轮已处理数量
+const { processed } = jobsResult.data
 ```
 
-init 输入来自最小接入，成功无数据；runJobs 无参数，输出本轮处理结果；close 等待并停止本实例后台任务。业务采集与 Webhook 的真实输入、重试和取消见下文。
-
-- 有界采集前后端日志、请求、错误、操作、版本与白名单环境信息；默认错误前后各最多 100 条。
-- 数据库事务受理、提交/证据幂等、附件校验、独立的处理/采集/通知状态、持久化任务与租约恢复。
 - 通知由 `notification.mode` 独立选择：`disabled` 不创建通知任务；`console` 默认仅输出定位与采集状态元数据（`notification.consoleContent: metadata`）；显式 `notification.consoleContent: summary` 才加入通用脱敏摘要，不依赖 Reach 或邮箱；`reach` 使用任意已配置 Provider 与接收方，仅此模式要求 `notification.recipients`。默认 `reach`，生成工程显式使用 `console`。Reach 免打扰期间由反馈自己的 outbox 等待，不进入 Reach 延迟队列，也不修改其他通知策略。Reach 的生产 Console Provider 限制保持不变；sent 仅表示选定通道受理，不能证明收信。
 - Reach API 接收方用 JSON 的 `extra.notificationId` 去重。同一个反馈通知任务重试时沿用该编号。它对应 `feedback.get()` 返回的通知任务 `id`。
-- 浏览器截图、遮挡/标注、可选 rrweb 回放、失败重试与本地导出；`@h-ai/ui` 提供 `FeedbackModal`、`FeedbackList` 和 `FeedbackDetail`。
-- 自包含 ZIP、SHA-256 校验、离线查看与按请求/错误/时间分页读取，不包含生产凭据。
 
 初始化成功后才能调用业务方法。应用代码在调用前准备实际的业务参数，校验输入和权限。收到 `HaiResult` 时先检查 `success`，成功时读 `data`，失败时读 `error`。成功结果为 `void` 时没有业务数据。返回 `null` 时表示没有找到值。
 
 input 中的 id 是反馈 ID，attachmentId/jobId 指向同一反馈；context 来自可信认证，包含当前主体/范围/权限。evidence、submission 和 base64 均受容量及归属检查。
+
+<a id="server-log-collection"></a>
+
+#### 服务端日志怎样进入报告
+
+1. **初始化后开始观察。** `feedback.init()` 注册 Core 日志观察器，按日志的 `scopeId`、`userId`、`requestId` 关联。请在认证后的请求上下文写入这些字段。未注册业务采集回调时，仍会观察 Core 日志。日志文件、标准输出及初始化之前的日志不在采集范围内。
+2. **错误证据可先暂存。** 普通日志留在当前实例最近 5 分钟的内存缓冲，最多 10000 条或 16 MiB。遇到 `error` 或 `fatal` 时，可将同请求错误前后各最多 100 条及错误本身写入共享库的临时证据区，后续窗口最多 30 秒。符合条件的条目默认存 5 分钟，尚未绑定报告。
+3. **受理后只关联相关材料。** 后台补采按应用、范围和提交人筛选，读取反馈锚点前 5 分钟到后 30 秒内的现有日志。浏览器用近期错误或打开草稿的时间作为锚点，直接调用 API 省略锚点时用受理时间。这一步最多带回 1000 条记录，还受整份反馈的证据预算限制。各实例可读取共享库暂存的错误轨迹，普通内存日志仅在采集实例可用。没有匹配、超限或读取失败时，详情可能显示缺项。
+4. **业务证据由应用按报告提供。** 应用注册的 `collectEvidence({ report, signal })` 随后台补采任务运行。业务系统可以从自己的日志服务查询这份报告相关的记录，再返回文字、结构化数据或附件。
+
+<a id="feedback-job-execution"></a>
+
+#### 后台任务怎样领取和恢复
+
+提交事务保存报告并登记补采、到期清理和已启用的通知任务。Webhook 配置后单独登记，等待采集进入终态（包括失败）再投递。管理员申请导出时才登记生成 ZIP 的任务。浏览器截图和附件上传由客户端发起。
+
+**领取由 worker 自动完成。** 默认由应用进程轮询共享数据库，每个任务同一时间只有一份有效租约。例如实例 A 开始生成 ZIP 时，会原子登记自己的令牌和租约，运行期间持续续租。如果 A 中途退出，租约过期后实例 B 可接手。只有当前持有有效租约的实例才能登记结果。外部通知仍可能在失败重试时重复投递，接收方按任务对应的幂等 ID 去重。[任务字段](../data/feedback.md#table-hai-feedback-jobs)
 
 #### 场景：在服务端异步补充业务证据
 
@@ -534,9 +597,7 @@ const viewer = feedback.getBundleViewerFiles()['viewer/index.html'] // 无需输
 
 prepare 固定现场供用户检查，submit 才可靠提交。受理之后，浏览器续传和服务端采集仍可能继续。
 
-![反馈：现场固定、可靠受理与后续采集](../images/function-feedback-collection.svg)
-
-首次发送后包络冻结，重试沿用同一提交编号及内容，不能悄悄换一份输入。受理回执不等于附件、业务证据或通知全部完成；详情以采集状态为准。服务端 Webhook 等待采集 complete/partial/failed 后独立执行，采集失败也会回调。关闭客户端要释放录制、轮询与预览。
+下面的 SDK 示例将准备、确认和提交写在同一段，方便展示完整调用。实际界面应在 `prepare()` 成功后打开表单，让用户检查材料，再在点击提交时调用 `submit()`。
 
 ```ts
 

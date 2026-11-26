@@ -22,7 +22,7 @@
 | [`hai_feedback_evidence`](#table-hai-feedback-evidence) | 按来源和顺序查采集到的事件。 |
 | [`hai_feedback_attachments`](#table-hai-feedback-attachments) | 查附件对象位置、状态，校验文件是否完整。 |
 | [`hai_feedback_history`](#table-hai-feedback-history) | 查谁在什么时候改变了反馈状态。 |
-| [`hai_feedback_jobs`](#table-hai-feedback-jobs) | 领取证据采集、通知或导出等后台任务。 |
+| [`hai_feedback_jobs`](#table-hai-feedback-jobs) | 记录待执行的补采、通知、Webhook、导出和到期清理，由后台进程执行和恢复。 |
 | [`hai_feedback_quotas`](#table-hai-feedback-quotas) | 提交或导出前核对条数、字节和次数预算。 |
 
 <a id="reports"></a>
@@ -180,19 +180,19 @@ attachment-42 指向 feedback-42 的一个5字节对象；checksum 用来核对�
 
 ### `hai_feedback_history`
 
-按 `report_id` 查处理历史。
+`hai_feedback_reports` 保存当前状态。每次状态真正变化时，同一事务会在这张表追加一条记录，详情和诊断包因此能显示谁改过、从哪个状态改到哪个状态，以及何时修改。
+
+详情按 `report_id` 一次读出该反馈的所有处理记录，只有查找和关联用的 ID 单独成列。`payload` 保存整条 `FeedbackHistory`，包括处理人、前后状态、时间和可选备注。其他表也使用 JSON，例如报告的诊断信息、证据内容、不同任务的输入和结果。像报告当前状态、任务执行时间这类用于查询和调度的字段，单独成列。若要经常跨反馈按处理人和时间查询，再考虑为这些字段建列和索引。
 
 | 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
 | --- | --- | --- | --- | --- | --- |
 | `id` | `TEXT` | 否 | — | 处理记录主键。 | `history-42` |
 | `report_id` | `TEXT` | 否 | — | 所属反馈 ID。 | `feedback-42` |
-| `payload` | `JSON` | 否 | — | 处理人、处理时间和变更前后的状态。 | `{"id":"history-42","feedbackId":"feedback-42","userId":"user-42","from":"pending","to":"handled","timestamp":1794873660000}` |
+| `payload` | `JSON` | 否 | — | 处理人、处理时间、变更前后的状态和可选备注。 | `{"id":"history-42","feedbackId":"feedback-42","userId":"operator-7","from":"pending","to":"handled","timestamp":1794873660000}` |
 
 <a id="谁把反馈状态改成了什么"></a>
 
 #### 示例 · 谁把反馈状态改成了什么
-
-每次处理反馈时留下变更记录，方便看到处理过程和备注。
 
 ```json
 {
@@ -201,15 +201,16 @@ attachment-42 指向 feedback-42 的一个5字节对象；checksum 用来核对�
   "payload": {
     "id": "history-42",
     "feedbackId": "feedback-42",
-    "userId": "user-42",
+    "userId": "operator-7",
     "from": "pending",
     "to": "handled",
-    "timestamp": 1794873660000
+    "timestamp": 1794873660000,
+    "note": "已确认订单查询恢复"
   }
 }
 ```
 
-示例中 user-42 把 feedback-42 从 pending 改为 handled；timestamp 是处理时间，不是最初提交时间。
+管理员 `operator-7` 把 `feedback-42` 从 `pending` 改为 `handled`。`userId` 是本次操作人，`timestamp` 是修改发生的时间。备注在写入前脱敏。
 
 <a id="jobs"></a>
 
@@ -217,7 +218,9 @@ attachment-42 指向 feedback-42 的一个5字节对象；checksum 用来核对�
 
 ### `hai_feedback_jobs`
 
-按 `(app_id, status, next_run_at)` 领取任务，按 `(report_id, snapshot_revision, snapshot_version)` 找快照。默认租期为 30 秒，通常最多尝试 5 次。
+这张表让反馈可以先返回编号，服务进程重启后仍能继续执行未完成的工作。受理时登记服务端补采和到期清理，按配置登记通知和 Webhook。导出任务在管理员申请时创建。截图和附件上传由浏览器发起。
+
+**领取**是后台进程用一次条件更新取得任务的临时执行权，管理员无需操作。进程按 `(app_id, status, next_run_at)` 找到可执行的任务，写入执行令牌和租期。执行中续租。进程退出后，同一应用的其他进程可在租期过后接手。记录结果时会核验租期和令牌，旧进程无法覆盖新进程的结果。租期默认 30 秒，普通任务默认最多尝试 5 次。导出按 `(report_id, snapshot_revision, snapshot_version)` 找快照。[任务执行与恢复](../function/feedback.md#feedback-job-execution)
 
 | 字段 | 类型 | 可空 | 默认值 | 说明 | 示例 |
 | --- | --- | --- | --- | --- | --- |
@@ -239,13 +242,13 @@ attachment-42 指向 feedback-42 的一个5字节对象；checksum 用来核对�
 | `payload` | `JSON` | 否 | — | 任务输入及进度。导出登记证据修订号和条数，另固定报告、附件元数据和处理历史。 | `{}` |
 | `result` | `JSON` | 是 | — | 任务完成后记录的结果。 | `NULL` |
 
-导出任务在受理时固定 `snapshot_revision`、`snapshot_version` 和 `payload.evidenceCount`。执行时读取该修订及之前的证据，核对条数后生成 ZIP。反馈到期或证据不完整时，任务不会生成成功的 ZIP。
+申请导出时固定 `snapshot_revision`、`snapshot_version` 和 `payload.evidenceCount`。执行时读取该修订及之前的证据，核对条数后生成 ZIP。采集状态为 `partial` 时仍可导出已有材料。如果反馈到期或固定的证据行缺失，导出会失败。
 
 <a id="提交之后还要做的后台工作"></a>
 
-#### 示例 · 提交之后还要做的后台工作
+#### 示例 · ZIP 导出任务等待执行
 
-截图、补充证据、通知或导出需要异步完成，任务记录让节点领取、失败重试，并避免旧处理者覆盖新结果。
+管理员申请导出后立即拿到任务 ID。下面列出这条任务尚未被领取时的调度字段。
 
 ```json
 {
@@ -253,6 +256,8 @@ attachment-42 指向 feedback-42 的一个5字节对象；checksum 用来核对�
   "app_id": "orders",
   "report_id": "feedback-42",
   "scope_id": "team-1",
+  "kind": "export",
+  "status": "pending",
   "attempts": 0,
   "token": null,
   "lease_until": 0,
@@ -260,7 +265,7 @@ attachment-42 指向 feedback-42 的一个5字节对象；checksum 用来核对�
 }
 ```
 
-job-42 属于 feedback-42，尚未尝试、没有领取 token；next_run_at 表示最早可开始时间，不保证届时一定完成。
+`job-42` 属于 `feedback-42`，尚未执行。`next_run_at` 是最早可领取时间。若首个进程生成到一半就退出，之后取得租约的进程会重新生成 ZIP，任务 ID 保持相同。
 
 <a id="table-hai-feedback-quotas"></a>
 

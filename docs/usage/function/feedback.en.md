@@ -4,6 +4,60 @@
 
 [Chinese source](feedback.md) · [Configuration](../configuration/feedback.en.md) · [Data structures](../data/feedback.en.md)
 
+<a id="feedback-workflow"></a>
+
+## Complete workflow
+
+This flow assumes a signed-in web user. The browser prepares and uploads evidence. The service accepts reports, collects additional evidence, handles reports, and cleans up expired data. Notifications and Webhooks are optional.
+
+![Feedback workflow from startup and draft preparation through acceptance, collection, handling, export, and expiry](../images/function-feedback-collection.en.svg)
+
+Suppose an order page fails. After the user submits a report, the page displays `FB-20261117-3A8D91C2`. An administrator can open and handle it immediately while the browser is still uploading the screenshot. The detail view shows handling, collection, and notification status separately. Webhook delivery appears in the job list.
+
+<a id="feedback-steps"></a>
+
+## Step by step
+
+### 1. Start the service and mount the routes
+
+Initialize RelDB and private Storage, then call server-side `feedback.init()`. Initialize the notification provider first in Reach mode. Mount the routes with `kit.createFeedbackHandler()` or `serv.createFeedbackProcedures()` and resolve `scopeId`, `userId`, and permissions from an authenticated session. Create the browser client from `@h-ai/feedback/client` and use `client.init({ appId, actions })` to connect those routes. [Quick start](#quick-start) · [Kit routes](kit.en.md#protocol-integrations) · [Serv routes](#reports) · [Client settings](#feedback-client-config)
+
+### 2. Prepare a draft and let the user review it
+
+When the user opens feedback, call `client.prepare()`. On success, use `client.getView()` to show evidence, screenshot previews, and missing material. Use `addFiles()` to add files and `annotate()` to mark or redact images. Use `client.saveDraft()` to save a local ZIP when the user wants to keep the material first. [Draft workflow and examples](#browser-capture)
+
+### 3. Submit and display the report number
+
+On submit, call `client.submit({ description, category, contact })`. The description can be omitted. Display `report.number` and keep `report.id` for queries. The first send fixes the submission ID and contents. Retry with the same data if the response is lost. To change a report already sent, save the existing draft and let the user confirm a new submission. [Submit and query](#reports)
+
+### 4. Send remaining material and view background progress
+
+After acceptance, the browser uploads attachments and remaining evidence for the same report, then acknowledges completion. Use `client.flush()` to retry pending items when the connection or current account session recovers. Check `get()` for `available` attachments, collection status, and failed jobs. The server worker collects extra evidence and runs enabled notifications and Webhooks independently. With `worker.intervalMs: 0`, schedule `feedback.runJobs()` from the application. [Evidence API](#evidence) · [How jobs are claimed](#feedback-job-execution)
+
+### 5. Let authors view reports and administrators handle them
+
+Authors use their own reports view or `listMine()`. Administrators look up the report by number, read its current `version`, and call `setStatus({ id, status: 'handled', expectedVersion }, context)`. Set `pending` to reopen it. Reload the detail before acting again after a version conflict. The status change also writes a history entry. [History storage](../data/feedback.en.md#table-hai-feedback-history) · [Query and handling examples](#reports)
+
+### 6. Export on demand and clean up at expiry
+
+An authorized administrator calls `feedback.export({ id }, context)`, keeps the job ID, and fetches the ZIP with `getExport()`. The request freezes the report version and evidence revision. If you need the most complete evidence, check collection status before requesting a ZIP. A pending `409` means to check again later. Handle failure and expiry according to the result. Access stops for all expired reports and their ZIPs, and workers remove the data. Call `client.close({ discard: true })` on logout and `feedback.close()` before server shutdown. [Diagnostic ZIP operations](#exports)
+
+<a id="feedback-limits"></a>
+
+## Key limits
+
+| What to check | Default behavior |
+| --- | --- |
+| Which server logs are collected? | `feedback.init()` observes the Core logger. Only entries with `scopeId`, `userId`, and `requestId` in context enter the recent in-memory buffer. An `error` or `fatal` entry can temporarily store the error and up to 100 surrounding entries on each side from the same request in the shared database. That can happen before submission. The temporary retention is five minutes. Report collection selects records by app, scope, user, and time. |
+| Does the browser keep uploading? | Initialization can fetch the server policy. Recent Core logs, uncaught errors, and request summaries supplied by the app stay on the device, up to five minutes, 1,000 records, and 2 MiB by default. Submission sends evidence the SDK selected for that draft, then uploads remaining evidence and retained attachments. Native console capture is opt-in through `captureConsole: true` and covers `debug/info/warn/error`. |
+| Screenshots, replay and privacy | Preparing a draft attempts a current-page screenshot by default. Background screenshots and DOM replay are opt-in. Request bodies, all cookies, and the full environment are excluded by default. Mark app-specific sensitive areas with `data-feedback-private` and let the user review and remove files before submission. Redact ZIP/GZIP contents before compression. |
+| Size and count | By default, each report can include up to 20 attachments totaling 22 MiB, with at most 5 MiB per file, and up to 2,000 evidence items totaling 4 MiB. The first submission can include up to 1,000 client items. The server reserves capacity for its own evidence. Use `reports.policy({})` for the effective limits. |
+| Submission quota | Defaults per user and UTC day are 20 accepted reports and 2 GiB of reserved space for reports and exports. Each scope in an app can reserve up to 10 GiB by default. A retry of the same submission counts once. |
+| Waiting and retries | After acceptance, the server waits for the client's completion acknowledgement, up to 60 seconds by default, before collecting with the evidence then available. Accepted reports can be handled with partial material. Ordinary jobs get five attempts by default. Failed cleanup jobs keep retrying. |
+| Retention and access | Reports are retained for 30 days by default. Completed ZIPs can be downloaded for up to 24 hours from the export request, within the report's lifetime. Access stops at expiry and background cleanup removes the data. Authors can work with their own in-scope reports. Administration actions check permissions individually. |
+
+[How the service associates logs with a report](#server-log-collection) · [Configuration and effective limits](../configuration/feedback.en.md#configuration-fields)
+
 <a id="module-dependencies"></a>
 
 ## Dependencies
@@ -27,27 +81,22 @@ Browser code can use `@h-ai/feedback/client` directly, and offline tools can use
 This server example accepts trusted context and an idempotent submission ID. Read storage credentials from private server configuration. Call `feedback.close()` before releasing the other services.
 
 ```ts
-
 import { type FeedbackContext, feedback } from '@h-ai/feedback'
 
-// 为 orders 初始化反馈服务。本地开发通过日志查看受理状态。
 // Start orders 1.0.0 with console notifications and the admin URL below. Success has no data; initialization failure stops intake.
 const initialized = await feedback.init({
   appId: 'orders',
-  appVersion: '1.0.0',
-  notification: { mode: 'console' },
-  adminUrl: 'https://app.example.test/admin/feedback',
+  build: { appVersion: '1.0.0' },
+  notification: { mode: 'console', adminUrl: 'https://app.example.test/admin/feedback' },
 })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 export async function submitFeedback(context: FeedbackContext, submissionId: string) {
-  // 受理成功返回含编号的报告。遇到失败时，调用方读取 error。
-  // Submit for orders with the trusted context and caller's stable submissionId. Success returns a report ID and number; authorization or budget checks can fail.
+  // Submit for orders with trusted context and a stable submissionId. Success returns a report ID and number. Authorization and quota checks can fail.
   return feedback.submit({ appId: 'orders', submissionId }, context)
 }
 ```
-
 
 <a id="api-reference"></a>
 
@@ -68,8 +117,8 @@ The server accepts reports, collects evidence, notifies and expires records usin
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
 | `feedback.init(config, options?)` | Start the service with the selected dependencies | `config: FeedbackConfigInput`, `options?: FeedbackInitOptions` · [initialization arguments](#feedback-init-options) | `Promise<HaiResult<void>>` | `await feedback.init(config)` |
-| `feedback.close()` | Stop the worker and release service state | None | `void` | `await feedback.close()` |
-| `feedback.runJobs()` | Run available background jobs | None | `{ processed: number }` | `await feedback.runJobs()` |
+| `feedback.close()` | Stop the worker and release service state | None | `Promise<HaiResult<void>>` | `await feedback.close()` |
+| `feedback.runJobs()` | Run one round of due background jobs | None | `Promise<HaiResult<{ processed: number }>>` | `await feedback.runJobs()` |
 
 <a id="feedback-init-options"></a>
 
@@ -79,7 +128,9 @@ Pass the required `config: FeedbackConfigInput`. See the [configuration file ref
 
 The optional `collectEvidence({ report, signal })` runs after a report is stored. It receives the read-only report and a signal that the application can pass to work that must stop on timeout or shutdown. Return `FeedbackCollectedEvidence` directly or as a promise, with optional `text: string`, structured `data`, and `attachments`. Each attachment has a stable string `id`, file `name`, media type `contentType`, and `bytes: Uint8Array`. For example, a report numbered `FB-42` can yield `{ text: "Diagnostics for FB-42", data: { businessSystem: "orders" } }`.
 
-#### Scenario: Prepare the service and collection jobs
+#### Scenario: Schedule background jobs from the application
+
+Feedback schedules its worker by default. If the deployment has its own process scheduler, set `worker.intervalMs: 0` and schedule the following call after initialization.
 
 ```ts
 // Fragment inside an async application function; return failed results to its caller.
@@ -87,16 +138,31 @@ The optional `collectEvidence({ report, signal })` runs after a report is stored
 const jobsResult = await feedback.runJobs()
 if (!jobsResult.success)
   return jobsResult
-const jobs = jobsResult.data // this round's processed count
+const { processed } = jobsResult.data
 ```
-
-The quick start provides init input. init has no business data; runJobs takes no input and reports this round; close stops this instance’s workers. Collection and webhook inputs and recovery are detailed below.
 
 Reach API receivers can deduplicate feedback notifications by `extra.notificationId` in the JSON payload. Retries reuse the same notification job ID from `feedback.get()`.
 
 The output is successful HaiResult.data. Build context from the authenticated server identity and check success.
 
 Finalization stops the current collection; it does not wait for all notifications to finish. Read attachments and exports through a server endpoint that checks the caller’s access.
+
+<a id="server-log-collection"></a>
+
+#### How server logs reach a report
+
+1. **Observation starts on initialization.** `feedback.init()` observes Core log entries with `scopeId`, `userId`, and `requestId`. Set those values in authenticated request context. Core observation runs even without an application evidence callback. Log files, stdout, and logs emitted before initialization are outside this observer.
+2. **Error evidence can be stored before submission.** Ordinary entries stay in the local instance's latest five minutes of memory, up to 10,000 entries or 16 MiB. An `error` or `fatal` entry can preserve itself and up to 100 entries before and after it from the same request in the shared database. The following window lasts at most 30 seconds. Temporary records are retained for five minutes before they expire.
+3. **Collection attaches only relevant evidence.** After acceptance, the worker filters by app, scope, and author. It reads available entries from five minutes before to 30 seconds after the report anchor. The browser uses a recent error or the time the draft opened. Direct API calls that omit the anchor use acceptance time. Up to 1,000 entries fit within this step, subject to the report budget. Instances can read shared error evidence. Ordinary in-memory logs stay with the instance that captured them. Missing matches, truncation, and read failures can appear as missing evidence.
+4. **The app supplies any business evidence for the report.** The background job runs the app's registered `collectEvidence({ report, signal })` callback. Use the report to query relevant entries from your own service, then return text, structured data, or attachments.
+
+<a id="feedback-job-execution"></a>
+
+#### How background jobs are claimed and recovered
+
+Submission saves the report and registers collection, expiry cleanup, and enabled notification jobs in the same transaction. A configured Webhook waits for collection to finish, including failure. A ZIP job is registered on export request. The browser captures screenshots and initiates file uploads.
+
+**The worker claims jobs automatically.** Application processes poll the shared database by default, with one active lease per job at any time. When instance A starts generating a ZIP, it atomically records its token and lease, and renews the lease while running. If A exits, instance B can take over after the lease expires. Only the current lease holder can record the outcome. A notification may still be delivered twice after a retry. The receiver can deduplicate on the job's idempotency ID. [Job fields](../data/feedback.en.md#table-hai-feedback-jobs)
 
 #### Scenario: Collect application evidence after submission
 
@@ -409,9 +475,7 @@ For example, exporting with `{ description: "Checkout failed", removedAttachment
 
 prepare freezes the scene for review; submit durably submits it. Browser uploads and server collection may continue after acceptance.
 
-![Feedback: capture, acceptance and later collection](../images/function-feedback-collection.en.svg)
-
-The first send freezes the envelope; retries retain its ID and contents. Acceptance does not mean every attachment, business-evidence job or notification is complete. Inspect collection status. The independent webhook waits for complete/partial/failed collection and also runs after collection failure. Close releases recording, polling and previews.
+This SDK example shows preparation, confirmation, and submission together. In the UI, show the form after `prepare()` succeeds and let the user review the material before calling `submit()`.
 
 ```ts
 

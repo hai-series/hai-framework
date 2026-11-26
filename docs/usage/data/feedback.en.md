@@ -20,7 +20,7 @@ The module uses 6 tables.
 | [`hai_feedback_evidence`](#table-hai-feedback-evidence) | Read captured events by source and sequence. |
 | [`hai_feedback_attachments`](#table-hai-feedback-attachments) | Locate an attachment and check its status and integrity. |
 | [`hai_feedback_history`](#table-hai-feedback-history) | See who changed a report's status and when. |
-| [`hai_feedback_jobs`](#table-hai-feedback-jobs) | Claim background work such as collection, notifications and exports. |
+| [`hai_feedback_jobs`](#table-hai-feedback-jobs) | Track collection, notification, webhook, export, and cleanup work so workers can run or recover it. |
 | [`hai_feedback_quotas`](#table-hai-feedback-quotas) | Check report, byte and export budgets. |
 
 <a id="table-hai-feedback-reports"></a>
@@ -177,19 +177,19 @@ attachment-42 refers to a 5-byte object for feedback-42. Its checksum is redacte
 
 ### `hai_feedback_history`
 
-Look up the processing history by `report_id`.
+`hai_feedback_reports` holds the current state. When that state changes, the same transaction adds a row here. Report details and diagnostic bundles use these rows to show who changed the state, when, and which states were involved.
+
+The detail view fetches all entries for one `report_id`. The lookup and relationship IDs are columns. The complete `FeedbackHistory` entry fits in `payload`, including the actor, both states, the time, and the optional note. Other tables also use JSON for report diagnostics, evidence contents, and inputs and results that vary by job type. Fields used for filtering or scheduling, such as current state and next run time, are columns. If cross-report queries by actor and time become common, those fields can get columns and indexes of their own.
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
 | `id` | `TEXT` | No | — | History entry primary key. | `history-42` |
 | `report_id` | `TEXT` | No | — | Related report ID. | `feedback-42` |
-| `payload` | `JSON` | No | — | Actor, change time and previous and new status. | `{"id":"history-42","feedbackId":"feedback-42","userId":"user-42","from":"pending","to":"handled","timestamp":1794873660000}` |
+| `payload` | `JSON` | No | — | Actor, time, previous and new status, and optional note. | `{"id":"history-42","feedbackId":"feedback-42","userId":"operator-7","from":"pending","to":"handled","timestamp":1794873660000}` |
 
 <a id="who-changed-the-feedback-state"></a>
 
 #### Example · Who changed the feedback state
-
-Keep each handling change and note so staff can follow the report history.
 
 ```json
 {
@@ -198,15 +198,16 @@ Keep each handling change and note so staff can follow the report history.
   "payload": {
     "id": "history-42",
     "feedbackId": "feedback-42",
-    "userId": "user-42",
+    "userId": "operator-7",
     "from": "pending",
     "to": "handled",
-    "timestamp": 1794873660000
+    "timestamp": 1794873660000,
+    "note": "Verified that order lookup has recovered"
   }
 }
 ```
 
-user-42 changed feedback-42 from pending to handled; timestamp is the handling time, not original submission.
+Administrator `operator-7` changed `feedback-42` from `pending` to `handled`. The `userId` identifies the actor and `timestamp` records when that change happened. The service redacts notes before saving them.
 
 <a id="jobs"></a>
 
@@ -214,7 +215,9 @@ user-42 changed feedback-42 from pending to handled; timestamp is the handling t
 
 ### `hai_feedback_jobs`
 
-Claim jobs by `(app_id, status, next_run_at)` and locate snapshots by `(report_id, snapshot_revision, snapshot_version)`. The default lease is 30 seconds and the normal attempt limit is five.
+The service can return a report number right away because this table preserves unfinished work across process restarts. Acceptance queues server collection and expiry cleanup, plus notifications and webhooks when enabled. An export request queues its own job. The browser initiates screenshots and attachment uploads.
+
+**Claiming** is an automatic conditional update that gives a worker temporary ownership. The worker finds eligible work by `(app_id, status, next_run_at)` and writes its execution token and lease. It renews the lease while it runs. If the worker exits, another worker for the same application can take over after expiry. Recording the result requires the current token and an active lease, which prevents a stale worker from overwriting it. The default lease is 30 seconds and ordinary jobs get five attempts by default. Exports locate snapshots by `(report_id, snapshot_revision, snapshot_version)`. [Job execution and recovery](../function/feedback.en.md#feedback-job-execution)
 
 | Column | Type | Nullable | Default | Meaning | Example |
 | --- | --- | --- | --- | --- | --- |
@@ -236,13 +239,13 @@ Claim jobs by `(app_id, status, next_run_at)` and locate snapshots by `(report_i
 | `payload` | `JSON` | No | — | Task input and progress. Exports reference an evidence revision and count and freeze the report, attachment metadata and history. | `{}` |
 | `result` | `JSON` | Yes | — | Recorded outcome when the job finishes. | `NULL` |
 
-An export freezes `snapshot_revision`, `snapshot_version` and `payload.evidenceCount` when queued. Its worker reads evidence through that revision and checks the count before writing the ZIP. Expired reports or incomplete evidence cannot produce a successful export.
+An export freezes `snapshot_revision`, `snapshot_version`, and `payload.evidenceCount` when queued. The worker reads evidence through that revision and checks the count before writing the ZIP. It can export the available material when collection is `partial`. The export fails if the report expires or an evidence row in the snapshot is missing.
 
 <a id="background-work-after-submission"></a>
 
-#### Example · Background work after submission
+#### Example · A ZIP export waiting for a worker
 
-Persist asynchronous collection, notification or export work for claims and retries.
+The administrator receives a job ID on request. These are the scheduling fields before a worker claims the job.
 
 ```json
 {
@@ -250,6 +253,8 @@ Persist asynchronous collection, notification or export work for claims and retr
   "app_id": "orders",
   "report_id": "feedback-42",
   "scope_id": "team-1",
+  "kind": "export",
+  "status": "pending",
   "attempts": 0,
   "token": null,
   "lease_until": 0,
@@ -257,7 +262,7 @@ Persist asynchronous collection, notification or export work for claims and retr
 }
 ```
 
-job-42 has no attempt or owner token yet. next_run_at is the earliest start, not a promised completion time.
+`job-42` belongs to `feedback-42` and has yet to run. `next_run_at` is the earliest time it can be claimed. If the first worker exits midway, the worker that obtains the next lease generates the ZIP again under the same job ID.
 
 <a id="table-hai-feedback-quotas"></a>
 

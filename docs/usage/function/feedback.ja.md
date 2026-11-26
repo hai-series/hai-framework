@@ -4,6 +4,60 @@
 
 [原文（中国語）](feedback.md) · [設定](../configuration/feedback.ja.md) · [データ構造](../data/feedback.ja.md)
 
+<a id="feedback-workflow"></a>
+
+## 全体の流れ
+
+ログインした Web 利用者の例です。ブラウザーは資料を準備して送信し、サーバーは受理、追加収集、処理、期限切れの削除を担当します。通知と Webhook は設定に応じて有効にします。
+
+![フィードバックの開始、下書き、受理、資料の追加、処理、出力、期限切れまでの流れ](../images/function-feedback-collection.ja.svg)
+
+たとえば注文ページでエラーが発生し、利用者が報告を送信すると `FB-20261117-3A8D91C2` と表示されます。画像の送信中でも、管理者は番号からすぐに問題票を開いて処理できます。処理、収集、通知の状態は詳細に別々に表示されます。Webhook の結果はタスク一覧で確認できます。
+
+<a id="feedback-steps"></a>
+
+## 手順
+
+### 1. サービスを初期化してルートを用意する
+
+RelDB と非公開 Storage を初期化し、サーバー側の `feedback.init()` を呼びます。Reach モードでは通知プロバイダーも先に初期化します。`kit.createFeedbackHandler()` または `serv.createFeedbackProcedures()` でルートを公開し、認証済みのセッションから `scopeId`、`userId` と権限を解決します。ブラウザーでは `@h-ai/feedback/client` からクライアントを作り、`client.init({ appId, actions })` でルートに接続します。[クイックスタート](#quick-start) · [Kit のルート](kit.ja.md#protocol-integrations) · [Serv のルート](#reports) · [クライアント設定](#feedback-client-config)
+
+### 2. 下書きを作って資料を確認する
+
+フィードバックを開いたら `client.prepare()` を呼びます。成功後、`client.getView()` で証拠、画像のプレビュー、不足資料をフォームに表示します。`addFiles()` で添付を追加し、`annotate()` で画像を注釈またはマスクできます。手元に保存する場合は `client.saveDraft()` で ZIP を保存します。[ブラウザーの下書きと例](#browser-capture)
+
+### 3. 送信して受付番号を表示する
+
+送信時は `client.submit({ description, category, contact })` を呼びます。説明は省略できます。成功したら `report.number` を表示し、照会に使う `report.id` を保持します。初回送信で提出 ID と内容が確定します。応答を受け取れなかった場合は同じ内容で再送します。送信済み内容を変更する場合は下書きを保存し、利用者の確認後に新規作成します。[提出と照会](#reports)
+
+### 4. 残りの資料を送り、タスクの進捗を確認する
+
+受理後、ブラウザーは同じ問題票に添付と追加証拠を送り、収集完了を伝えます。ネットワークや同じアカウントのセッションが復旧したら、`client.flush()` で未確認分を再試行できます。`get()` で添付の `available`、収集状態、失敗したタスクを確認します。サーバーワーカーは追加収集と、有効にした通知や Webhook を進めます。`worker.intervalMs: 0` ではアプリが `feedback.runJobs()` を定期的に呼びます。[資料 API](#evidence) · [タスクの取得と引き継ぎ](#feedback-job-execution)
+
+### 5. 提出者が確認し、管理者が処理する
+
+提出者は「自分の問題票」または `listMine()` で照会します。管理者は番号で検索し、詳細の現在の `version` を取得して `setStatus({ id, status: 'handled', expectedVersion }, context)` を呼びます。`pending` に戻すと再開できます。競合時は詳細を更新してから判断します。状態変更は履歴にも記録します。[処理履歴の保存](../data/feedback.ja.md#table-hai-feedback-history) · [照会と処理の例](#reports)
+
+### 6. 必要なときに出力し、期限切れを回収する
+
+出力権限を持つ管理者は `feedback.export({ id }, context)` を呼び、タスク ID を保存して `getExport()` で ZIP を取得します。申請時の問題票バージョンと証拠の改訂が固定されます。資料をできるだけ揃えたい場合は、収集状態を見てから申請します。生成中の `409` なら時間をおいて照会し、失敗と期限切れは戻り値に従って処理します。期限が切れた問題票と ZIP はアクセスを停止し、タスクがデータを削除します。ログアウト前に `client.close({ discard: true })`、サーバー終了前に `feedback.close()` を呼びます。[診断 ZIP の操作](#exports)
+
+<a id="feedback-limits"></a>
+
+## 主な制限
+
+| 確認事項 | 既定の動作 |
+| --- | --- |
+| どのサーバーログを収集するか | `feedback.init()` は Core logger を監視します。コンテキストに `scopeId`、`userId`、`requestId` があるログだけを直近のメモリーに保持します。`error` または `fatal` が発生すると、同じリクエストのエラーと前後各最大 100 件が、送信前でも共有 DB に一時保存される場合があります。保存期間は 5 分です。報告にはアプリ、範囲、利用者、時刻に合うログを関連付けます。 |
+| ブラウザーは常時アップロードするか | 初期化時にサーバーポリシーを取得できます。直近の Core ログ、未捕捉のエラー、アプリが渡した通信の概要は、既定で最大 5 分、1000 件、2 MiB を端末内に保持します。利用者が送信すると SDK が下書き用に絞り込んだ証拠を送り、受理後は残した添付と追加証拠を送ります。ブラウザーのコンソールは `captureConsole: true` にすると `debug/info/warn/error` を収集します。 |
+| スクリーンショットとプライバシー | 下書きを準備すると、既定で現在の画面の撮影を試みます。バックグラウンド撮影と DOM リプレイは明示的に有効にします。リクエスト本文、Cookie 全体、すべての環境変数は既定で収集しません。機密箇所には `data-feedback-private` を付け、提出前に添付を確認します。ZIP/GZIP の中身は圧縮前にマスクします。 |
+| サイズと件数 | 既定では 1 添付 5 MiB、1 問題票に添付 20 件かつ合計 22 MiB、証拠 2000 件かつ合計 4 MiB です。最初の提出にはクライアントの証拠を最大 1000 件含められます。実際の上限は `reports.policy({})` で取得します。 |
+| 提出枠 | 既定では利用者 1 人あたり UTC の 1 日につき 20 件まで受理し、資料と出力に 2 GiB まで予約できます。アプリ内の各範囲の予約上限は既定で 10 GiB です。同じ提出の再送は 1 件と数えます。 |
+| 待機と再試行 | 受理後の完了確認を既定で最大 60 秒待ち、その時点で利用できる資料で追加収集を進めます。資料が一部でも受理済みの問題票を処理できます。通常タスクは既定で最大 5 回、期限切れの削除は失敗後も再試行します。 |
+| 保存期間と権限 | 問題票は既定で 30 日保存します。生成済みの ZIP は既定で出力申請から 24 時間以内かつ問題票の有効期間中に取得できます。期限になるとアクセスを停止し、バックグラウンドで削除します。提出者は同じ範囲の自分の問題票を操作でき、管理操作は個別に権限を確認します。 |
+
+[サーバーログを問題票に関連付ける仕組み](#server-log-collection) · [設定と上限](../configuration/feedback.ja.md#configuration-fields)
+
 <a id="module-dependencies"></a>
 
 ## 依存関係
@@ -29,27 +83,22 @@
 サーバー側の例では、信頼できる `context` と再送時に共用する `submissionId` を受け取ります。ストレージの認証情報はサーバーの非公開設定から読み込みます。依存サービスを閉じる前に `feedback.close()` を呼び出します。
 
 ```ts
-
 import { type FeedbackContext, feedback } from '@h-ai/feedback'
 
-// 为 orders 初始化反馈服务。本地开发通过日志查看受理状态。
 // orders 1.0.0 をコンソール通知と下記の管理 URL で起動する。成功時にデータはなく、初期化失敗時は報告を受け付けない。
 const initialized = await feedback.init({
   appId: 'orders',
-  appVersion: '1.0.0',
-  notification: { mode: 'console' },
-  adminUrl: 'https://app.example.test/admin/feedback',
+  build: { appVersion: '1.0.0' },
+  notification: { mode: 'console', adminUrl: 'https://app.example.test/admin/feedback' },
 })
 if (!initialized.success)
   throw new Error(initialized.error.message)
 
 export async function submitFeedback(context: FeedbackContext, submissionId: string) {
-  // 受理成功返回含编号的报告。遇到失败时，调用方读取 error。
-  // 信頼済みの主体と呼び出し側の安定した submissionId で orders に提出する。成功時は ID と報告番号、権限・予算の拒否は失敗。
+  // 信頼済みの主体と安定した submissionId で提出する。成功時は ID と報告番号を返し、権限や提出枠の検査に通らなければ失敗を返す。
   return feedback.submit({ appId: 'orders', submissionId }, context)
 }
 ```
-
 
 <a id="api-reference"></a>
 
@@ -70,8 +119,8 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
 | `feedback.init(config, options?)` | 必要な依存先でサービスを初期化 | `config: FeedbackConfigInput`, `options?: FeedbackInitOptions` · [初期化の引数](#feedback-init-options) | `Promise<HaiResult<void>>` | `await feedback.init(config)` |
-| `feedback.close()` | ワーカーを停止して状態を解放 | なし | `void` | `await feedback.close()` |
-| `feedback.runJobs()` | 実行可能なバックグラウンド処理を実行 | なし | `{ processed: number }` | `await feedback.runJobs()` |
+| `feedback.close()` | ワーカーを停止して状態を解放 | なし | `Promise<HaiResult<void>>` | `await feedback.close()` |
+| `feedback.runJobs()` | 実行可能になったタスクを一巡処理 | なし | `Promise<HaiResult<{ processed: number }>>` | `await feedback.runJobs()` |
 
 <a id="feedback-init-options"></a>
 
@@ -81,7 +130,9 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 
 省略可能な `collectEvidence({ report, signal })` は報告の保存後に実行されます。`report` は読み取り専用の報告、`signal` はタイムアウトや終了に合わせて外部処理を中断するための通知です。同期または非同期で `FeedbackCollectedEvidence` を返し、省略可能な `text: string`、構造化した `data`、`attachments` を指定できます。添付ファイルには固定の文字列 `id`、ファイル名 `name`、メディアタイプ `contentType`、`bytes: Uint8Array` を指定します。報告番号が `FB-42` なら、たとえば `{ text: "Diagnostics for FB-42", data: { businessSystem: "orders" } }` を返せます。
 
-#### 利用例：サービスと採取処理の準備
+#### 利用例：アプリがバックグラウンドタスクを定期実行する
+
+既定では Feedback がワーカーを動かします。独自のプロセススケジューラーを使う環境では、`worker.intervalMs: 0` を設定し、初期化後に次の処理を定期実行します。
 
 ```ts
 // アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
@@ -89,10 +140,8 @@ export async function submitFeedback(context: FeedbackContext, submissionId: str
 const jobsResult = await feedback.runJobs()
 if (!jobsResult.success)
   return jobsResult
-const jobs = jobsResult.data // this round's processed count
+const { processed } = jobsResult.data
 ```
-
-init の入力は入門例の通りで、成功時の業務データはありません。runJobs は引数なしで今回の結果を返し、close はこのインスタンスの処理を停止します。
 
 Reach API の受信側は JSON の `extra.notificationId` で通知の重複を識別できます。再試行時も `feedback.get()` で確認できる同じ通知ジョブの ID を使います。
 
@@ -101,6 +150,23 @@ Reach API の受信側は JSON の `extra.notificationId` で通知の重複を�
 収集完了は現在の収集を終える処理で、通知の完了までは待ちません。添付とエクスポートは権限を確認するサーバーのエンドポイントを通じて取得します。
 
 未翻訳：証拠収集、非公開添付、エクスポート、再試行の詳しい手順。[中国語の該当節](feedback.md#api-reference)を参照してください。
+
+<a id="server-log-collection"></a>
+
+#### サーバーログの関連付け
+
+1. **初期化時に監視を始めます。** `feedback.init()` は `scopeId`、`userId`、`requestId` を持つ Core ログを監視します。認証済みのリクエストコンテキストにこれらを設定します。アプリ独自のコールバックを登録しなくても Core ログの監視は行われます。ログファイル、標準出力、初期化前のログはこの監視の対象外です。
+2. **エラーの証拠は提出前にも保存されます。** 通常のログはインスタンスの直近 5 分のメモリー内に、最大 10000 件または 16 MiB 保存します。`error` や `fatal` が発生すると、同じリクエストの前後各最大 100 件とエラー本体を共有 DB に一時保存できます。後続の取得時間は最大 30 秒で、一時レコードは 5 分で期限切れになります。
+3. **受理後は関連する資料だけを結び付けます。** ワーカーはアプリ、範囲、提出者を照合し、基準時刻の 5 分前から 30 秒後までを読みます。ブラウザーは直近のエラーまたは下書きを開いた時刻を使います。API を直接呼んで基準時刻を省略した場合は受理時刻を使います。取得件数は最大 1000 件で、問題票の予算にも従います。共有 DB のエラー証拠は各インスタンスから読めます。通常のメモリーログは採取したインスタンスで使えます。一致する証拠がない場合や上限超過、読み取り失敗は不足資料に表示されることがあります。
+4. **業務の証拠はアプリが報告ごとに提供します。** ワーカーが、アプリの登録した `collectEvidence({ report, signal })` を呼びます。対象の報告に関連するログを業務サービスから探し、テキスト、構造化データまたは添付を返します。
+
+<a id="feedback-job-execution"></a>
+
+#### タスクの取得と復旧
+
+提出時のトランザクションは問題票と、追加収集、期限切れの削除、有効な通知のタスクを保存します。設定した Webhook は失敗を含む収集の終端状態を待ちます。ZIP は出力申請時にタスクを登録します。ブラウザーの撮影と添付の送信はクライアントが開始します。
+
+**タスクはワーカーが自動で取得します。** 既定ではアプリのプロセスが共有 DB を確認し、タスクごとに有効なリースを 1 つだけ保持します。たとえばインスタンス A は ZIP 生成を始めるときにトークンとリースを原子的に登録し、実行中に延長します。A が途中で停止すると、期限後に B が引き継げます。有効な保有者だけが結果を記録できます。通知は再試行で重複する場合があり、受信側はタスクの冪等 ID で重複を判定できます。[タスクの項目](../data/feedback.ja.md#table-hai-feedback-jobs)
 
 #### 利用例：保存後にアプリの証拠を収集する
 
@@ -413,9 +479,7 @@ async function requestArchive(id: string, context: FeedbackContext) {
 
 prepare で現場を固定して確認し、submit で確実に送信します。受理後もブラウザーの追加転送とサーバー収集は続く場合があります。
 
-![フィードバック：現場固定・受理・後続の収集](../images/function-feedback-collection.ja.svg)
-
-初回送信で内容を固定し、再試行も同じ ID・内容を使います。受理は添付・業務証拠・通知の完了ではなく、収集状態を確認します。独立 Webhook は complete／partial／failed を待ち、収集失敗でも動作します。close は録画・監視・プレビューを解放します。
+この SDK 例では準備、資料の確認、送信を続けて示します。実際の画面では `prepare()` の成功後にフォームを表示し、利用者が資料を確認してから `submit()` を呼びます。
 
 ```ts
 

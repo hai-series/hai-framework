@@ -22,7 +22,7 @@
 | [`hai_feedback_evidence`](#table-hai-feedback-evidence) | 出所と順序で収集済みイベントを確認します。 |
 | [`hai_feedback_attachments`](#table-hai-feedback-attachments) | 添付の保存先、状態、完全性を確認します。 |
 | [`hai_feedback_history`](#table-hai-feedback-history) | 誰がいつ問題票の状態を変更したか確認します。 |
-| [`hai_feedback_jobs`](#table-hai-feedback-jobs) | 証拠収集、通知、出力などの裏側の作業を取得します。 |
+| [`hai_feedback_jobs`](#table-hai-feedback-jobs) | 証拠収集、通知、Webhook、出力、期限切れの削除を記録し、ワーカーが実行・再開できるようにします。 |
 | [`hai_feedback_quotas`](#table-hai-feedback-quotas) | 報告数、バイト数、出力回数の上限を確認します。 |
 
 <a id="table-hai-feedback-reports"></a>
@@ -178,19 +178,19 @@ feedback-42 の順序1、24バイトの例です。timestamp は発生時刻を 
 
 ### `hai_feedback_history`
 
-`report_id` で処理履歴を検索します。
+`hai_feedback_reports` に現在の状態を保存します。状態が変わったときは、同じトランザクションでこの表に履歴を追加します。詳細画面と診断バンドルで、誰がいつどの状態に変更したかを確認できます。
+
+詳細画面はひとつの `report_id` に属する履歴をまとめて読みます。検索や関連付けに使う ID は列に置き、操作した利用者、変更前後の状態、時刻、任意の備考は `FeedbackHistory` として `payload` に保存します。他の表でも問題票の診断情報、証拠の内容、種類によって異なるジョブの入力や結果には JSON を使います。現在の状態や開始可能時刻など、絞り込みや実行順の判定に使う値は列です。複数の問題票を横断して担当者や日時で頻繁に検索する場合は、対応する列と索引を追加できます。
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
 | `id` | `TEXT` | 不可 | — | 対応履歴の主キー。 | `history-42` |
 | `report_id` | `TEXT` | 不可 | — | 関連する問題票の ID。 | `feedback-42` |
-| `payload` | `JSON` | 不可 | — | 操作した利用者、時刻、変更前後の状態。 | `{"id":"history-42","feedbackId":"feedback-42","userId":"user-42","from":"pending","to":"handled","timestamp":1794873660000}` |
+| `payload` | `JSON` | 不可 | — | 操作した利用者、時刻、変更前後の状態、任意の備考。 | `{"id":"history-42","feedbackId":"feedback-42","userId":"operator-7","from":"pending","to":"handled","timestamp":1794873660000}` |
 
 <a id="誰が問題票の状態を変えたか"></a>
 
 #### 例 · 誰が問題票の状態を変えたか
-
-処理時の変更と備考を残して経過を確認します。
 
 ```json
 {
@@ -199,15 +199,16 @@ feedback-42 の順序1、24バイトの例です。timestamp は発生時刻を 
   "payload": {
     "id": "history-42",
     "feedbackId": "feedback-42",
-    "userId": "user-42",
+    "userId": "operator-7",
     "from": "pending",
     "to": "handled",
-    "timestamp": 1794873660000
+    "timestamp": 1794873660000,
+    "note": "注文の検索が復旧したことを確認"
   }
 }
 ```
 
-user-42 が pending から handled に変更した例で、時刻は提出時ではなく変更時です。
+管理者 `operator-7` が `feedback-42` を `pending` から `handled` に変更しました。`userId` は操作した利用者、`timestamp` は変更が行われた時刻です。備考は機密情報を伏せてから保存します。
 
 <a id="jobs"></a>
 
@@ -215,7 +216,9 @@ user-42 が pending から handled に変更した例で、時刻は提出時で
 
 ### `hai_feedback_jobs`
 
-`(app_id, status, next_run_at)` でタスクを取得し、`(report_id, snapshot_revision, snapshot_version)` でスナップショットを検索します。既定のリースは 30 秒で、通常は最大 5 回試行します。
+この表に未完了の作業を保存するので、サービスは受付番号をすぐに返し、再起動後も作業を再開できます。受理時にサーバーでの収集と期限切れの削除を登録し、設定に応じて通知と Webhook を登録します。ZIP 生成は出力申請時に登録します。スクリーンショットの撮影と添付の送信はブラウザーが開始します。
+
+**取得**はワーカーが条件付きの更新で一時的な実行権を得ることです。ワーカーは `(app_id, status, next_run_at)` で実行可能な作業を探し、実行トークンとリースを記録します。実行中はリースを更新します。処理が停止した場合、期限後に同じアプリの別のワーカーが引き継げます。結果の記録には現在のトークンとリースが必要なので、以前のワーカーが結果を上書きすることはありません。リースの既定値は 30 秒で、通常のジョブは既定で最大 5 回試行します。出力時は `(report_id, snapshot_revision, snapshot_version)` でスナップショットを検索します。[ジョブの実行と復旧](../function/feedback.ja.md#feedback-job-execution)
 
 | 項目 | 型 | NULL | 既定値 | 用途 | 例 |
 | --- | --- | --- | --- | --- | --- |
@@ -237,13 +240,13 @@ user-42 が pending から handled に変更した例で、時刻は提出時で
 | `payload` | `JSON` | 不可 | — | タスクの入力と進捗。出力は証拠の改訂番号と件数を参照し、問題票、添付のメタデータ、処理履歴を固定します。 | `{}` |
 | `result` | `JSON` | 可 | — | ジョブ完了後の結果。 | `NULL` |
 
-出力の登録時に `snapshot_revision`、`snapshot_version` と `payload.evidenceCount` を固定します。タスクは指定された改訂以前の証拠を読み、件数を照合してから ZIP を作成します。期限切れや証拠の欠落がある場合は成功として扱いません。
+出力の登録時に `snapshot_revision`、`snapshot_version` と `payload.evidenceCount` を固定します。タスクは指定された改訂以前の証拠を読み、件数を照合してから ZIP を作成します。収集状態が `partial` でも、揃っている資料は出力できます。問題票の期限が切れた場合や、固定した証拠の行が失われた場合は出力に失敗します。
 
 <a id="提出後に進める裏側の作業"></a>
 
-#### 例 · 提出後に進める裏側の作業
+#### 例 · ワーカーを待つ ZIP 出力
 
-収集・通知・出力などを別処理で進めるための作業記録です。
+管理者は申請時にタスクの ID を受け取ります。次はワーカーが取得する前の実行管理の項目です。
 
 ```json
 {
@@ -251,6 +254,8 @@ user-42 が pending から handled に変更した例で、時刻は提出時で
   "app_id": "orders",
   "report_id": "feedback-42",
   "scope_id": "team-1",
+  "kind": "export",
+  "status": "pending",
   "attempts": 0,
   "token": null,
   "lease_until": 0,
@@ -258,7 +263,7 @@ user-42 が pending から handled に変更した例で、時刻は提出時で
 }
 ```
 
-job-42 は未試行・未取得で、next_run_at は開始可能時刻であり完了保証ではありません。
+`job-42` は `feedback-42` に属し、実行待ちです。`next_run_at` は取得可能になる最も早い時刻です。最初のワーカーが途中で停止した場合、次のワーカーが同じタスク ID のまま ZIP の生成をやり直します。
 
 <a id="table-hai-feedback-quotas"></a>
 
