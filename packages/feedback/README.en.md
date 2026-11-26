@@ -14,7 +14,7 @@ pnpm add @h-ai/feedback @h-ai/reldb
 
 ## Configuration Reference
 
-Connect RelDB, then initialize Feedback with an `appId`. Example deployments read it from `config/_feedback.yml`. [Configuration](../../docs/usage/configuration/feedback.en.md)
+Connect RelDB, then initialize Feedback from `config/_feedback.yml` with the application ID, submission and capture limits, and retention. [Configuration](../../docs/usage/configuration/feedback.en.md)
 
 ## Features
 

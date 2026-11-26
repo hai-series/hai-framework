@@ -32,11 +32,13 @@
 4. 停止后在弹窗的「短录屏」里点击播放器的播放键，确认画面。可以删除或重录。保留「短录屏」并提交后，处理人员在「问题反馈」打开该记录，点「首帖现场」下「短录屏」的「查看材料」，再点播放键。
 5. 如果取消浏览器授权或录屏不可用，可以继续填写首帖，使用截图或手动附件提交。
 
-录屏获取选中画面实际显示的像素，最长 60 秒，单个最多 5 MiB，只录视频。截图和操作回放中的页面遮挡规则不适用于录屏，发送前检查所选画面及预览。 [Chrome 的分享选择器](https://developer.chrome.com/docs/web-platform/screen-sharing-controls#the_selfbrowsersurface_option)
+录屏获取选中画面实际显示的像素，默认最长 60 秒、单个 5 MiB，只录视频。截图和操作回放中的页面遮挡规则不适用于录屏，发送前检查所选画面及预览。 [Chrome 的分享选择器](https://developer.chrome.com/docs/web-platform/screen-sharing-controls#the_selfbrowsersurface_option)
 
 <a id="feedback-limits"></a>
 
-## 关键限制
+## 默认关键限制
+
+以下数值是默认配置。宿主可按应用设置发送和首帖现场的上限。
 
 打开反馈弹窗时才准备当前页截图并冻结此前的浏览器材料。页面收集期间，浏览器日志与操作事件缓存在本页内存。提交时只上传作者保留的材料。
 
@@ -48,7 +50,7 @@
 | 短录屏 | 作者授权后实时录制所选画面。 | 仅视频，最长 60 秒，单个最多 5 MiB。 |
 | 服务端日志 | 作者勾选后在提交时取当前实例的近期 Core 请求日志。 | 同一用户、同一业务范围、最近 5 分钟，最多 1000 条、512 KiB，并受剩余附件容量约束。可用日志不足时，仍可提交正文或其他材料。 |
 
-每次发送的正文最多 5000 个 UTF-16 代码单元。手动附件最多 5 个，单个文件最多 5 MiB，附件与首帖材料合计最多 10 MiB。回复和补充请求的附件同样合计最多 10 MiB。至少发送正文、一个文件或一项实际可保存的首帖材料。容量与保留分别由反馈契约和应用的数据策略决定。 [配置分层](../configuration/feedback.md#configuration-ownership) · [保留期限](../data/feedback.md#retention)
+每次发送的正文最多 5000 个 UTF-16 代码单元。手动附件最多 5 个，单个文件最多 5 MiB，附件与首帖材料合计最多 10 MiB。回复和补充请求的附件同样合计最多 10 MiB。至少发送正文、一个文件或一项实际可保存的首帖材料。发送、采集与保留期限在 `_feedback.yml` 设置。 [配置分层](../configuration/feedback.md#configuration-ownership) · [保留期限](../data/feedback.md#retention)
 
 <a id="permissions"></a>
 
@@ -104,7 +106,7 @@ SvelteKit 用 `kit.createFeedbackHandler({ feedback, resolveContext })` 挂载 G
 
 ### 首帖现场接入
 
-在登录后的页面挂载 `FeedbackModal`。为 `captureKey` 传入会话或用户的稳定标识，切换账号时更新标识，退出时卸载组件。组件打开首帖时准备现场，`onsubmit` 把保留的材料与正文交给宿主 API。省略 `captureKey` 时，弹窗仍可填写正文和手动附文件。
+在登录后的页面挂载 `FeedbackModal`。为 `captureKey` 传入会话或用户的稳定标识，切换账号时更新标识，退出时卸载组件。组件打开首帖时准备现场，`onsubmit` 把保留的材料与正文交给宿主 API。省略 `captureKey` 时，弹窗仍可填写正文和手动附文件。 宿主通过 `getLimits` 回调读取服务端的 `GET /feedback/limits`。弹窗挂载后读取限额再开始缓冲，对话通过 `FeedbackViewActions.getLimits` 使用同一个读取函数。
 
 自行实现界面时，可在 `reports.submit` 通过 `capture` 提供以下字段。
 
@@ -139,6 +141,7 @@ Feedback 初始化后观察当前进程的 Core 日志，在内存里缓冲能�
 | --- | --- | --- | --- | --- |
 | `feedback.init(config)` | 初始化反馈表 | `{ appId }` | `HaiResult<void>` | `await feedback.init({ appId: 'orders' })` |
 | `feedback.close()` | 停止接受新调用，等待正在执行的请求 | 无 | `HaiResult<void>` | `await feedback.close()` |
+| `feedback.getLimits(context)` | 读取前端使用的发送和采集配置 | 可信会话上下文 | `{ limits, capture }` | `await feedback.getLimits(author)` |
 | `feedback.submit(input, context)` | 提交新的反馈 | UUID `id`、`body`、可选 `attachments` 和 `capture` | 已保存的反馈 | `await feedback.submit({ id, body }, author)` |
 | `feedback.listMine(query, context)` | 列出自己的反馈 | `status?`、`page?`、`pageSize?` | 反馈分页 | `await feedback.listMine({}, author)` |
 | `feedback.list(query, context)` | 按权限列出同范围反馈 | 与 `listMine` 相同 | 反馈分页 | `await feedback.list({ status: 'pending' }, staff)` |
@@ -154,6 +157,7 @@ Kit 或 Serv 的 `apiContract.feedback` 在宿主 API 前缀下公开以下 HTTP
 
 | 方法和相对路径 | 操作 |
 | --- | --- |
+| `GET /feedback/limits` | 读取前端使用的发送和采集配置 |
 | `POST /feedback/reports` | 提交首帖 |
 | `GET /feedback/my-reports` | 列出本人反馈 |
 | `GET /feedback/reports` | 查询业务范围共享列表 |

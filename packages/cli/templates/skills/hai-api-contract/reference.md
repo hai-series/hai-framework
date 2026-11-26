@@ -143,7 +143,7 @@ const previewPath = '/api/v1' + apiContract.pathOf(widgetContract.preview)
 | `apiContract.storage` | 上传与下载预签名 URL、文件查询、删除和批量删除。 |
 | `apiContract.ai` | 非流式聊天补全、消息与历史、记忆召回和会话列表。 |
 | `apiContract.payment` | 订单和支付通知。 |
-| `apiContract.feedback` | 反馈报告、对话和附件。 `reports.listMine` 查询本人报告，`apiContract.feedbackTransportRoutes` 提供固定的路由容量。 |
+| `apiContract.feedback` | 反馈报告、对话和附件。 `reports.listMine` 查询本人报告，`limits` 读取生效的发送与采集设置，`apiContract.feedbackTransportRoutes` 按单次文件容量声明路由预算。 |
 
 <a id="response-schemas"></a>
 

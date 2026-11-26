@@ -873,7 +873,7 @@ Serv 在 `config/_serv.yml` 的 `transport.maxPlaintextBytes` 中配置，对应
 
 密文使用 SM4-CBC 十六进制编码，`crypto.transport.resolveBodyLimits(limit).encryptedPayloadBytes` 为 `2 * limit + 32768`。32 KiB 用于填充和认证封装，8 MiB 明文对应 `16809984` 字节代理请求上限。内存占用还包括 JSON、Base64、密文和认证中间数据。文件原始大小、压缩包解压量、工作表/行数、权限和业务并发仍由应用限制。
 
-普通业务使用全局 `transport.maxPlaintextBytes`。将 `apiContract.feedbackTransportRoutes(apiPrefix)` 合入宿主的 `routePlaintextBytes`，为反馈提交、消息和附件路径保留 16 MiB 明文容量。路径中的 `*` 匹配一个完整路径段。握手和反向代理按最大路由容量预留。
+普通业务使用全局 `transport.maxPlaintextBytes`。将 `apiContract.feedbackTransportRoutes(apiPrefix, maxTotalFileBytes)` 合入宿主的 `routePlaintextBytes`，按反馈的 `limits.maxTotalFileBytes` 为提交和消息路径预留明文容量，附件读取使用 16 MiB。路径中的 `*` 匹配一个完整路径段。握手和反向代理按最大路由容量预留。
 
 握手 16 KiB、公钥 4 KiB、认证头 16 KiB、路径 8 KiB、握手超时 30 秒及认证和共享防重放约束均独立于业务容量。超限立即停止读取、取消原流并释放 reader，不依赖 Content-Length 或 clone/tee。`TransportBodyTooLargeError`（继承 RangeError，`hai:crypto:070`）只携带 `direction`、`stage`、`limitBytes` 和可用的 `actualBytes`；`stage` 为 `plaintext`、`encrypted` 或 `header`，提前终止时观察到的字节数可能小于完整报文。
 

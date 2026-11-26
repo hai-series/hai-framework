@@ -109,10 +109,10 @@ A list returns report summaries. `get` returns one report and the initial attach
 
 | Data | Where stored | Availability |
 | --- | --- | --- |
-| Browser logs and page events before opening feedback | Memory in the current signed-in page | Buffered for the page session, with up to five minutes of usable history. Reloading or signing out starts a new buffer. |
-| Correlatable server request logs | Memory in the current server process | The instance holds up to 5,000 entries and 4 MiB. When attaching logs, it selects up to five minutes, 1,000 entries, and 512 KiB for the same user and business scope. Restarting the process clears the buffer. |
-| Submitted reports, messages, and files | The three relational tables above | Available after a successful submission. The host sets the retention period. |
+| Browser logs and page events before opening feedback | Memory in the current signed-in page | Buffered for the page session, with up to five minutes of usable history by default. Reloading or signing out starts a new buffer. |
+| Correlatable server request logs | Memory in the current server process | The default instance buffer holds up to 5,000 entries and 4 MiB. Attaching logs uses the window, entry limit, and byte limit in `capture` for the same user and business scope. Restarting the process clears the buffer. |
+| Submitted reports, messages, and files | The three relational tables above | Available after a successful submission and retained according to `retention.days`. |
 
-The database stores the attachment bytes, so the application can operate without object storage. Reports and messages have no module-managed expiration. The host manages the database records according to its retention policy. With foreign keys enabled, deleting a report cascades to its messages and files, and deleting one message cascades to that message's attachments.
+The database stores the attachment bytes, so the application can operate without object storage. The default is indefinite retention. A positive `retention.days` counts from `updated_at` and applies to Pending, Awaiting user, and Handled reports. After expiry, lists, details, messages, and attachments are no longer accessible. At startup and hourly, the service uses the `hai_feedback_reports_retention` index over `(app_id, updated_at, id)` to delete expired reports for its application in batches. Messages and attachments cascade with the report.
 
 [Feedback operations](../operations/feedback.en.md)

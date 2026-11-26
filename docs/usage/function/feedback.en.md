@@ -32,11 +32,13 @@ The menu names below are from the admin console.
 4. Use the play button in the preview under **Screen recording** to check the result. You can remove it or record another take. After you submit with the recording attached, staff open the report from **Feedback**, choose **View material** on the **Screen recording** row, and press play.
 5. If the author cancels sharing or the browser cannot record, they can still complete the report with a screenshot or manual attachment.
 
-A recording captures the visible pixels of the selected surface. It lasts up to 60 seconds, uses up to 5 MiB, and contains video only. The masking used for screenshots and operation replay does not apply to screen recordings. Check the chosen surface and preview before sending. [Chrome screen sharing chooser](https://developer.chrome.com/docs/web-platform/screen-sharing-controls#the_selfbrowsersurface_option)
+A recording captures the visible pixels of the selected surface. The default limits are 60 seconds and 5 MiB. The recording contains video only. The masking used for screenshots and operation replay does not apply to screen recordings. Check the chosen surface and preview before sending. [Chrome screen sharing chooser](https://developer.chrome.com/docs/web-platform/screen-sharing-controls#the_selfbrowsersurface_option)
 
 <a id="feedback-limits"></a>
 
-## Key limits
+## Default limits
+
+The table uses default values. The host can configure submission and first-post evidence limits per application.
 
 Opening feedback prepares a screenshot of the current page and freezes the preceding browser evidence. While collecting, the page buffers browser logs and events in memory. Submitting uploads only what the author kept.
 
@@ -48,7 +50,7 @@ Opening feedback prepares a screenshot of the current page and freezes the prece
 | Screen recording | Live recording of the surface the author authorizes. | Video only, up to 60 seconds and 5 MiB. |
 | Server logs | Recent Core request logs from the current service instance, selected on submission if the author opts in. | Up to five minutes, 1,000 entries, and 512 KiB for the same user and business scope, subject to the remaining file budget. The author can still submit text or other evidence when logs are unavailable. |
 
-Each send allows up to 5,000 UTF-16 code units of text, five manual attachments, and 5 MiB per file. The initial evidence and manual files share 10 MiB. Attachments to a reply or information request can also total up to 10 MiB. Send at least some text, a file, or a piece of first-post evidence that can be saved. The feedback contract sets the capacity, and the application sets the retention policy. [Configuration layers](../configuration/feedback.en.md#configuration-ownership) · [Retention](../data/feedback.en.md#retention)
+Each send allows up to 5,000 UTF-16 code units of text, five manual attachments, and 5 MiB per file. The initial evidence and manual files share 10 MiB. Attachments to a reply or information request can also total up to 10 MiB. Send at least some text, a file, or a piece of first-post evidence that can be saved. Configure submission, capture, and retention in `_feedback.yml`. [Configuration layers](../configuration/feedback.en.md#configuration-ownership) · [Retention](../data/feedback.en.md#retention)
 
 <a id="permissions"></a>
 
@@ -104,7 +106,7 @@ In SvelteKit, mount `kit.createFeedbackHandler({ feedback, resolveContext })` as
 
 ### Integrate first-post diagnostics
 
-Mount `FeedbackModal` on the signed-in page. Pass a stable session or user identifier as `captureKey`, change it when the account changes, and unmount after sign-out. The component prepares the evidence on open. Its `onsubmit` passes the retained evidence and text to the host API. When `captureKey` is omitted, the dialog still accepts text and manual files.
+Mount `FeedbackModal` on the signed-in page. Pass a stable session or user identifier as `captureKey`, change it when the account changes, and unmount after sign-out. The component prepares the evidence on open. Its `onsubmit` passes the retained evidence and text to the host API. When `captureKey` is omitted, the dialog still accepts text and manual files. Pass a `getLimits` callback that reads the server’s `GET /feedback/limits`. The dialog loads limits before collecting evidence. Conversations use the same callback through `FeedbackViewActions.getLimits`.
 
 Custom clients can use the following fields in `capture` on `reports.submit`.
 
@@ -139,6 +141,7 @@ In a single-scope Kit application, use `core.context.run({ scopeId: 'orders' }, 
 | --- | --- | --- | --- | --- |
 | `feedback.init(config)` | Prepare database tables | `{ appId }` | `HaiResult<void>` | `await feedback.init({ appId: 'orders' })` |
 | `feedback.close()` | Stop accepting calls and wait for in-flight requests | None | `HaiResult<void>` | `await feedback.close()` |
+| `feedback.getLimits(context)` | Read submission and capture limits for the UI | Trusted session context | `{ limits, capture }` | `await feedback.getLimits(author)` |
 | `feedback.submit(input, context)` | File a report | UUID `id`, `body`, optional `attachments` and `capture` | Saved report | `await feedback.submit({ id, body }, author)` |
 | `feedback.listMine(query, context)` | List the author's reports | `status?`, `page?`, `pageSize?` | Page of reports | `await feedback.listMine({}, author)` |
 | `feedback.list(query, context)` | List reports in the staff member's scope | Same as `listMine` | Page of reports | `await feedback.list({ status: 'pending' }, staff)` |
@@ -154,6 +157,7 @@ Kit or Serv exposes `apiContract.feedback` at the following HTTP paths under the
 
 | Method and relative path | Operation |
 | --- | --- |
+| `GET /feedback/limits` | Read submission and capture limits for the UI |
 | `POST /feedback/reports` | Submit a report |
 | `GET /feedback/my-reports` | List your reports |
 | `GET /feedback/reports` | Open the shared list for the business scope |

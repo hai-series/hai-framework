@@ -879,7 +879,7 @@ timeRejected.status // 400
 
 `crypto.transport.resolveBodyLimits(limit).encryptedPayloadBytes` は十六進 SM4-CBC と認証封装のため `2 * limit + 32768` を返します。平文 8 MiB に対するプロキシ要求上限は `16809984` バイトです。メモリには JSON、Base64、暗号文、認証の中間値も保持されます。元ファイル、展開量、シート・行数、権限、業務の並行数はアプリ側で制限します。
 
-通常のルートでは全体の `transport.maxPlaintextBytes` を使います。`apiContract.feedbackTransportRoutes(apiPrefix)` をホストの `routePlaintextBytes` に結合し、提出、会話、添付の各パスで平文 16 MiB を許可します。`*` は完全な一つのパス区間に一致します。鍵交換とリバースプロキシは最大のルート容量を使います。
+通常のルートでは全体の `transport.maxPlaintextBytes` を使います。`apiContract.feedbackTransportRoutes(apiPrefix, maxTotalFileBytes)` をホストの `routePlaintextBytes` に結合し、`limits.maxTotalFileBytes` から投稿と会話の容量を計算します。添付の取得には 16 MiB を使います。`*` は完全な一つのパス区間に一致します。鍵交換とリバースプロキシは最大のルート容量を使います。
 
 鍵交換 JSON 16 KiB、公開鍵 4 KiB、認証ヘッダー 16 KiB、パス 8 KiB、交換タイムアウト 30 秒、認証と共有リプレイ防止は独立です。超過時は Content-Length や clone/tee に頼らず元ストリームを停止・キャンセルし reader を解放します。`TransportBodyTooLargeError` は RangeError を継承し、コード `hai:crypto:070` と `direction`、`stage`、`limitBytes`、取得できた `actualBytes` だけを持ちます。段階は `plaintext`・`encrypted`・`header` で、早期停止時の観測値は本文全体より小さい場合があります。
 

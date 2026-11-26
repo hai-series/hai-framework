@@ -1796,7 +1796,7 @@ import { DEFAULT_LOCALE, DEFAULT_LOCALES, ui } from '@h-ai/ui/i18n'
 | [`<FeedbackDetail>`](#component-feedbackdetail) | 传入反馈 ID 和鉴权回调，查看对话、回复和附件。开启 `canProcess` 可处理状态或请求补充。 | `<FeedbackDetail {id} {actions} />` |
 | [`<FeedbackForm>`](#component-feedbackform) | 在普通页面渲染正文、文件输入与提交按钮。调用方在 `onsubmit` 中发送本次输入。 | `<FeedbackForm onsubmit={submitFeedback} />` |
 | [`<FeedbackList>`](#component-feedbacklist) | 传入本人的或管理端的 `actions.list` 回调，以及详情所需操作。可用 `initialId` 打开指定报告。 | `<FeedbackList {actions} />` |
-| [`<FeedbackModal>`](#component-feedbackmodal) | 通过 `open` 打开首帖。登录后传入账号的 `captureKey`，让组件准备近期日志、操作回放、截图和录屏。使用 `onsubmit` 提交。 | `<FeedbackModal bind:open={open} captureKey={user.id} onsubmit={submitFeedback} />` |
+| [`<FeedbackModal>`](#component-feedbackmodal) | 通过 `open` 打开首帖。登录后传入账号的 `captureKey`，让组件准备近期日志、操作回放、截图和录屏。使用 `onsubmit` 提交。 | `<FeedbackModal bind:open={open} captureKey={user.id} getLimits={getFeedbackLimits} onsubmit={submitFeedback} />` |
 
 [@h-ai/feedback](feedback.md#feedback-steps)
 
@@ -3880,10 +3880,10 @@ import { ui } from '@h-ai/ui'
 
 #### FeedbackModal
 
-通过 `open` 打开首帖。登录后传入账号的 `captureKey`，让组件准备近期日志、操作回放、截图和录屏。使用 `onsubmit` 提交。
+通过 `open` 打开首帖。登录后传入账号的 `captureKey`，让组件准备近期日志、操作回放、截图和录屏。使用 `onsubmit` 提交。 宿主通过 `getLimits` 回调读取服务端的 `GET /feedback/limits`。弹窗挂载后读取限额再开始缓冲，对话通过 `FeedbackViewActions.getLimits` 使用同一个读取函数。
 
 ```svelte
-<FeedbackModal bind:open={open} captureKey={user.id} onsubmit={submitFeedback} />
+<FeedbackModal bind:open={open} captureKey={user.id} getLimits={getFeedbackLimits} onsubmit={submitFeedback} />
 ```
 
 <a id="component-guidehost"></a>

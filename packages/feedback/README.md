@@ -14,7 +14,7 @@ pnpm add @h-ai/feedback @h-ai/reldb
 
 ## 配置清单
 
-应用连接 RelDB 后，以 `appId` 初始化反馈服务。示例部署从 `config/_feedback.yml` 读取配置。 [配置](../../docs/usage/configuration/feedback.md)
+应用连接 RelDB 后加载 `config/_feedback.yml` 并初始化 Feedback。文件提供应用标识、发送与采集上限和保留期限。 [配置](../../docs/usage/configuration/feedback.md)
 
 ## 功能说明
 

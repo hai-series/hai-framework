@@ -32,11 +32,13 @@
 4. 「画面録画」のプレビューで再生ボタンを押して内容を確認します。削除や録り直しもできます。録画を添えて送信した後、担当者は「フィードバック」でその投稿を開き、「画面録画」の「資料を見る」から再生します。
 5. ブラウザーの共有をキャンセルした場合や録画できない場合も、スクリーンショットや手動添付ファイルで投稿できます。
 
-録画には選択した画面に表示される内容がそのまま入ります。最大 60 秒、5 MiB の無音動画です。スクリーンショットや操作リプレイのマスキングは画面録画に適用されません。送信前に共有対象とプレビューを確認してください。 [Chrome の画面共有の選択画面](https://developer.chrome.com/docs/web-platform/screen-sharing-controls#the_selfbrowsersurface_option)
+録画には選択した画面に表示される内容がそのまま入ります。無音動画で、既定の上限は 60 秒、5 MiB です。スクリーンショットや操作リプレイのマスキングは画面録画に適用されません。送信前に共有対象とプレビューを確認してください。 [Chrome の画面共有の選択画面](https://developer.chrome.com/docs/web-platform/screen-sharing-controls#the_selfbrowsersurface_option)
 
 <a id="feedback-limits"></a>
 
-## 主な制限
+## 既定の上限
+
+表の値は既定の設定です。ホストはアプリごとに送信と初回投稿の資料の上限を設定できます。
 
 ダイアログを開くと現在のページを撮影し、直前までのブラウザー資料を確定します。収集中は、ブラウザーログと操作イベントを現在のページのメモリに保持します。投稿に含めるのは利用者が残した資料です。
 
@@ -48,7 +50,7 @@
 | 画面録画 | 投稿者が許可した画面をリアルタイムに録画します。 | 動画のみ。最大 60 秒、5 MiB。 |
 | サーバーログ | 投稿者が選択した場合、送信時に現在のサービスインスタンスの Core リクエストログを取得します。 | 同じ利用者と業務スコープの直近 5 分、最大 1000 件、512 KiB。ファイルの残り容量にも従います。取得できない場合も本文や別の資料を送れます。 |
 
-1 回の送信で本文は UTF-16 のコード単位で 5000、手動添付は 5 件、1 ファイルは 5 MiB までです。初回投稿の資料と手動添付の合計は 10 MiB までです。返信や追加情報の依頼の添付も合計 10 MiB までです。本文、ファイル、保存可能な初回資料のうち一つ以上が必要です。容量はフィードバック契約で、保持期間はアプリのポリシーで決まります。 [設定の層](../configuration/feedback.ja.md#configuration-ownership) · [データの保持](../data/feedback.ja.md#retention)
+1 回の送信で本文は UTF-16 のコード単位で 5000、手動添付は 5 件、1 ファイルは 5 MiB までです。初回投稿の資料と手動添付の合計は 10 MiB までです。返信や追加情報の依頼の添付も合計 10 MiB までです。本文、ファイル、保存可能な初回資料のうち一つ以上が必要です。送信、収集、保持期間は `_feedback.yml` で設定します。 [設定の層](../configuration/feedback.ja.md#configuration-ownership) · [データの保持](../data/feedback.ja.md#retention)
 
 <a id="permissions"></a>
 
@@ -104,7 +106,7 @@ SvelteKit は `kit.createFeedbackHandler({ feedback, resolveContext })` を GET�
 
 ### 初回投稿の資料を組み込む
 
-ログイン後のページに `FeedbackModal` を配置します。`captureKey` にセッションまたは利用者の固定識別子を渡し、アカウントが変わったら更新し、ログアウト時にコンポーネントを外します。ダイアログを開くと資料を準備し、`onsubmit` で残した資料と本文をホストの API に渡します。`captureKey` を省略した場合も、本文と手動添付を送れます。
+ログイン後のページに `FeedbackModal` を配置します。`captureKey` にセッションまたは利用者の固定識別子を渡し、アカウントが変わったら更新し、ログアウト時にコンポーネントを外します。ダイアログを開くと資料を準備し、`onsubmit` で残した資料と本文をホストの API に渡します。`captureKey` を省略した場合も、本文と手動添付を送れます。 サーバーの `GET /feedback/limits` を読む関数を `getLimits` に渡すと、上限を取得してから資料を収集します。会話も `FeedbackViewActions.getLimits` で同じ関数を使います。
 
 独自クライアントでは `reports.submit` の `capture` に次の項目を指定できます。
 
@@ -139,6 +141,7 @@ Feedback は初期化後に自身のプロセスの Core ログを監視し、�
 | --- | --- | --- | --- | --- |
 | `feedback.init(config)` | テーブルを準備 | `{ appId }` | `HaiResult<void>` | `await feedback.init({ appId: 'orders' })` |
 | `feedback.close()` | 新規受付を止め、実行中の呼び出しを待つ | なし | `HaiResult<void>` | `await feedback.close()` |
+| `feedback.getLimits(context)` | 画面で使う送信と収集の上限を取得 | 信頼できるセッションのコンテキスト | `{ limits, capture }` | `await feedback.getLimits(author)` |
 | `feedback.submit(input, context)` | 新規投稿 | UUID の `id`、`body`、省略可能な `attachments`、`capture` | 保存済み投稿 | `await feedback.submit({ id, body }, author)` |
 | `feedback.listMine(query, context)` | 自分の投稿一覧 | `status?`、`page?`、`pageSize?` | 投稿のページ | `await feedback.listMine({}, author)` |
 | `feedback.list(query, context)` | 業務スコープ内の共通一覧 | `listMine` と同じ | 投稿のページ | `await feedback.list({ status: 'pending' }, staff)` |
@@ -154,6 +157,7 @@ Kit または Serv はホストの API プレフィックス配下で `apiContra
 
 | メソッドと相対パス | 操作 |
 | --- | --- |
+| `GET /feedback/limits` | 画面で使う送信と収集の上限を取得 |
 | `POST /feedback/reports` | 初回投稿を送信 |
 | `GET /feedback/my-reports` | 自分の投稿一覧を取得 |
 | `GET /feedback/reports` | 業務スコープの共通一覧を取得 |

@@ -14,7 +14,7 @@ pnpm add @h-ai/feedback @h-ai/reldb
 
 ## 設定一覧
 
-RelDB に接続し、`appId` を渡して Feedback を初期化します。接続例は `config/_feedback.yml` から読み込みます。 [設定](../../docs/usage/configuration/feedback.ja.md)
+RelDB に接続し、`config/_feedback.yml` のアプリ ID、送信と収集の上限、保存期間で Feedback を初期化します。 [設定](../../docs/usage/configuration/feedback.ja.md)
 
 ## 機能
 
