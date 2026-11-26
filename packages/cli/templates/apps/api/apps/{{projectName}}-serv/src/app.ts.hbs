@@ -147,7 +147,11 @@ routePlaintextBytes: servConfig.transport.routePlaintextBytes,
           origin: security.allowOrigin,
           credentials: servConfig.cors.credentials,
           allowedHeaders: [
-            ...new Set([...servConfig.cors.allowedHeaders, 'x-request-client', 'x-hai-token-transport']),
+            ...new Set([
+              ...servConfig.cors.allowedHeaders,
+              'x-request-client',
+              'x-hai-token-transport',
+            ]),
           ],
           exposedHeaders: [...servConfig.cors.exposedHeaders],
         }),
