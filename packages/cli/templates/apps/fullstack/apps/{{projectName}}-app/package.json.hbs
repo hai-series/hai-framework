@@ -38,14 +38,7 @@
     "cap:build:ios": "pnpm package:ios"
   },
   "dependencies": {
-    {{#if features.feedback}}
-    "@capacitor/filesystem": "{{fullstack.packageSpecifiers.capacitorFilesystem}}",
-    "@capacitor/share": "{{fullstack.packageSpecifiers.capacitorShare}}",
-    {{/if}}
     "@h-ai/capacitor": "{{haiPackageSpecifier}}",
-    {{#if features.feedback}}
-    "@h-ai/feedback": "{{haiPackageSpecifier}}",
-    {{/if}}
     "@h-ai/ui": "{{haiPackageSpecifier}}",
     "{{fullstack.sharedPackageName}}": "workspace:*"
   },

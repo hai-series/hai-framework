@@ -2,7 +2,6 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { feedback } from '@h-ai/feedback/bundle'
 import fse from 'fs-extra'
 import { afterAll, expect, it } from 'vitest'
 import { stringify } from 'yaml'
@@ -122,8 +121,6 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
   const inputs = Object.keys(metadata.inputs)
   expect(inputs.some(input => /reldb[\\/]dist[\\/]schemas\.js$/.test(input))).toBe(true)
   expect(inputs.some(input => /[\\/]zod[\\/]/.test(input))).toBe(true)
-  expect(inputs.some(input => /feedback[\\/]dist[\\/]/.test(input))).toBe(true)
-  expect(inputs.filter(input => /feedback[\\/]src[\\/]/.test(input))).toEqual([])
   expect(inputs.filter(input => /reldb-main|reldb-provider|better-sqlite3|mysql2|[\\/]pg[\\/]/.test(input))).toEqual([])
   expect(Object.values(metadata.inputs).flatMap(input => input.imports).filter(input => input.external && /^(?:@h-ai\/(?:feedback|reldb|storage|reach)(?:\/|$)|fflate$|zod(?:\/|$)|better-sqlite3$|mysql2(?:\/|$)|pg$)/.test(input.path))).toEqual([])
   const cliManifest = await fse.readJson(path.join(packageRoot, 'package.json')) as { dependencies: Record<string, string> }
@@ -160,34 +157,6 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
   })
   const help = run(['--help'])
   expect(help.status, help.error?.message || help.stderr || help.stdout).toBe(0)
-  const diagnostic = await feedback.createBundle({
-    report: { id: 'artifact-feedback', description: 'Standalone published CLI feedback' },
-    evidence: [
-      {
-        source: 'browser',
-        kind: 'log',
-        timestamp: 1,
-        requestId: 'request-artifact',
-        data: { message: 'offline' },
-      },
-    ],
-  })
-  expect(diagnostic.success).toBe(true)
-  if (!diagnostic.success)
-    throw new Error(diagnostic.error.message)
-  await fse.writeFile(path.join(app, 'feedback.zip'), diagnostic.data)
-  const summary = run(['feedback', 'summary', 'feedback.zip'])
-  expect(summary.status, summary.error?.message || summary.stderr || summary.stdout).toBe(0)
-  expect(summary.stdout).toContain('Standalone published CLI feedback')
-  const evidence = run([
-    'feedback',
-    'evidence',
-    'feedback.zip',
-    '--request-id',
-    'request-artifact',
-  ])
-  expect(evidence.status, evidence.error?.message || evidence.stderr || evidence.stdout).toBe(0)
-  expect(JSON.parse(evidence.stdout).total).toBe(1)
   const version = (await fse.readJson(path.join(packageRoot, 'package.json')) as { version: string }).version
   await fse.writeJson(path.join(app, 'package.json'), {
     name: 'schema-app',

@@ -29,8 +29,6 @@
       "@h-ai/serv/features/storage": ["./packages/serv/src/features/serv-feature-storage-entry.ts"],
       "@h-ai/serv/features/feedback": ["./packages/serv/src/features/serv-feature-feedback-entry.ts"],
       "@h-ai/feedback": ["./packages/feedback/src/index.ts"],
-      "@h-ai/feedback/client": ["./packages/feedback/src/client/index.ts"],
-      "@h-ai/feedback/bundle": ["./packages/feedback/src/bundle/index.ts"],
       "@h-ai/ai": ["./packages/ai/src/index.ts"],
       "@h-ai/tools": ["./packages/tools/src/index.ts"],
       "@h-ai/tools/server": ["./packages/tools/src/server/index.ts"],

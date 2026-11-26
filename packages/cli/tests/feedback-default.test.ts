@@ -50,10 +50,8 @@ describe('fullstack 默认反馈生成', () => {
     ])
       expect(manifest.dependencies[`@h-ai/${dependency}`], dependency).toBe('catalog:')
     const config = parse(await readFile(path.join(directory, service, 'config/_feedback.yml'), 'utf8'))
-    expect(config).toMatchObject({
-      notification: {
-        mode: expect.stringContaining('HAI_FEEDBACK_NOTIFICATION_MODE:console'),
-      },
+    expect(config).toEqual({
+      appId: expect.stringContaining('HAI_FEEDBACK_APPID:default-feedback'),
     })
     expect(parseEnv(await readFile(path.join(directory, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
     expect(parseEnv(await readFile(path.join(directory, '.env'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
@@ -61,19 +59,16 @@ describe('fullstack 默认反馈生成', () => {
     expect(procedures).toContain('serv.createFeedbackProcedures(')
     expect(procedures).toContain(`scopeId: '${name}'`)
     const shell = await readFile(path.join(directory, shared, 'src/lib/components/AppShell.svelte'), 'utf8')
-    expect(shell).toContain('<FeedbackEntry />')
+    expect(shell).toContain('<FeedbackEntry canSubmit=')
     expect(shell).toContain('m.nav_feedback()')
     expect(await readFile(path.join(directory, shared, 'src/lib/pages/feedback.svelte'), 'utf8')).toContain('<FeedbackList')
     // 默认工程只交付基础用例；深入的反馈场景由框架脚手架门禁安装并执行。
     const ordinaryTests = await readFile(path.join(directory, 'e2e/fullstack.spec.ts'), 'utf8')
     expect(ordinaryTests).toContain('application opens')
-    expect(ordinaryTests).not.toContain('feedback submits an empty description')
+    expect(ordinaryTests).not.toContain('feedback exchanges attachments')
     const browserTests = await readFile(new URL('./fixtures/scenarios/fullstack.spec.ts.hbs', import.meta.url), 'utf8')
-    expect(browserTests).toContain('feedback submits an empty description')
-    expect(browserTests).toContain('attached-large-log.txt')
-    expect(browserTests).toContain('getImageData(12, 12, 1, 1)')
-    expect(browserTests).toContain('import { feedback } from \'@h-ai/feedback/bundle\'')
-    expect(browserTests).toContain('feedback.readBundle(')
+    expect(browserTests).toContain('feedback exchanges attachments')
+    expect(browserTests).toContain('feedback-mine')
   })
 
   it('api 新工程也包含完整反馈能力与自动容量预算', async () => {

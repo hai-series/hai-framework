@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process'
 import { createECDH, createHash } from 'node:crypto'
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { parseEnv } from 'node:util'
-import { apiContract } from '@h-ai/api-contract/feedback'
+import { feedbackLimits } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { deploy } from '@h-ai/deploy'
@@ -94,7 +94,7 @@ function fixture(kit = false) {
   writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 25165824\nhttp:\n  apiPrefix: /api/v1\n')
   if (kit)
     writeFileSync(join(root, 'config/_kit.yml'), 'transport:\n  maxPlaintextBytes: 25165824\n')
-  writeFileSync(join(root, 'config/_feedback.yml'), 'appId: review\nnotification:\n  mode: disabled\nlimits:\n  maxTotalBytes: 8388608\n  maxEvidenceBytes: 2097152\n')
+  writeFileSync(join(root, 'config/_feedback.yml'), 'appId: review\n')
   const artifactDir = join(root, 'artifacts')
   mkdirSync(artifactDir)
   const images = ['serv', 'web'].map((name) => {
@@ -122,8 +122,6 @@ function fixture(kit = false) {
 
 it.each([false, true])('公开离线包保留较大的显式上限并一致推导代理/Kit 容量，Kit=%s', async (kit) => {
   const { root, artifactDir } = fixture(kit)
-  const feedback = apiContract.resolveFeedbackBudget({ maxTotalBytes: 8388608, maxEvidenceBytes: 2097152 })
-  expect(feedback.maxTransportBytes).toBe(11250348)
   expect(crypto.transport.resolveBodyLimits(25165824).encryptedPayloadBytes).toBe(50364416)
   expect((await deploy.init({
     provider: {
@@ -143,7 +141,7 @@ it.each([false, true])('公开离线包保留较大的显式上限并一致推�
   if (!result.success || !result.data.bundlePath)
     return
   const proxy = execFileSync('tar', ['-xOf', result.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
-  const lowered = crypto.transport.resolveBodyLimits(feedback.maxTransportBytes).encryptedPayloadBytes
+  const lowered = crypto.transport.resolveBodyLimits(feedbackLimits.maxPlaintextBytes).encryptedPayloadBytes
   expect(proxy).toContain('client_max_body_size 50364416;')
   expect(proxy).not.toContain(`client_max_body_size ${lowered};`)
   if (kit) {
@@ -152,17 +150,9 @@ it.each([false, true])('公开离线包保留较大的显式上限并一致推�
   }
 })
 
-it.each([
-  { name: '代理使用嵌套环境覆盖派生容量', evidenceCount: 10000, success: true },
-  { name: '代理拒绝运行时不接受的材料限制', evidenceCount: 10001, success: false },
-])('$name', async ({ evidenceCount, success }) => {
+it('代理用固定的反馈路由容量保护较大附件请求', async () => {
   const { root, artifactDir } = fixture()
   writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 1048576\nhttp:\n  apiPrefix: /api/v1\n')
-  appendFileSync(join(root, '.env.test'), [
-    'HAI_FEEDBACK_LIMITS_MAXTOTALBYTES=16777216',
-    `HAI_FEEDBACK_LIMITS_MAXEVIDENCECOUNT=${evidenceCount}`,
-    '',
-  ].join('\n'))
   expect((await deploy.init({
     provider: {
       type: 'docker-ssh',
@@ -177,13 +167,12 @@ it.each([
     bundleOnly: true,
     skipMiddleware: true,
   })
-  expect(result.success, result.success ? undefined : result.error.message).toBe(success)
-  if (!result.success)
+  expect(result.success, result.success ? undefined : result.error.message).toBe(true)
+  if (!result.success || !result.data.bundlePath)
     return
-  expect(result.data.bundlePath).toBeDefined()
-  const proxy = execFileSync('tar', ['-xOf', result.data.bundlePath!, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
-  const feedback = apiContract.resolveFeedbackBudget({ maxTotalBytes: 16777216, maxEvidenceCount: evidenceCount })
-  expect(proxy).toContain(`client_max_body_size ${crypto.transport.resolveBodyLimits(feedback.maxTransportBytes).encryptedPayloadBytes};`)
+  const proxy = execFileSync('tar', ['-xOf', result.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
+  const budget = crypto.transport.resolveBodyLimits(feedbackLimits.maxPlaintextBytes).encryptedPayloadBytes
+  expect(proxy).toContain(`client_max_body_size ${budget};`)
 })
 
 it('计划保持远端 Docker，与本地打包 Podman 分离', async () => {

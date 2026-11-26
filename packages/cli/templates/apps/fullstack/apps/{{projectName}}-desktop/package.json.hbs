@@ -29,15 +29,8 @@
   },
   "dependencies": {
     "@h-ai/api-client": "{{haiPackageSpecifier}}",
-    {{#if features.feedback}}
-    "@h-ai/feedback": "{{haiPackageSpecifier}}",
-    {{/if}}
     "@h-ai/ui": "{{haiPackageSpecifier}}",
     "@tauri-apps/api": "{{fullstack.packageSpecifiers.tauriApi}}",
-    {{#if features.feedback}}
-    "@tauri-apps/plugin-dialog": "{{fullstack.packageSpecifiers.tauriDialog}}",
-    "@tauri-apps/plugin-fs": "{{fullstack.packageSpecifiers.tauriFs}}",
-    {{/if}}
     "@tauri-apps/plugin-updater": "{{fullstack.packageSpecifiers.tauriUpdater}}",
     "{{fullstack.sharedPackageName}}": "workspace:*"
   },

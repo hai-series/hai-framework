@@ -9,19 +9,13 @@
   import { createManagementGuide } from '../stores/guide-store.js'
   import { ManagementStore } from '../stores/management-store.svelte.js'
   import AppShell from './AppShell.svelte'
-{{#if features.feedback}}
-  import { browserFeedback, feedbackReview, initializeBrowserFeedback } from '../api/feedback-client.js'
-{{/if}}
 
   interface Props {
     platform: 'web' | 'app' | 'desktop'
-{{#if features.feedback}}
-    buildMetadata: { appVersion: string, buildId: string, commit: string }
-{{/if}}
     apiOptions?: ManagementApiOptions
     onLocaleChange?: (locale: string) => void
   }
-  const { platform, apiOptions = {}, onLocaleChange{{#if features.feedback}}, buildMetadata{{/if}} }: Props = $props()
+  const { platform, apiOptions = {}, onLocaleChange }: Props = $props()
   const pages = import.meta.glob<{ default: Component<{ store: ManagementStore }> }>('../pages/**/*.svelte')
   const router = new HashRouter(Object.keys(pages), '/users')
   const store = new ManagementStore(router)
@@ -54,25 +48,6 @@
       void store.close()
     }
   })
-{{#if features.feedback}}
-  const feedbackUserId = $derived(store.user?.id)
-  $effect(() => {
-    const userId = feedbackUserId
-    if (userId) {
-      void initializeBrowserFeedback(buildMetadata).catch((cause) => {
-        store.error = ui.errorMessage(cause, m.operation_failed())
-      })
-    }
-    else {
-      feedbackReview.close()
-      void browserFeedback.close({ discard: true })
-    }
-    return () => {
-      feedbackReview.close()
-      void browserFeedback.close({ discard: true })
-    }
-  })
-{{/if}}
   $effect(() => {
     if (store.info)
       document.title = store.info.name

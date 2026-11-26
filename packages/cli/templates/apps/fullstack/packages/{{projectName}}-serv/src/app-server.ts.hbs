@@ -1,15 +1,12 @@
 import type { CoreConfig } from '@h-ai/core'
-import type { {{#if features.feedback}}CreateServContext, {{/if}}ServHttpApp } from '@h-ai/serv'
+import type { ServHttpApp } from '@h-ai/serv'
 import process from 'node:process'
 {{#if features.feedback}}
-import { apiContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract/feedback'
 {{/if}}
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
-{{#if features.feedback}}
-import { FeedbackConfigSchema } from '@h-ai/feedback'
-{{/if}}
 import { iam } from '@h-ai/iam'
 import { serv, ServConfigSchema } from '@h-ai/serv'
 import { storage } from '@h-ai/storage'
@@ -27,13 +24,6 @@ export function createServerApp(): ServHttpApp {
   const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
   if (!ring.success)
     throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
-{{#if features.feedback}}
-  // 可选反馈故障重试期间仍使用配置预算，避免缓存默认容量。
-  const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
-  const feedbackBudget = apiContract.resolveFeedbackBudget(feedbackSettings.success
-    ? feedbackSettings.data.limits
-    : undefined)
-{{/if}}
   const security = serv.createRuntimeSecurityPolicy({
     environment: coreConfig.env,
     corsOrigin: servConfig.cors.origin,
@@ -51,14 +41,6 @@ export function createServerApp(): ServHttpApp {
       ? [servConfig.http.docs.path, `${servConfig.http.docs.path.slice(0, servConfig.http.docs.path.lastIndexOf('/') + 1)}_hai/scalar.js`]
       : []),
   ]
-{{#if features.feedback}}
-  // 普通业务日志与反馈使用同一可信应用范围；身份仍由 IAM 验证。
-  const authenticatedContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
-  const createContext: CreateServContext = async input => ({
-    ...await authenticatedContext(input),
-    scopeId: '{{projectName}}',
-  })
-{{/if}}
 
   return serv.createApp({
     contract: contracts.{{fullstack.contractExportName}},
@@ -74,9 +56,6 @@ export function createServerApp(): ServHttpApp {
       },
     }),
     iam,
-{{#if features.feedback}}
-    createContext,
-{{/if}}
     refreshCookie: {
       secure: security.secureRefreshCookie,
       nativeTokenTransport: {
@@ -90,10 +69,7 @@ export function createServerApp(): ServHttpApp {
       ...servConfig.transport,
 {{#if features.feedback}}
       routePlaintextBytes: {
-        [`${servConfig.http.apiPrefix}/feedback/reports`]: feedbackBudget.maxTransportBytes,
-        [`${servConfig.http.apiPrefix}/feedback/reports/*/evidence`]: feedbackBudget.maxTransportBytes,
-        [`${servConfig.http.apiPrefix}/feedback/reports/*/attachments/*`]: feedbackBudget.maxTransportBytes,
-        [`${servConfig.http.apiPrefix}/feedback/reports/*/exports/*`]: feedbackBudget.maxTransportBytes,
+        ...apiContract.feedbackTransportRoutes(servConfig.http.apiPrefix),
         ...servConfig.transport.routePlaintextBytes,
       },
 {{/if}}

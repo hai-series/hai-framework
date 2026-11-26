@@ -1,10 +1,10 @@
 import type { CoreConfig } from '@h-ai/core'
-import type { {{#if features.feedback}}CreateServContext, {{/if}}ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
+import type { ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
 {{#if features.crypto}}
 import process from 'node:process'
 {{/if}}
 {{#if features.feedback}}
-import { apiContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract/feedback'
 {{/if}}
 {{#if features.crypto}}
 import { cache } from '@h-ai/cache'
@@ -12,9 +12,6 @@ import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 {{#if features.crypto}}
 import { crypto } from '@h-ai/crypto'
-{{/if}}
-{{#if features.feedback}}
-import { FeedbackConfigSchema } from '@h-ai/feedback'
 {{/if}}
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
@@ -46,13 +43,6 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
     const ring = crypto.transport.parseServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
       throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
-{{#if features.feedback}}
-    // 可选反馈故障重试期间仍使用配置预算，避免缓存默认容量。
-    const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
-    const feedbackBudget = apiContract.resolveFeedbackBudget(feedbackSettings.success
-      ? feedbackSettings.data.limits
-      : undefined)
-{{/if}}
     transport = {
       crypto,
       serverKeyRing: ring.data,
@@ -63,10 +53,7 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
       maxRequestAgeSeconds: servConfig.transport.maxRequestAgeSeconds,
 {{#if features.feedback}}
       routePlaintextBytes: {
-        [`${servConfig.http.apiPrefix}/feedback/reports`]: feedbackBudget.maxTransportBytes,
-        [`${servConfig.http.apiPrefix}/feedback/reports/*/evidence`]: feedbackBudget.maxTransportBytes,
-        [`${servConfig.http.apiPrefix}/feedback/reports/*/attachments/*`]: feedbackBudget.maxTransportBytes,
-        [`${servConfig.http.apiPrefix}/feedback/reports/*/exports/*`]: feedbackBudget.maxTransportBytes,
+        ...apiContract.feedbackTransportRoutes(servConfig.http.apiPrefix),
         ...servConfig.transport.routePlaintextBytes,
       },
 {{else}}
@@ -103,14 +90,6 @@ routePlaintextBytes: servConfig.transport.routePlaintextBytes,
         },
       }
 {{/if}}
-{{#if features.feedback}}
-      // 普通业务日志与反馈使用同一可信应用范围；身份仍由 IAM 验证。
-  const authenticatedContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
-  const createContext: CreateServContext = async input => ({
-    ...await authenticatedContext(input),
-    scopeId: '{{projectName}}',
-  })
-{{/if}}
 
   const appOptions: Parameters<typeof serv.createApp>[0] = {
     contract: {{api.contractExportName}},
@@ -134,9 +113,6 @@ routePlaintextBytes: servConfig.transport.routePlaintextBytes,
 {{#if features.iam}}
     iam,
     refreshCookie,
-{{/if}}
-{{#if features.feedback}}
-    createContext,
 {{/if}}
 {{#if features.crypto}}
     transport,

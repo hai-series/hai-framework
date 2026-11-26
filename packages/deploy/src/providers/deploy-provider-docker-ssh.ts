@@ -20,7 +20,7 @@ import { request as requestHttps } from 'node:https'
 import { basename, dirname, join, resolve } from 'node:path'
 import { rootCertificates } from 'node:tls'
 import { parseEnv } from 'node:util'
-import { apiContract } from '@h-ai/api-contract/feedback'
+import { feedbackLimits } from '@h-ai/api-contract/feedback'
 import { core, CoreConfigSchema, RequestAccessConfigSchema } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { stringify } from 'yaml'
@@ -40,7 +40,6 @@ import { createHttpsAssets, renderHttpsProxy } from '../container/deploy-https.j
 import { deploymentRuntimeFunctions } from '../container/deploy-runtime-selection.js'
 import { shellArgument } from '../container/deploy-scripts.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
-import configurationShapes from '../deploy-config-shapes.json' with { type: 'json' }
 import { deploymentOrigin } from '../deploy-config.js'
 import { describeDeploymentVariableSources, loadDeploymentConfig, loadDeploymentEnvironment, mergeEnvironmentLayers, saveDeploymentEnvironment } from '../deploy-environment.js'
 import { resolveProjectDirectory } from '../deploy-functions.js'
@@ -49,11 +48,6 @@ import { getDeployCommandState } from '../deploy-recovery.js'
 import { HaiDeployError } from '../deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'provider-docker-ssh' })
-
-// 构建时从 Feedback 的输入 Schema 生成；部署无需加载反馈或初始化存储。
-const feedbackLimitsSchema = z.fromJSONSchema(configurationShapes.feedback.properties.limits as Parameters<typeof z.fromJSONSchema>[0])
-  .pipe(z.record(z.string(), z.number()))
-  .optional()
 
 /** 健康检查轮询间隔（毫秒） */
 const HEALTH_POLL_INTERVAL = 3000
@@ -412,19 +406,9 @@ export function createDockerSshProvider(
         ])
       }
     }
-    let feedbackTransportBytes: number | undefined
-    if (scan.haiModules?.includes('@h-ai/feedback')) {
-      const policy = loadDeploymentConfig('feedback', join(appDir, 'config', '_feedback.yml'), env)
-      if (!policy.success)
-        return policy
-      try {
-        const limits = feedbackLimitsSchema.parse(policy.data.limits)
-        feedbackTransportBytes = apiContract.resolveFeedbackBudget(limits).maxTransportBytes
-      }
-      catch {
-        return core.err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
-      }
-    }
+    const feedbackTransportBytes = scan.haiModules?.includes('@h-ai/feedback')
+      ? feedbackLimits.maxPlaintextBytes
+      : 0
     let protectedTransport = !!server.data.transport
     let applicationPlaintextBytes: number | undefined
     if (scan.isSvelteKit) {
@@ -457,7 +441,7 @@ export function createDockerSshProvider(
           const routes = (transport as { routePlaintextBytes?: Record<string, number> }).routePlaintextBytes
           const limits = crypto.transport.resolveBodyLimits(Math.max(crypto.transport.createBodyPolicy(configured === 'auto'
             ? undefined
-            : configured, routes).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
+            : configured, routes).maximum.plaintextBytes, feedbackTransportBytes))
           // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
           env.BODY_SIZE_LIMIT = String(limits.encryptedPayloadBytes)
           applicationPlaintextBytes = limits.plaintextBytes
@@ -491,7 +475,7 @@ export function createDockerSshProvider(
         const configured = transport ? transport.maxPlaintextBytes : undefined
         const limits = crypto.transport.resolveBodyLimits(Math.max(crypto.transport.createBodyPolicy(configured === 'auto'
           ? undefined
-          : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
+          : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes))
         webProxy = generateWebProxyConfig(containerPort, apiPrefix, {
           webPort: webContainerPort,
           maxPlaintextBytes: limits.plaintextBytes,
@@ -515,7 +499,7 @@ export function createDockerSshProvider(
           const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | undefined
           applicationPlaintextBytes = Math.max(crypto.transport.createBodyPolicy(transport?.maxPlaintextBytes === 'auto'
             ? undefined
-            : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes ?? 0)
+            : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes)
         }
         webProxy = generateApplicationProxyConfig({
           primaryService,

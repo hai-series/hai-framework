@@ -36,59 +36,15 @@ import { storage, StorageConfigSchema } from '@h-ai/storage'
 {{#if features.vecdb}}
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 {{/if}}
-{{#if features.feedback}}
-import { buildMetadata } from '../../build-metadata.js'
-{{/if}}
 
 {{#if features.feedback}}
-let feedbackRetry: ReturnType<typeof setTimeout> | undefined
-let feedbackStarting: Promise<void> | undefined
-let feedbackClosing = false
-let feedbackFailure: string | number | undefined
-
-/** 可选辅助能力独立重试；不能回滚已经就绪的 IAM 与业务模块。 */
-function startFeedback(): Promise<void> {
-  if (feedbackStarting)
-    return feedbackStarting
-  feedbackClosing = false
-  feedbackStarting = (async () => {
-    try {
-      const result = await feedback.init({
-        ...core.config.getOrThrow<import('@h-ai/feedback').FeedbackConfigInput>('feedback'),
-        build: buildMetadata,
-      })
-      if (!result.success) {
-        if (feedbackFailure !== result.error.code)
-          core.logger.warn('Optional feedback unavailable; business runtime remains ready', { module: 'feedback', code: result.error.code })
-        feedbackFailure = result.error.code
-      }
-      else {
-        feedbackFailure = undefined
-      }
-    }
-    catch {
-      if (feedbackFailure !== 'configuration')
-        core.logger.warn('Optional feedback configuration unavailable; business runtime remains ready', { module: 'feedback' })
-      feedbackFailure = 'configuration'
-    }
-    if (feedbackFailure && !feedbackClosing) {
-      feedbackRetry = setTimeout(() => {
-        feedbackRetry = undefined
-        void startFeedback()
-      }, 30000)
-      feedbackRetry.unref()
-    }
-  })().finally(() => { feedbackStarting = undefined })
-  return feedbackStarting
-}
-
-async function closeFeedback() {
-  feedbackClosing = true
-  if (feedbackRetry)
-    clearTimeout(feedbackRetry)
-  feedbackRetry = undefined
-  await feedbackStarting
-  return feedback.close()
+async function startFeedback() {
+  const config = core.config.get<import('@h-ai/feedback').FeedbackConfigInput>('feedback')
+  if (!config)
+    return
+  const result = await feedback.init(config)
+  if (!result.success)
+    core.logger.warn('Feedback unavailable', { module: 'feedback', errorCode: result.error.code, traceId: result.error.traceId })
 }
 {{/if}}
 
@@ -249,7 +205,7 @@ const runtime = core.module.createRuntime([
     name: 'feedback',
     enabled: () => Boolean(core.config.get('feedback')),
     start: startFeedback,
-    close: closeFeedback,
+    close: () => feedback.close(),
   },
 {{/if}}
 {{#if features.ai}}

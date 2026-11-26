@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { addModule } from '../src/commands/cli-add.js'
 
 describe('feedback 增量添加', () => {
-  it('从仅有 core 的工程补齐 IAM 完整直接依赖、配置、环境与 skill，并对齐新通知 Provider', async () => {
+  it('从仅有 core 的工程补齐 IAM 完整直接依赖、配置、环境与 skill', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-add-feedback-'))
     try {
       await writeFile(path.join(directory, 'package.json'), JSON.stringify({
@@ -20,7 +20,6 @@ describe('feedback 增量添加', () => {
         'crypto',
         'reldb',
         'cache',
-        'storage',
         'iam',
       ])
         expect(manifest.dependencies[`@h-ai/${name}`]).toBe('catalog:')
@@ -28,14 +27,15 @@ describe('feedback 增量添加', () => {
         'feedback',
         'db',
         'cache',
-        'storage',
         'iam',
       ])
         expect(await readFile(path.join(directory, 'config', `_${module}.yml`), 'utf8')).not.toBe('')
-      expect(manifest.dependencies['@h-ai/reach']).toBeUndefined()
-      await expect(readFile(path.join(directory, 'config/_reach.yml'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      for (const module of ['storage', 'reach']) {
+        expect(manifest.dependencies[`@h-ai/${module}`]).toBeUndefined()
+        await expect(readFile(path.join(directory, 'config', `_${module}.yml`), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+      }
       const feedback = await readFile(path.join(directory, 'config/_feedback.yml'), 'utf8')
-      expect(feedback).toContain('HAI_FEEDBACK_NOTIFICATION_MODE:console')
+      expect(feedback).toContain('HAI_FEEDBACK_APPID:my-app')
       expect(await readFile(path.join(directory, '.env.prod'), 'utf8')).toContain('HAI_CACHE_')
       expect(await readFile(path.join(directory, '.agents/skills/hai-feedback/SKILL.md'), 'utf8')).toContain('name: hai-feedback')
       expect(await readFile(path.join(directory, '.agents/skills/hai-iam/SKILL.md'), 'utf8')).toContain('name: hai-iam')
@@ -55,7 +55,7 @@ describe('feedback 增量添加', () => {
       }))
       await mkdir(path.join(directory, 'config'))
       const reach = '# Private provider mapping\nproviders:\n  - name: existing-email\n    type: console\n'
-      const feedback = 'appId: private-app\nnotification:\n  mode: reach\n  provider: existing-email\n  recipients: [ops@example.test]\n'
+      const feedback = 'appId: private-app\n'
       await writeFile(path.join(directory, 'config/_reach.yml'), reach)
       await writeFile(path.join(directory, 'config/_feedback.yml'), feedback)
       await writeFile(path.join(directory, '.env.prod'), 'HAI_CACHE_HOST=private-cache.example.test\n')

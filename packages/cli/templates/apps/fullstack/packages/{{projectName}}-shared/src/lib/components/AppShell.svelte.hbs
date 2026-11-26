@@ -97,7 +97,7 @@
     {#snippet actions()}
         <Button variant="ghost" size="sm" onclick={onhelp} data-guide="admin-help" data-testid="admin-help" ariaLabel={m.guide_help_title()}><span class="icon-[tabler--help-circle] size-4"></span><span class="hidden sm:inline">{m.guide_help_title()}</span></Button>
 {{#if features.feedback}}
-        <FeedbackEntry />
+        <FeedbackEntry canSubmit={store.hasPermission('feedback:create')} />
 {{/if}}
         <Badge variant="ghost" size="sm" data-testid="app-environment">{store.info?.env}</Badge>
         {#if store.user}

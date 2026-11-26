@@ -927,9 +927,9 @@ export function buildTemplateContext(options: {
     ]) featureMap[feature] = true
   }
 
-  // feedback 默认使用独立控制台通知；HTTP 接入仍复用可信认证、持久化和附件。
+  // 反馈依赖关系数据库与可信认证。
   if (featureMap.feedback) {
-    for (const feature of ['db', 'storage', 'iam']) featureMap[feature] = true
+    for (const feature of ['db', 'iam']) featureMap[feature] = true
   }
 
   // 强制补全模块硬依赖，防止调用方未经过 resolveFeatureDependencies 时遗漏依赖

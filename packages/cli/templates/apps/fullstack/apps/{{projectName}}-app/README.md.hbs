@@ -57,7 +57,7 @@ Android 容器会安装依赖、编译 workspace 并打包。调试时可临时�
 
 所有前端共用的偏好、认证存储、表单、审计与帮助行为见[共享工作区](../../packages/{{fullstack.sharedPackageName}}/README.md)，详细配置见[生成应用IAM技能](../../.agents/skills/hai-iam/reference.md)。
 
-启用反馈时，shared SDK 负责图片预览/比例标注/导出轮询；原生保存使用 Filesystem 缓存与 Share，完成/取消清理临时文件。首次添加 iOS 平台后按 Filesystem 插件要求配置 PrivacyInfo.xcprivacy。
+启用反馈时，应用通过共享界面提交反馈、查看会话和发送回复。图片与文件由用户在发送前选择，预览和下载需要当前账号有权查看反馈。
 
 ## 开发测试
 

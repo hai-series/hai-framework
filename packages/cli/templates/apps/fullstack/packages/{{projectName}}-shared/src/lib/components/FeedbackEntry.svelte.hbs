@@ -1,107 +1,29 @@
 {{! @skipIfEmpty }}
 {{#if features.feedback}}
 <script lang='ts'>
-  import type { FeedbackDraft } from '@h-ai/feedback/client'
-  import type { FeedbackAnnotation, FeedbackAttachmentView, FeedbackFormData, FeedbackReceipt } from '@h-ai/ui'
-  import { Button, FeedbackModal, ui } from '@h-ai/ui'
-  import { onDestroy } from 'svelte'
-  import { browserFeedback } from '../api/feedback-client.js'
+  import { Button, FeedbackList, FeedbackModal, Modal } from '@h-ai/ui'
+  import { myFeedbackActions, submitFeedback } from '../api/feedback-client.js'
   import * as m from '../paraglide/messages.js'
 
+  const { canSubmit }: { canSubmit: boolean } = $props()
   let open = $state(false)
-  $effect(() => {
-    if (!open)
-      browserFeedback.pause()
-  })
-  let preparing = $state(false)
-  let error = $state('')
-  let draft = $state.raw<FeedbackDraft>()
-  let pendingReceipt = $state<FeedbackReceipt>()
-  let attachments = $state<FeedbackAttachmentView[]>([])
-  function refreshAttachments() {
-    attachments = browserFeedback.getView().attachments
+  let mine = $state(false)
+  let selected = $state<string>()
+
+  function openMine(id?: string) {
+    selected = id
+    mine = true
   }
-  async function prepareDraft(options?: { startNew?: boolean }) {
-    const result = await browserFeedback.prepare(options)
-    if (!result.success)
-      throw new Error(result.error.message, { cause: result.error })
-    draft = result.data
-    const report = result.data.report
-    pendingReceipt = report && { number: report.number, collectionStatus: report.collectionStatus }
-    refreshAttachments()
-  }
-  async function prepare() {
-    preparing = true
-    error = ''
-    try {
-      await prepareDraft()
-      open = true
-    }
-    catch (cause) {
-      error = ui.errorMessage(cause, m.operation_failed())
-    }
-    finally {
-      preparing = false
-    }
-  }
-  function input(data: FeedbackFormData) {
-    return {
-      description: data.description,
-      category: data.type,
-      contact: data.contact,
-      files: data.files,
-      removedAttachmentIds: data.removedAttachmentIds,
-    }
-  }
-  async function submit(data: FeedbackFormData) {
-    const result = await browserFeedback.submit(input(data))
-    if (!result.success)
-      throw new Error(result.error.message, { cause: result.error })
-    return result.data
-  }
-  async function annotate(mark: FeedbackAnnotation) {
-    const result = await browserFeedback.annotate(mark.id, { mode: mark.mode, ...mark.rect, coordinateSpace: 'ratio' })
-    if (!result.success)
-      throw new Error(result.error.message, { cause: result.error })
-    refreshAttachments()
-  }
-  async function capturePage(id?: string) {
-    const result = await browserFeedback.captureScreenshot(id)
-    if (!result.success)
-      throw new Error(result.error.message, { cause: result.error })
-    draft = browserFeedback.getDraft()
-    refreshAttachments()
-  }
-  async function addFiles(files: File[], removedAttachmentIds: readonly string[] = []) {
-    const result = await browserFeedback.addFiles(files, removedAttachmentIds)
-    if (!result.success)
-      throw new Error(result.error.message, { cause: result.error })
-    draft = browserFeedback.getDraft()
-    refreshAttachments()
-  }
-  async function exportLocal(data: FeedbackFormData) {
-    const result = await browserFeedback.saveDraft(browserFeedback.getDraft()?.report
-      ? undefined
-      : input(data))
-    if (!result.success)
-      throw new Error(result.error.message, { cause: result.error })
-    return result.data.status !== 'cancelled'
-  }
-  onDestroy(browserFeedback.releasePreviews)
-  ui.useToastFeedback(() => error)
 </script>
 
-<Button variant='ghost' size='sm' loading={preparing} onclick={() => void prepare()} data-testid='feedback-open'>{m.nav_feedback()}</Button>
-<FeedbackModal bind:open {attachments} budget={browserFeedback.budget} resetKey={draft?.submissionId} onsubmit={submit} oncapture={capturePage} onannotate={annotate} onexport={exportLocal} onfileschange={addFiles}
-  {pendingReceipt} onstartnew={() => prepareDraft({ startNew: true })}
-  evidence={draft?.evidence ?? []}
-  evidenceSummary={draft?.missing.length
-? [
-{
-label: m.feedback_logs(),
-status: 'partial',
-detail: draft.missing.join(', '),
-},
-]
-: []} />
+{#if canSubmit}
+  <Button variant='ghost' size='sm' onclick={() => { open = true }} data-testid='feedback-open'>{m.nav_feedback()}</Button>
+  <FeedbackModal bind:open onsubmit={submitFeedback} oncomplete={openMine} />
+{/if}
+<Button variant='ghost' size='sm' onclick={() => openMine()} data-testid='feedback-mine'>{m.feedback_mine()}</Button>
+<Modal bind:open={mine} title={m.feedback_mine()} size='xl'>
+  {#if mine}
+    <FeedbackList actions={myFeedbackActions} initialId={selected} />
+  {/if}
+</Modal>
 {{/if}}

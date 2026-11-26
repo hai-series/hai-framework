@@ -1106,17 +1106,7 @@ function generatePaymentConfig(): string {
 }
 
 function generateFeedbackConfig(): string {
-  return `# 问题反馈使用共享数据库与私有存储。
-appId: my-app
-build:
-  appVersion: 0.1.0
-notification:
-  mode: console
-  adminUrl: http://localhost:5173/#/feedback
-  # Reach 模式在此配置 provider 和 recipients。接收方也可用 HAI_FEEDBACK_NOTIFICATION_RECIPIENTS 提供 JSON 数组。
-collection:
-  envAllowlist:
-    - NODE_ENV
-    - TZ
+  return `# 固定标识在同一数据库内区分应用。
+appId: \${HAI_FEEDBACK_APPID:my-app}
 `
 }

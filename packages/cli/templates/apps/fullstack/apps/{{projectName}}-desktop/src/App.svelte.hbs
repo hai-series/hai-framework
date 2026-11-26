@@ -5,9 +5,6 @@
   import type { DesktopUpdateMessage } from './lib/desktop-update/DesktopUpdateEntry.svelte'
   import { apiClient } from '@h-ai/api-client'
   import { AdminWorkspace } from '{{fullstack.sharedPackageName}}'
-{{#if features.feedback}}
-  import { buildMetadata } from './build-metadata.js'
-{{/if}}
   import DesktopUpdateEntry from './lib/desktop-update/DesktopUpdateEntry.svelte'
   import * as m from './lib/paraglide/messages.js'
   import { getLocale, setLocale } from './lib/paraglide/runtime.js'
@@ -36,6 +33,6 @@
   }
 </script>
 
-<AdminWorkspace platform="desktop" {apiOptions}{{#if features.feedback}} {buildMetadata}{{/if}} onLocaleChange={syncLocale} />
+<AdminWorkspace platform="desktop" {apiOptions} onLocaleChange={syncLocale} />
 <DesktopUpdateEntry message={updateMessage} />
 {{/if}}

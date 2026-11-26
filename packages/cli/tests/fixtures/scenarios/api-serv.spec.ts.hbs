@@ -1,3 +1,6 @@
+{{#if features.feedback}}
+import { randomUUID } from 'node:crypto'
+{{/if}}
 import process from 'node:process'
 import { apiClient } from '@h-ai/api-client'
 {{#if features.crypto}}
@@ -92,39 +95,24 @@ test('configured IAM supports registration, OTP and reset', async ({ request }) 
 {{/if}}
 {{#if features.feedback}}
 
-test('feedback intake is idempotent and creator can append evidence without administrator access', async () => {
+test('feedback author can submit, reply with files, and list only their reports', async () => {
   const actions = apiClient.createAuthActions(client)
   const username = `feedback${Date.now()}`
   const password = 'Feedback-test-Password123!'
   expect((await actions.register({ username, password, email: `${username}@example.test` })).success).toBe(true)
   expect((await actions.login({ identifier: username, password })).success).toBe(true)
-  const submissionId = `submission-${Date.now()}`
-  const created = await client.feedback.reports.submit({ appId: '{{projectName}}', submissionId })
-  expect(created.success).toBe(true)
-  if (!created.success)
+  const id = randomUUID()
+  expect(await client.feedback.reports.submit({ id, body: 'Cannot open order' })).toMatchObject({ success: true, data: { id } })
+  expect(await client.feedback.reports.submit({ id, body: 'Cannot open order' })).toMatchObject({ success: true, data: { id } })
+  const messageId = randomUUID()
+  const file = { name: 'steps.txt', contentType: 'text/plain', dataBase64: 'U3RlcHM=' }
+  const message = await client.feedback.reports.addMessage({ id, messageId, body: '', kind: 'reply', attachments: [file] })
+  expect(message.success).toBe(true)
+  if (!message.success)
     return
-  const duplicate = await client.feedback.reports.submit({ appId: '{{projectName}}', submissionId })
-  expect(duplicate.success).toBe(true)
-  if (duplicate.success)
-    expect(duplicate.data.id).toBe(created.data.id)
-  const evidence = await client.feedback.reports.appendEvidence({
-    id: created.data.id,
-    evidence: [
-      {
-        id: 'event-1',
-        source: 'api-test',
-        sequence: 1,
-        kind: 'business',
-        timestamp: Date.now(),
-        data: { action: 'api-feedback' },
-      },
-    ],
-  })
-  expect(evidence.success).toBe(true)
-  expect((await client.feedback.reports.completeCollection({
-    id: created.data.id,
-    missing: ['browser-not-applicable'],
-  })).success).toBe(true)
+  const attachmentId = message.data.attachments[0]!.id
+  expect(await client.feedback.attachments.get({ id, attachmentId })).toMatchObject({ success: true, data: { name: file.name, dataBase64: file.dataBase64 } })
+  expect(await client.feedback.reports.listMine({})).toMatchObject({ success: true, data: { total: 1 } })
   expect((await client.feedback.reports.list({})).success).toBe(false)
 })
 {{/if}}

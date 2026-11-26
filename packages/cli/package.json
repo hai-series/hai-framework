@@ -61,7 +61,6 @@
     "@h-ai/crypto": "workspace:*",
     "@h-ai/datapipe": "workspace:*",
     "@h-ai/deploy": "workspace:*",
-    "@h-ai/feedback": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/kit": "workspace:*",
     "@h-ai/payment": "workspace:*",

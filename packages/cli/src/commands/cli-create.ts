@@ -226,7 +226,7 @@ const FEATURES: Record<string, FeatureDefinition> = {
       return cliM('cli_featureFeedbackDescription')
     },
     packages: ['@h-ai/feedback'],
-    dependencies: ['db', 'storage', 'iam'],
+    dependencies: ['db', 'iam'],
   },
   'payment': {
     id: 'payment',
@@ -1596,9 +1596,9 @@ Web/App/Desktop 共享 AppShell 的 header/footer。新增页面放 shared/src/l
 
 以下描述可运行示例的初始业务，可按实际需求调整或移除，并同步代码、数据、鉴权、界面、测试和文档。
 
-默认启用 IAM、reldb、cache、audit、storage、scheduler 和 crypto${hasFeedback ? '、feedback 和 Reach' : ''}。示例将职责分为 admin（账号和角色管理）、audit_admin（审计查询、统计与备份）、config_admin（公开业务公告配置）、business_operator（业务处理）及 user（个人自助）。服务端限制跨职责授权和账号接管，系统管理员可配置基础成员；角色名称及业务权限由应用维护，可按项目需求调整，不写死为 IAM 规则。密码修改后全部会话失效，需要重新登录。
+默认启用 IAM、reldb、cache、audit、storage、scheduler 和 crypto${hasFeedback ? '、feedback' : ''}。示例将职责分为 admin（账号和角色管理）、audit_admin（审计查询、统计与备份）、config_admin（公开业务公告配置）、business_operator（业务处理）及 user（个人自助）。服务端限制跨职责授权和账号接管，系统管理员可配置基础成员；角色名称及业务权限由应用维护，可按项目需求调整，不写死为 IAM 规则。密码修改后全部会话失效，需要重新登录。
 
-${hasFeedback ? '普通成员和业务操作员可从顶部“问题反馈”提交说明、截图与日志；只有 business_operator 显示反馈管理菜单并能查看、处理、撤销和导出问题包。服务端继续按可信身份与应用范围授权。开发通知使用 Console，生产须在 _feedback.yml 与 _reach.yml 配置收件人和真实邮件。' : ''}
+${hasFeedback ? '普通成员可以提交反馈，在“我的反馈”中阅读结果或附上图片和文件继续回复。业务操作员从处理列表回复、请求补充和标记状态。使用同一份反馈和可信会话范围授权。' : ''}
 
 CLI 在根目录 .env.dev.local、.env.test.local、.env.prod.local 中为 admin、audit_admin、config_admin、business_operator 分别生成独立随机强密码，对应 HAI_ADMIN_DEFAULT_PASSWORD、HAI_AUDIT_ADMIN_PASSWORD、HAI_CONFIG_ADMIN_PASSWORD、HAI_BUSINESS_OPERATOR_PASSWORD。这些私有文件不提交 Git；克隆后通过受保护配置或 Secret Manager 分发对应环境秘密，同一环境各节点共享。共享 .env.local 或进程变量可覆盖公共值，模式私有文件优先于共享私有文件。已有账号不改密、不重新分配职责；未配置密码的独立职责账号不创建。密码须符合 _iam.yml 策略；启动失败保留模块、配置字段、错误码和端口占用诊断。
 
