@@ -33,12 +33,17 @@ it('请求策略目录保留真实默认值和复用的访问条件说明', asyn
   const iam = IamConfigSchema.parse({})
   for (const [name, value] of [
     ['HAI_SERV_HTTP_ACCESS', serv.http.access],
+    ['HAI_SERV_HTTP_RATELIMIT', serv.http.rateLimit],
     ['HAI_SERV_HTTP_TRUSTEDPROXIES', serv.http.trustedProxies],
-    ['HAI_KIT_ACCESS', kit.access],
-    ['HAI_KIT_TRUSTEDPROXIES', kit.trustedProxies],
+    ['HAI_KIT_HTTP_ACCESS', kit.http.access],
+    ['HAI_KIT_HTTP_RATELIMIT', kit.http.rateLimit],
+    ['HAI_KIT_HTTP_TRUSTEDPROXIES', kit.http.trustedProxies],
     ['HAI_IAM_REGISTER_DEFAULTACCOUNTSTATUS', iam.register.defaultAccountStatus],
   ]) {
     assert.equal(catalog.find(entry => entry.name === name)?.value, String(value), name)
+  }
+  for (const module of ['SERV', 'KIT']) {
+    assert.equal(catalog.find(entry => entry.name === `HAI_${module}_HTTP_RATELIMIT`)?.constraint, 'false 或 JSON 对象；整体覆盖时替换该节点')
   }
   assert.match(catalog.find(entry => entry.name === 'HAI_IAM_LOGINACCESS_ALLOWIPS_0')?.description ?? '', /IP|地址/)
   assert.match(catalog.find(entry => entry.name === 'HAI_SERV_HTTP_ACCESS_RULES_0_WINDOWS_0_END')?.description ?? '', /结束/)

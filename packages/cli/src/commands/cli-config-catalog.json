@@ -148,7 +148,7 @@
     "module": "ai",
     "path": "ai.a2a.agentCard.url",
     "description": "Agent 对外 URL",
-    "value": "http://localhost:5173",
+    "value": "http://localhost:3000/a2a",
     "constraint": "字符串"
   },
   {
@@ -3149,15 +3149,15 @@
     "path": "HAI_CRYPTO_TRANSPORT",
     "description": "桌面示例公开传输配置；在构建阶段与浏览器使用同一 Schema 校验",
     "value": "false",
-    "constraint": "false 关闭；或 JSON/YAML 对象，keyExchangePath 须以 / 开头；不接受 true"
+    "constraint": "false 关闭；或 JSON/YAML 对象，keyExchangePath 是站点根绝对路径；不接受 true"
   },
   {
     "name": "HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH",
     "module": "crypto",
     "path": "HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH",
     "description": "桌面示例公开密钥交换端点，构建期插值",
-    "value": "/_hai/key-exchange",
-    "constraint": "以 / 开头的路径"
+    "value": "/api/v1/_hai/key-exchange",
+    "constraint": "站点根绝对路径；默认 /api/v1/_hai/key-exchange"
   },
   {
     "name": "HAI_DB",
@@ -5040,268 +5040,28 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
-    "name": "HAI_KIT_ACCESS",
+    "name": "HAI_KIT_A2A",
     "module": "kit",
-    "path": "kit.access",
-    "description": "每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用",
+    "path": "kit.a2a",
+    "description": "发布 A2A HTTP 发现及 JSON-RPC；默认关闭",
     "value": "false",
-    "constraint": "true | false；false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
   },
   {
-    "name": "HAI_KIT_ACCESS_FILE",
+    "name": "HAI_KIT_A2A_CARDPATH",
     "module": "kit",
-    "path": "kit.access.file",
-    "description": "独立 yml/yaml 策略文件；按工作目录解析，启动读一次，最大 1 MiB",
-    "value": "",
-    "constraint": "字符串；最小字符数 1；最大字符数 4096；正则 \\.ya?ml$"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL",
-    "module": "kit",
-    "path": "kit.access.global",
-    "description": "所有宿主请求的共同条件；包含健康检查，省略不增加全局限制",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_ALLOWIPS",
-    "module": "kit",
-    "path": "kit.access.global.allowIps",
-    "description": "允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_ALLOWIPS_0",
-    "module": "kit",
-    "path": "kit.access.global.allowIps.0",
-    "description": "允许的 IPv4/IPv6 地址或 CIDR；非空时只允许匹配的可信客户端地址。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_DENYIPS",
-    "module": "kit",
-    "path": "kit.access.global.denyIps",
-    "description": "拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_DENYIPS_0",
-    "module": "kit",
-    "path": "kit.access.global.denyIps.0",
-    "description": "拒绝的 IP/CIDR；与 allowIps 同时命中时拒绝优先。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_TIMEZONE",
-    "module": "kit",
-    "path": "kit.access.global.timezone",
-    "description": "访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟",
-    "value": "UTC",
+    "path": "kit.a2a.cardPath",
+    "description": "公开 Agent Card 的完整站点路径",
+    "value": "/.well-known/agent-card.json",
     "constraint": "字符串"
   },
   {
-    "name": "HAI_KIT_ACCESS_GLOBAL_WINDOWS",
+    "name": "HAI_KIT_A2A_RPCPATH",
     "module": "kit",
-    "path": "kit.access.global.windows",
-    "description": "允许的访问时间窗口；空数组不限时间，最多 100 个",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 100"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_WINDOWS_0",
-    "module": "kit",
-    "path": "kit.access.global.windows.0",
-    "description": "允许的时段；空列表不限时间，跨午夜窗口按开始日归属。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_WINDOWS_0_DAYS",
-    "module": "kit",
-    "path": "kit.access.global.windows.0.days",
-    "description": "允许窗口的开始日，周一 1 至周日 7，至少一项",
-    "value": "",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 7"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_WINDOWS_0_DAYS_0",
-    "module": "kit",
-    "path": "kit.access.global.windows.0.days.0",
-    "description": "周一为 1、周日为 7；跨午夜填写开始日。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "整数；>= 1；<= 7"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_WINDOWS_0_END",
-    "module": "kit",
-    "path": "kit.access.global.windows.0.end",
-    "description": "允许窗口结束时间 HH:mm，不含结束；早于开始表示跨午夜，不得与开始相同",
-    "value": "",
-    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_GLOBAL_WINDOWS_0_START",
-    "module": "kit",
-    "path": "kit.access.global.windows.0.start",
-    "description": "允许窗口开始时间 HH:mm，包含开始时刻",
-    "value": "",
-    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES",
-    "module": "kit",
-    "path": "kit.access.rules",
-    "description": "路径访问规则，最多 1000 条；全局和所有匹配规则都必须通过",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0",
-    "module": "kit",
-    "path": "kit.access.rules.0",
-    "description": "路径规则；仅支持精确路径和末尾 /**，不用正则表达式。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_ALLOWIPS",
-    "module": "kit",
-    "path": "kit.access.rules.0.allowIps",
-    "description": "允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_ALLOWIPS_0",
-    "module": "kit",
-    "path": "kit.access.rules.0.allowIps.0",
-    "description": "允许的 IPv4/IPv6 地址或 CIDR；非空时只允许匹配的可信客户端地址。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_DENYIPS",
-    "module": "kit",
-    "path": "kit.access.rules.0.denyIps",
-    "description": "拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_DENYIPS_0",
-    "module": "kit",
-    "path": "kit.access.rules.0.denyIps.0",
-    "description": "拒绝的 IP/CIDR；与 allowIps 同时命中时拒绝优先。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_ENCRYPTION",
-    "module": "kit",
-    "path": "kit.access.rules.0.encryption",
-    "description": "路径的应用层加解密模式；省略沿用宿主，required 强制加密，disabled 明文；重叠路径和方法不得冲突",
-    "value": "required",
-    "constraint": "字符串；取值：required | disabled"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_ID",
-    "module": "kit",
-    "path": "kit.access.rules.0.id",
-    "description": "唯一规则编号，用于日志定位；1–64 个字母数字下划线、点或连字符",
-    "value": "",
-    "constraint": "字符串；最小字符数 1；最大字符数 64；正则 ^[\\w.-]+$"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_METHODS",
-    "module": "kit",
-    "path": "kit.access.rules.0.methods",
-    "description": "受该规则约束的 HTTP 方法；空数组全部方法，GET 不隐含 HEAD",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 9"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_METHODS_0",
-    "module": "kit",
-    "path": "kit.access.rules.0.methods.0",
-    "description": "HTTP 方法，空数组表示所有方法；GET 不隐含 HEAD。；此变量整体替换单个数组项",
-    "value": "GET",
-    "constraint": "字符串；取值：GET | HEAD | POST | PUT | PATCH | DELETE | OPTIONS | CONNECT | TRACE"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_PATHS",
-    "module": "kit",
-    "path": "kit.access.rules.0.paths",
-    "description": "完整请求路径列表，包含部署前缀；精确或末尾 /**，最多 100 项",
-    "value": "",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 100"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_PATHS_0",
-    "module": "kit",
-    "path": "kit.access.rules.0.paths.0",
-    "description": "完整请求路径；末尾 /** 同时匹配该路径及子路径，大小写敏感。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "字符串；最小字符数 1；最大字符数 2048"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_TIMEZONE",
-    "module": "kit",
-    "path": "kit.access.rules.0.timezone",
-    "description": "访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟",
-    "value": "UTC",
+    "path": "kit.a2a.rpcPath",
+    "description": "JSON-RPC 调用的完整站点路径，应与 Agent Card 公布地址一致",
+    "value": "/a2a",
     "constraint": "字符串"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_WINDOWS",
-    "module": "kit",
-    "path": "kit.access.rules.0.windows",
-    "description": "允许的访问时间窗口；空数组不限时间，最多 100 个",
-    "value": "[]",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 100"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_WINDOWS_0",
-    "module": "kit",
-    "path": "kit.access.rules.0.windows.0",
-    "description": "允许的时段；空列表不限时间，跨午夜窗口按开始日归属。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_WINDOWS_0_DAYS",
-    "module": "kit",
-    "path": "kit.access.rules.0.windows.0.days",
-    "description": "允许窗口的开始日，周一 1 至周日 7，至少一项",
-    "value": "",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 7"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_WINDOWS_0_DAYS_0",
-    "module": "kit",
-    "path": "kit.access.rules.0.windows.0.days.0",
-    "description": "周一为 1、周日为 7；跨午夜填写开始日。；此变量整体替换单个数组项",
-    "value": "",
-    "constraint": "整数；>= 1；<= 7"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_WINDOWS_0_END",
-    "module": "kit",
-    "path": "kit.access.rules.0.windows.0.end",
-    "description": "允许窗口结束时间 HH:mm，不含结束；早于开始表示跨午夜，不得与开始相同",
-    "value": "",
-    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
-  },
-  {
-    "name": "HAI_KIT_ACCESS_RULES_0_WINDOWS_0_START",
-    "module": "kit",
-    "path": "kit.access.rules.0.windows.0.start",
-    "description": "允许窗口开始时间 HH:mm，包含开始时刻",
-    "value": "",
-    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
   },
   {
     "name": "HAI_KIT_COOKIE_KEY",
@@ -5310,6 +5070,430 @@
     "description": "kit Cookie 加密密钥",
     "value": "",
     "constraint": "满足 crypto SM4 密钥格式；敏感值仅本机或目标进程注入"
+  },
+  {
+    "name": "HAI_KIT_CORS",
+    "module": "kit",
+    "path": "kit.cors",
+    "description": "浏览器跨域访问策略；默认关闭",
+    "value": "false",
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_CORS_ALLOWEDHEADERS",
+    "module": "kit",
+    "path": "kit.cors.allowedHeaders",
+    "description": "浏览器预检获准发送的请求头",
+    "value": "[\"Authorization\",\"Content-Type\",\"X-Requested-With\",\"X-Hai-Reauthentication\",\"X-Hai-Terminal\"]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_KIT_CORS_ALLOWEDHEADERS_0",
+    "module": "kit",
+    "path": "kit.cors.allowedHeaders.0",
+    "description": "一个 HTTP 方法或响应、请求头名称",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_KIT_CORS_CREDENTIALS",
+    "module": "kit",
+    "path": "kit.cors.credentials",
+    "description": "允许浏览器跨域携带 Cookie 等凭据，默认关闭",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_KIT_CORS_EXPOSEDHEADERS",
+    "module": "kit",
+    "path": "kit.cors.exposedHeaders",
+    "description": "允许跨域页面通过 JavaScript 读取的响应头",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_KIT_CORS_EXPOSEDHEADERS_0",
+    "module": "kit",
+    "path": "kit.cors.exposedHeaders.0",
+    "description": "一个 HTTP 方法或响应、请求头名称",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_KIT_CORS_MAXAGE",
+    "module": "kit",
+    "path": "kit.cors.maxAge",
+    "description": "预检响应的浏览器缓存时间，单位为秒",
+    "value": "86400",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_KIT_CORS_METHODS",
+    "module": "kit",
+    "path": "kit.cors.methods",
+    "description": "浏览器预检获准使用的 HTTP 方法",
+    "value": "[\"GET\",\"HEAD\",\"PUT\",\"PATCH\",\"POST\",\"DELETE\",\"OPTIONS\"]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_KIT_CORS_METHODS_0",
+    "module": "kit",
+    "path": "kit.cors.methods.0",
+    "description": "一个 HTTP 方法或响应、请求头名称",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_KIT_CORS_NATIVEORIGINS",
+    "module": "kit",
+    "path": "kit.cors.nativeOrigins",
+    "description": "显式允许的原生 WebView 来源，使用逗号分隔",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_KIT_CORS_ORIGIN",
+    "module": "kit",
+    "path": "kit.cors.origin",
+    "description": "允许访问的完整来源；使用凭据时仅允许明确来源",
+    "value": "*",
+    "constraint": "字符串；JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_KIT_CORS_ORIGIN_0",
+    "module": "kit",
+    "path": "kit.cors.origin.0",
+    "description": "一个完整的浏览器来源",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_KIT_CORS_PATHS",
+    "module": "kit",
+    "path": "kit.cors.paths",
+    "description": "应用跨域策略的完整请求路径；省略匹配全部",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_KIT_CORS_PATHS_0",
+    "module": "kit",
+    "path": "kit.cors.paths.0",
+    "description": "启用跨域策略的一条完整请求路径",
+    "value": "/",
+    "constraint": "字符串；JSON/YAML 值；格式及范围由对应模块 Schema 校验；取值：/"
+  },
+  {
+    "name": "HAI_KIT_HTTP",
+    "module": "kit",
+    "path": "kit.http",
+    "description": "HTTP 基础路径、请求体大小及访问配置",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS",
+    "module": "kit",
+    "path": "kit.http.access",
+    "description": "每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用",
+    "value": "false",
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_FILE",
+    "module": "kit",
+    "path": "kit.http.access.file",
+    "description": "独立 yml/yaml 策略文件；按工作目录解析，启动读一次，最大 1 MiB",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 4096；正则 \\.ya?ml$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL",
+    "module": "kit",
+    "path": "kit.http.access.global",
+    "description": "所有宿主请求的共同条件；包含健康检查，省略不增加全局限制",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_ALLOWIPS",
+    "module": "kit",
+    "path": "kit.http.access.global.allowIps",
+    "description": "允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_ALLOWIPS_0",
+    "module": "kit",
+    "path": "kit.http.access.global.allowIps.0",
+    "description": "允许的 IPv4/IPv6 地址或 CIDR；非空时只允许匹配的可信客户端地址。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_DENYIPS",
+    "module": "kit",
+    "path": "kit.http.access.global.denyIps",
+    "description": "拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_DENYIPS_0",
+    "module": "kit",
+    "path": "kit.http.access.global.denyIps.0",
+    "description": "拒绝的 IP/CIDR；与 allowIps 同时命中时拒绝优先。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_TIMEZONE",
+    "module": "kit",
+    "path": "kit.http.access.global.timezone",
+    "description": "访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟",
+    "value": "UTC",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_WINDOWS",
+    "module": "kit",
+    "path": "kit.http.access.global.windows",
+    "description": "允许的访问时间窗口；空数组不限时间，最多 100 个",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 100"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_WINDOWS_0",
+    "module": "kit",
+    "path": "kit.http.access.global.windows.0",
+    "description": "允许的时段；空列表不限时间，跨午夜窗口按开始日归属。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_WINDOWS_0_DAYS",
+    "module": "kit",
+    "path": "kit.http.access.global.windows.0.days",
+    "description": "允许窗口的开始日，周一 1 至周日 7，至少一项",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 7"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_WINDOWS_0_DAYS_0",
+    "module": "kit",
+    "path": "kit.http.access.global.windows.0.days.0",
+    "description": "周一为 1、周日为 7；跨午夜填写开始日。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "整数；>= 1；<= 7"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_WINDOWS_0_END",
+    "module": "kit",
+    "path": "kit.http.access.global.windows.0.end",
+    "description": "允许窗口结束时间 HH:mm，不含结束；早于开始表示跨午夜，不得与开始相同",
+    "value": "",
+    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_GLOBAL_WINDOWS_0_START",
+    "module": "kit",
+    "path": "kit.http.access.global.windows.0.start",
+    "description": "允许窗口开始时间 HH:mm，包含开始时刻",
+    "value": "",
+    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES",
+    "module": "kit",
+    "path": "kit.http.access.rules",
+    "description": "路径访问规则，最多 1000 条；全局和所有匹配规则都必须通过",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0",
+    "module": "kit",
+    "path": "kit.http.access.rules.0",
+    "description": "路径规则；仅支持精确路径和末尾 /**，不用正则表达式。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_ALLOWIPS",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.allowIps",
+    "description": "允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_ALLOWIPS_0",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.allowIps.0",
+    "description": "允许的 IPv4/IPv6 地址或 CIDR；非空时只允许匹配的可信客户端地址。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_DENYIPS",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.denyIps",
+    "description": "拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_DENYIPS_0",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.denyIps.0",
+    "description": "拒绝的 IP/CIDR；与 allowIps 同时命中时拒绝优先。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_ENCRYPTION",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.encryption",
+    "description": "路径的应用层加解密模式；省略沿用宿主，required 强制加密，disabled 明文；重叠路径和方法不得冲突",
+    "value": "required",
+    "constraint": "字符串；取值：required | disabled"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_ID",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.id",
+    "description": "唯一规则编号，用于日志定位；1–64 个字母数字下划线、点或连字符",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 64；正则 ^[\\w.-]+$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_METHODS",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.methods",
+    "description": "受该规则约束的 HTTP 方法；空数组全部方法，GET 不隐含 HEAD",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 9"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_METHODS_0",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.methods.0",
+    "description": "HTTP 方法，空数组表示所有方法；GET 不隐含 HEAD。；此变量整体替换单个数组项",
+    "value": "GET",
+    "constraint": "字符串；取值：GET | HEAD | POST | PUT | PATCH | DELETE | OPTIONS | CONNECT | TRACE"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_PATHS",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.paths",
+    "description": "完整请求路径列表，包含部署前缀；精确或末尾 /**，最多 100 项",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 100"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_PATHS_0",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.paths.0",
+    "description": "完整请求路径；末尾 /** 同时匹配该路径及子路径，大小写敏感。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 2048"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_TIMEZONE",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.timezone",
+    "description": "访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟",
+    "value": "UTC",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_WINDOWS",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.windows",
+    "description": "允许的访问时间窗口；空数组不限时间，最多 100 个",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 100"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_WINDOWS_0",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.windows.0",
+    "description": "允许的时段；空列表不限时间，跨午夜窗口按开始日归属。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_WINDOWS_0_DAYS",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.windows.0.days",
+    "description": "允许窗口的开始日，周一 1 至周日 7，至少一项",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 7"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_WINDOWS_0_DAYS_0",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.windows.0.days.0",
+    "description": "周一为 1、周日为 7；跨午夜填写开始日。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "整数；>= 1；<= 7"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_WINDOWS_0_END",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.windows.0.end",
+    "description": "允许窗口结束时间 HH:mm，不含结束；早于开始表示跨午夜，不得与开始相同",
+    "value": "",
+    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_ACCESS_RULES_0_WINDOWS_0_START",
+    "module": "kit",
+    "path": "kit.http.access.rules.0.windows.0.start",
+    "description": "允许窗口开始时间 HH:mm，包含开始时刻",
+    "value": "",
+    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+  },
+  {
+    "name": "HAI_KIT_HTTP_RATELIMIT",
+    "module": "kit",
+    "path": "kit.http.rateLimit",
+    "description": "HTTP 固定窗口限流；false 关闭，启用时由应用注入原子存储",
+    "value": "false",
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_KIT_HTTP_RATELIMIT_MAXREQUESTS",
+    "module": "kit",
+    "path": "kit.http.rateLimit.maxRequests",
+    "description": "同一主体在窗口内允许的请求数",
+    "value": "100",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_KIT_HTTP_RATELIMIT_WINDOWMS",
+    "module": "kit",
+    "path": "kit.http.rateLimit.windowMs",
+    "description": "固定窗口时长，单位为毫秒，从首次成功提交计数起算",
+    "value": "60000",
+    "constraint": "整数；>= 1；<= 2147483647"
+  },
+  {
+    "name": "HAI_KIT_HTTP_TRUSTEDPROXIES",
+    "module": "kit",
+    "path": "kit.http.trustedProxies",
+    "description": "可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段",
+    "value": "auto",
+    "constraint": "字符串；JSON 数组；索引可按 0、1、2 扩展；最多项数 1000；取值：auto"
+  },
+  {
+    "name": "HAI_KIT_HTTP_TRUSTEDPROXIES_0",
+    "module": "kit",
+    "path": "kit.http.trustedProxies.0",
+    "description": "可信代理的 IP/CIDR，只有这些代理的转发头会被信任",
+    "value": "",
+    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
   },
   {
     "name": "HAI_KIT_SERVER",
@@ -5340,8 +5524,8 @@
     "module": "kit",
     "path": "kit.transport",
     "description": "传输加密开关或密钥协商配置",
-    "value": "false",
-    "constraint": "false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "value": "",
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
   },
   {
     "name": "HAI_KIT_TRANSPORT_EXCLUDEPATHS",
@@ -5380,8 +5564,8 @@
     "module": "kit",
     "path": "kit.transport.keyExchangePath",
     "description": "客户端与服务端约定的密钥交换端点",
-    "value": "/api/_hai/key-exchange",
-    "constraint": "字符串；以 / 开头的路径字符串"
+    "value": "/api/v1/_hai/key-exchange",
+    "constraint": "字符串；站点根绝对路径；使用非空普通路径段，无查询、片段或编码"
   },
   {
     "name": "HAI_KIT_TRANSPORT_MAXFUTURESKEWSECONDS",
@@ -5414,22 +5598,6 @@
     "description": "完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_KIT_TRUSTEDPROXIES",
-    "module": "kit",
-    "path": "kit.trustedProxies",
-    "description": "可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段",
-    "value": "auto",
-    "constraint": "字符串；JSON 数组；索引可按 0、1、2 扩展；最多项数 1000；取值：auto"
-  },
-  {
-    "name": "HAI_KIT_TRUSTEDPROXIES_0",
-    "module": "kit",
-    "path": "kit.trustedProxies.0",
-    "description": "可信代理的 IP/CIDR，只有这些代理的转发头会被信任",
-    "value": "",
-    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
   },
   {
     "name": "HAI_MODEL_API_KEY",
@@ -6445,7 +6613,15 @@
     "path": "PUBLIC_API_KEY_EXCHANGE_PATH",
     "description": "公开密钥交换端点，须与服务端一致",
     "value": "",
-    "constraint": "以 / 开头的路径"
+    "constraint": "站点根绝对路径；默认 /api/v1/_hai/key-exchange"
+  },
+  {
+    "name": "PUBLIC_API_KEY_EXCHANGE_PATH_BASE64",
+    "module": "runtime",
+    "path": "PUBLIC_API_KEY_EXCHANGE_PATH_BASE64",
+    "description": "容器生成前端运行时配置时使用的公开密钥交换路径编码",
+    "value": "",
+    "constraint": "由容器从 PUBLIC_API_KEY_EXCHANGE_PATH 派生"
   },
   {
     "name": "PUBLIC_API_TRANSPORT",
@@ -6475,7 +6651,7 @@
     "name": "SERVICE_BASE_URL",
     "module": "runtime",
     "path": "SERVICE_BASE_URL",
-    "description": "Fullstack 开发代理访问服务端的地址",
+    "description": "Fullstack 和 Mobile 的 Vite 开发、预览代理访问服务端的地址",
     "value": "",
     "constraint": "有效 HTTP(S) URL"
   },
@@ -6632,18 +6808,50 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_SERV_A2A",
+    "module": "serv",
+    "path": "serv.a2a",
+    "description": "发布 A2A HTTP 发现及 JSON-RPC；默认关闭",
+    "value": "false",
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_A2A_CARDPATH",
+    "module": "serv",
+    "path": "serv.a2a.cardPath",
+    "description": "公开 Agent Card 的完整站点路径",
+    "value": "/.well-known/agent-card.json",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_A2A_RPCPATH",
+    "module": "serv",
+    "path": "serv.a2a.rpcPath",
+    "description": "JSON-RPC 调用的完整站点路径，应与 Agent Card 公布地址一致",
+    "value": "/a2a",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_AUDIO",
+    "module": "serv",
+    "path": "serv.audio",
+    "description": "实时语音 WebSocket HTTP 路径；默认关闭",
+    "value": "false",
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
+  },
+  {
     "name": "HAI_SERV_CORS",
     "module": "serv",
     "path": "serv.cors",
-    "description": "跨域访问的来源、请求头与凭据策略",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
+    "description": "浏览器跨域访问策略；默认关闭",
+    "value": "false",
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
   },
   {
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS",
     "module": "serv",
     "path": "serv.cors.allowedHeaders",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "浏览器预检获准发送的请求头",
     "value": "[\"Authorization\",\"Content-Type\",\"X-Requested-With\",\"X-Hai-Reauthentication\",\"X-Hai-Terminal\"]",
     "constraint": "JSON 数组；索引可按 0、1、2 扩展"
   },
@@ -6651,7 +6859,7 @@
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS_0",
     "module": "serv",
     "path": "serv.cors.allowedHeaders.0",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "Authorization",
     "constraint": "字符串"
   },
@@ -6659,7 +6867,7 @@
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS_1",
     "module": "serv",
     "path": "HAI_SERV_CORS_ALLOWEDHEADERS_1",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "Content-Type",
     "constraint": "字符串"
   },
@@ -6667,7 +6875,7 @@
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS_2",
     "module": "serv",
     "path": "HAI_SERV_CORS_ALLOWEDHEADERS_2",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Client-Id",
     "constraint": "字符串"
   },
@@ -6675,7 +6883,7 @@
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS_3",
     "module": "serv",
     "path": "HAI_SERV_CORS_ALLOWEDHEADERS_3",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Encrypted",
     "constraint": "字符串"
   },
@@ -6683,7 +6891,7 @@
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS_4",
     "module": "serv",
     "path": "HAI_SERV_CORS_ALLOWEDHEADERS_4",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Hai-Locale",
     "constraint": "字符串"
   },
@@ -6691,7 +6899,7 @@
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS_5",
     "module": "serv",
     "path": "HAI_SERV_CORS_ALLOWEDHEADERS_5",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Request-Id",
     "constraint": "字符串"
   },
@@ -6699,7 +6907,7 @@
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS_6",
     "module": "serv",
     "path": "HAI_SERV_CORS_ALLOWEDHEADERS_6",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Requested-With",
     "constraint": "字符串"
   },
@@ -6707,7 +6915,7 @@
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS_7",
     "module": "serv",
     "path": "HAI_SERV_CORS_ALLOWEDHEADERS_7",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Hai-Transport",
     "constraint": "字符串"
   },
@@ -6715,7 +6923,7 @@
     "name": "HAI_SERV_CORS_ALLOWEDHEADERS_8",
     "module": "serv",
     "path": "HAI_SERV_CORS_ALLOWEDHEADERS_8",
-    "description": "CORS 允许客户端发送的请求头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Hai-Reauthentication",
     "constraint": "字符串"
   },
@@ -6723,7 +6931,7 @@
     "name": "HAI_SERV_CORS_CREDENTIALS",
     "module": "serv",
     "path": "serv.cors.credentials",
-    "description": "是否允许跨域请求携带凭据",
+    "description": "允许浏览器跨域携带 Cookie 等凭据，默认关闭",
     "value": "false",
     "constraint": "true | false"
   },
@@ -6731,7 +6939,7 @@
     "name": "HAI_SERV_CORS_EXPOSEDHEADERS",
     "module": "serv",
     "path": "serv.cors.exposedHeaders",
-    "description": "CORS 允许客户端读取的响应头",
+    "description": "允许跨域页面通过 JavaScript 读取的响应头",
     "value": "[]",
     "constraint": "JSON 数组；索引可按 0、1、2 扩展"
   },
@@ -6739,7 +6947,7 @@
     "name": "HAI_SERV_CORS_EXPOSEDHEADERS_0",
     "module": "serv",
     "path": "serv.cors.exposedHeaders.0",
-    "description": "CORS 允许客户端读取的响应头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Encrypted",
     "constraint": "字符串"
   },
@@ -6747,7 +6955,7 @@
     "name": "HAI_SERV_CORS_EXPOSEDHEADERS_1",
     "module": "serv",
     "path": "HAI_SERV_CORS_EXPOSEDHEADERS_1",
-    "description": "CORS 允许客户端读取的响应头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Request-Id",
     "constraint": "字符串"
   },
@@ -6755,15 +6963,39 @@
     "name": "HAI_SERV_CORS_EXPOSEDHEADERS_2",
     "module": "serv",
     "path": "HAI_SERV_CORS_EXPOSEDHEADERS_2",
-    "description": "CORS 允许客户端读取的响应头",
+    "description": "一个 HTTP 方法或响应、请求头名称",
     "value": "X-Hai-Transport",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_MAXAGE",
+    "module": "serv",
+    "path": "serv.cors.maxAge",
+    "description": "预检响应的浏览器缓存时间，单位为秒",
+    "value": "86400",
+    "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_SERV_CORS_METHODS",
+    "module": "serv",
+    "path": "serv.cors.methods",
+    "description": "浏览器预检获准使用的 HTTP 方法",
+    "value": "[\"GET\",\"HEAD\",\"PUT\",\"PATCH\",\"POST\",\"DELETE\",\"OPTIONS\"]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_CORS_METHODS_0",
+    "module": "serv",
+    "path": "serv.cors.methods.0",
+    "description": "一个 HTTP 方法或响应、请求头名称",
+    "value": "",
     "constraint": "字符串"
   },
   {
     "name": "HAI_SERV_CORS_NATIVEORIGINS",
     "module": "serv",
     "path": "serv.cors.nativeOrigins",
-    "description": "允许使用原生凭据通道的完整 Origin 列表",
+    "description": "显式允许的原生 WebView 来源，使用逗号分隔",
     "value": "http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost",
     "constraint": "字符串"
   },
@@ -6771,9 +7003,33 @@
     "name": "HAI_SERV_CORS_ORIGIN",
     "module": "serv",
     "path": "serv.cors.origin",
-    "description": "CORS 允许的 Origin，星号表示任意来源",
+    "description": "允许访问的完整来源；使用凭据时仅允许明确来源",
     "value": "*",
+    "constraint": "字符串；JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_CORS_ORIGIN_0",
+    "module": "serv",
+    "path": "serv.cors.origin.0",
+    "description": "一个完整的浏览器来源",
+    "value": "",
     "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_PATHS",
+    "module": "serv",
+    "path": "serv.cors.paths",
+    "description": "应用跨域策略的完整请求路径；省略匹配全部",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_SERV_CORS_PATHS_0",
+    "module": "serv",
+    "path": "serv.cors.paths.0",
+    "description": "启用跨域策略的一条完整请求路径",
+    "value": "/",
+    "constraint": "字符串；JSON/YAML 值；格式及范围由对应模块 Schema 校验；取值：/"
   },
   {
     "name": "HAI_SERV_HTTP",
@@ -6789,7 +7045,7 @@
     "path": "serv.http.access",
     "description": "每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用",
     "value": "false",
-    "constraint": "true | false；false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
   },
   {
     "name": "HAI_SERV_HTTP_ACCESS_FILE",
@@ -7120,6 +7376,30 @@
     "constraint": "字符串；以 / 开头的路径字符串"
   },
   {
+    "name": "HAI_SERV_HTTP_RATELIMIT",
+    "module": "serv",
+    "path": "serv.http.rateLimit",
+    "description": "HTTP 固定窗口限流；false 关闭，启用时由应用注入原子存储",
+    "value": "false",
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RATELIMIT_MAXREQUESTS",
+    "module": "serv",
+    "path": "serv.http.rateLimit.maxRequests",
+    "description": "同一主体在窗口内允许的请求数",
+    "value": "100",
+    "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_SERV_HTTP_RATELIMIT_WINDOWMS",
+    "module": "serv",
+    "path": "serv.http.rateLimit.windowMs",
+    "description": "固定窗口时长，单位为毫秒，从首次成功提交计数起算",
+    "value": "60000",
+    "constraint": "整数；>= 1；<= 2147483647"
+  },
+  {
     "name": "HAI_SERV_HTTP_TRUSTEDPROXIES",
     "module": "serv",
     "path": "serv.http.trustedProxies",
@@ -7172,8 +7452,8 @@
     "module": "serv",
     "path": "serv.transport",
     "description": "传输加密开关或密钥协商配置",
-    "value": "false",
-    "constraint": "false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "value": "",
+    "constraint": "false 或 JSON 对象；整体覆盖时替换该节点"
   },
   {
     "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS",
@@ -7228,8 +7508,8 @@
     "module": "serv",
     "path": "serv.transport.keyExchangePath",
     "description": "客户端与服务端约定的密钥交换端点",
-    "value": "/_hai/key-exchange",
-    "constraint": "字符串；以 / 开头的路径字符串"
+    "value": "/api/v1/_hai/key-exchange",
+    "constraint": "字符串；站点根绝对路径；使用非空普通路径段，无查询、片段或编码"
   },
   {
     "name": "HAI_SERV_TRANSPORT_MAXFUTURESKEWSECONDS",

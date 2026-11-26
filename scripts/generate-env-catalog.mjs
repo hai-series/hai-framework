@@ -276,9 +276,20 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
   const gatewayBody = context.name === 'reach' && segments.join('.') === 'providers.0.gateway.body'
   if (gatewayBody)
     constraints.push('JSON 对象、数组或原始文本')
-  const enums = node.enum ?? ('const' in node
-    ? [node.const]
-    : [])
+  const optionalHttpConfig = ['kit', 'serv'].includes(context.name)
+    && [
+      'a2a',
+      'audio',
+      'cors',
+      'http.access',
+      'http.rateLimit',
+      'transport',
+    ].includes(segments.join('.'))
+  const enums = optionalHttpConfig
+    ? []
+    : node.enum ?? ('const' in node
+      ? [node.const]
+      : [])
   if (node.type) {
     constraints.push(node.type === 'boolean' && enums.length
       ? enums.map(String).join(' | ')
@@ -329,15 +340,21 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
   }
   if (!constraints.length && !enums.length && !Object.keys(node).length && segments.length)
     constraints.push('JSON/YAML 值；格式及范围由对应模块 Schema 校验')
+  // 可关闭的 HTTP 配置仅接受 false 或启用对象。
+  if (optionalHttpConfig)
+    constraints.splice(0, constraints.length, 'false 或 JSON 对象；整体覆盖时替换该节点')
   // z.custom 的模板路径类型不能导出 JSON Schema；补充实际 AbsolutePathSchema 的约束。
+  const keyExchangePath = ['kit', 'serv'].includes(context.name) && segments.at(-1) === 'keyExchangePath'
   const absolutePath = ['kit', 'serv'].includes(context.name)
-    && (segments.at(-1) === 'keyExchangePath' || segments.at(-2) === 'excludePaths'
+    && (keyExchangePath || segments.at(-2) === 'excludePaths'
       || (context.name === 'serv' && segments[0] === 'http' && ['path', 'readyPath', 'prefix'].includes(segments.at(-1))))
   if (absolutePath) {
     const unrepresentable = constraints.indexOf('JSON/YAML 值；格式及范围由对应模块 Schema 校验')
     if (unrepresentable >= 0)
       constraints.splice(unrepresentable, 1)
-    constraints.push('以 / 开头的路径字符串')
+    constraints.push(keyExchangePath
+      ? '站点根绝对路径；使用非空普通路径段，无查询、片段或编码'
+      : '以 / 开头的路径字符串')
   }
   if (constraints.length || enums.length) {
     const parentDoc = segments.at(-1) === '0'
@@ -500,10 +517,10 @@ const extraDescriptions = {
   HAI_SERV_REFRESH_COOKIE_SECURE: ['Serv 刷新 Cookie 的 Secure 属性；留空沿用环境默认值，生产默认开启', 'true | false；仅在受控内网或 VPN 的 HTTP 入口使用 false'],
   PUBLIC_API_BASE: ['浏览器/原生客户端 API 地址，不能含凭据', '有效 HTTP(S) URL；是否含 /api/v1 以对应客户端为准'],
   PUBLIC_API_TRANSPORT: ['客户端传输加密开关，须与服务端一致', 'on | off'],
-  PUBLIC_API_KEY_EXCHANGE_PATH: ['公开密钥交换端点，须与服务端一致', '以 / 开头的路径'],
-  HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH: ['桌面示例公开密钥交换端点，构建期插值', '以 / 开头的路径'],
+  PUBLIC_API_KEY_EXCHANGE_PATH: ['公开密钥交换端点，须与服务端一致', '站点根绝对路径；默认 /api/v1/_hai/key-exchange'],
+  HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH: ['桌面示例公开密钥交换端点，构建期插值', '站点根绝对路径；默认 /api/v1/_hai/key-exchange'],
   HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ['服务端版本化传输密钥环；开发测试示例在公共模式文件，生产使用私有配置或 Secret Manager', 'JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志'],
-  HAI_CRYPTO_TRANSPORT: ['桌面示例公开传输配置；在构建阶段与浏览器使用同一 Schema 校验', 'false 关闭；或 JSON/YAML 对象，keyExchangePath 须以 / 开头；不接受 true'],
+  HAI_CRYPTO_TRANSPORT: ['桌面示例公开传输配置；在构建阶段与浏览器使用同一 Schema 校验', 'false 关闭；或 JSON/YAML 对象，keyExchangePath 是站点根绝对路径；不接受 true'],
   VITE_ADAPTER: ['SvelteKit 构建适配器', 'node | static；未识别的值回退 node'],
   HAI_AUDIT_ADMIN_PASSWORD: ['首次创建审计管理员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
   HAI_BUSINESS_OPERATOR_PASSWORD: ['首次创建业务操作员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
@@ -570,8 +587,9 @@ const extraDescriptions = {
   LC_ALL: ['子进程所有 locale 分类的覆盖值', '操作系统支持的 locale，例如 en_US.UTF-8'],
   LC_MESSAGES: ['CLI 消息语言；HAI_CORE_DEFAULTLOCALE、LC_ALL 优先，LANG 后备', '操作系统支持的 locale，例如 en_US.UTF-8'],
   PUBLIC_API_BASE_BASE64: ['容器生成前端运行时配置时使用的 API 地址编码', 'PUBLIC_API_BASE 的 Base64 编码，不含凭据'],
+  PUBLIC_API_KEY_EXCHANGE_PATH_BASE64: ['容器生成前端运行时配置时使用的公开密钥交换路径编码', '由容器从 PUBLIC_API_KEY_EXCHANGE_PATH 派生'],
   PYTHONIOENCODING: ['本地 Python 模型进程标准输入输出编码', 'Python 支持的编码名，通常 utf-8'],
-  SERVICE_BASE_URL: ['Fullstack 开发代理访问服务端的地址', '有效 HTTP(S) URL'],
+  SERVICE_BASE_URL: ['Fullstack 和 Mobile 的 Vite 开发、预览代理访问服务端的地址', '有效 HTTP(S) URL'],
   TAURI_DEV_HOST: ['Tauri 开发时 HMR 可访问的宿主机地址', '主机名或 IP，由 Tauri 开发工具注入'],
   TAURI_SIGNING_PRIVATE_KEY: ['桌面更新产物的签名私钥', '敏感字符串，由打包签名步骤临时注入'],
   TAURI_UPDATE_NOTES: ['写入桌面更新清单的发布说明', '可选纯文本'],
