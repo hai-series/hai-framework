@@ -475,7 +475,9 @@
     {/snippet}
   </WorkspaceLayout>
 </div>
-<FeedbackModal bind:open={feedbackOpen} onsubmit={submitFeedback} oncomplete={openMyFeedback} />
+{#if data.feedbackEnabled && hasPerm('feedback:create')}
+  <FeedbackModal bind:open={feedbackOpen} captureKey={data.user.id} onsubmit={submitFeedback} oncomplete={openMyFeedback} />
+{/if}
 <Modal bind:open={myFeedbackOpen} title={m.feedback_mine()} size='xl'>
   {#if myFeedbackOpen}
     <FeedbackList actions={myFeedbackActions} initialId={myFeedbackId} />

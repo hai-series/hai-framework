@@ -9,12 +9,13 @@ const FEEDBACK_PERMISSIONS = [
   'read',
   'process',
 ] as const
+export const feedbackScope = 'admin-console'
 
 export function getFeedbackContext(event: Pick<RequestEvent, 'locals'>): FeedbackContext | null {
   const session = event.locals.session
   if (!session)
     return null
-  return { scopeId: 'admin-console', userId: session.userId, permissions: session.permissions }
+  return { scopeId: feedbackScope, userId: session.userId, permissions: session.permissions }
 }
 
 /** 将反馈权限显式分配到宿主业务操作员角色，不在 feedback 模块内推断系统管理员。 */

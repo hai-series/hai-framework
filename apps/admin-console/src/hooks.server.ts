@@ -16,6 +16,7 @@ import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { paraglideMiddleware } from '#lib/paraglide/server.js'
+import { feedbackScope } from '#lib/server/feedback.js'
 import { initApp } from '#lib/server/init.js'
 import { getAdminKitConfig } from '#lib/server/kit-config.js'
 
@@ -131,6 +132,9 @@ async function createHaiHandle(): Promise<Handle> {
   return kit.createHandle({
     trustedProxies: kitConfig.trustedProxies,
     access: kitConfig.access,
+    middleware: [
+      (_context, next) => core.context.run({ scopeId: feedbackScope }, next),
+    ],
     auth: {
       verifyToken: validateSession,
       loginUrl: '/auth/login',

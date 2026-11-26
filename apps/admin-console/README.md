@@ -36,7 +36,7 @@
 - 🛡️ 权限管理：权限 CRUD、审计日志（`/admin/iam/permissions`）
 - 🧩 UI Gallery：组件交互式展示（4 标签页）（`/admin/ui-gallery`）
 - 🔧 模块演示：Core / DB / Cache / Storage / AI（LLM、Audio、Image）/ Crypto 演示（`/admin/modules`）
-- 💬 问题反馈：顶栏提交及本人反馈、处理列表（`/admin/feedback`）
+- 💬 问题反馈：顶栏提交和查看本人反馈，首帖可带截图、日志、操作回放和短录屏，处理列表位于 `/admin/feedback`。
 - ⚙️ 设置：业务公告、主题切换、语言切换（`/admin/settings`）
 
 #### 角色与演示行为

@@ -4,8 +4,8 @@ import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import { dutyAccounts, loginOnPage, registerViaApi, transportAdmin, uniqueUser } from './helpers'
 
-test('用户与处理人员在同一份反馈中交换图片、文件和处理结果', async ({ page: staff, browser, baseURL }, testInfo) => {
-  test.setTimeout(60_000)
+test('首帖保存选中的现场，后续双方只交换文字、图片和文件', async ({ page: staff, browser, baseURL }, testInfo) => {
+  test.setTimeout(90_000)
   const origin = baseURL!
   const title = uniqueUser('feedback').username
   const author = uniqueUser('feedback-author')
@@ -16,6 +16,29 @@ test('用户与处理人员在同一份反馈中交换图片、文件和处理�
   })
   const member = await context.newPage()
   try {
+    await member.addInitScript(() => {
+      // 隔离系统选择窗口，保留浏览器实际视频编码和播放链路。
+      Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
+        value: async () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = 320
+          canvas.height = 200
+          const paint = canvas.getContext('2d')!
+          const stream = canvas.captureStream(12)
+          const timer = window.setInterval(() => {
+            if (stream.getVideoTracks().every(track => track.readyState === 'ended')) {
+              window.clearInterval(timer)
+              return
+            }
+            paint.fillStyle = '#208040'
+            paint.fillRect(0, 0, canvas.width, canvas.height)
+            paint.fillStyle = '#ffffff'
+            paint.fillText(String(Date.now()), 20, 25)
+          }, 80)
+          return stream
+        },
+      })
+    })
     const registration = await registerViaApi(member.request, author)
     const registered: HaiResult<{ user: { id: string } }> = await registration.json()
     expect(registered.success).toBe(true)
@@ -37,15 +60,39 @@ test('用户与处理人员在同一份反馈中交换图片、文件和处理�
     expect((await assignment.json()).success).toBe(true)
 
     await loginOnPage(member, author.username, author.password)
+    member.setDefaultTimeout(12_000)
     await expect(member.locator('a[href="/admin/feedback"]')).toHaveCount(0)
     const screenshot = await member.screenshot()
+    await member.evaluate(() => {
+      window.dispatchEvent(new ErrorEvent('error', { message: 'Feedback browser warning token=private-fixture' }))
+    })
     await member.getByTestId('feedback-open').click()
     const submit = member.getByRole('dialog', { name: '反馈', exact: true })
+    const captured = submit.getByTestId('feedback-capture')
+    await expect(captured.getByTestId('feedback-capture-screenshot')).toBeVisible({ timeout: 10_000 })
+    await expect(captured.getByTestId('feedback-capture-replay')).toBeVisible()
+    await captured.getByTestId('feedback-capture-screenshot').getByRole('button', { name: '查看材料' }).click()
+    await expect.poll(() => captured.getByRole('img', { name: 'screenshot.png' }).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+    await captured.getByTestId('feedback-capture-browserLogs').getByRole('button', { name: '查看材料' }).click()
+    await expect(captured.locator('pre')).toContainText('Feedback browser warning')
+    await expect(captured.locator('pre')).not.toContainText('private-fixture')
+    await captured.getByTestId('feedback-capture-screenshot').getByRole('button', { name: '删除' }).click()
+    await expect(captured.getByTestId('feedback-capture-screenshot')).toHaveCount(0)
+    await captured.getByRole('button', { name: '录屏', exact: true }).click()
+    await captured.getByRole('button', { name: '开始录屏' }).click()
+    await expect(member.getByText('正在录屏 · 1 秒', { exact: true })).toBeVisible()
+    await member.getByRole('button', { name: '停止录屏' }).click()
+    await expect(captured.getByTestId('feedback-capture-recording')).toBeVisible()
+    await expect.poll(() => captured.locator('video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThan(0)
     await submit.getByRole('textbox', { name: '内容' }).fill(title)
     await submit.locator('input[type=file]').setInputFiles({ name: 'initial.png', mimeType: 'image/png', buffer: screenshot })
     await submit.getByRole('button', { name: '提交反馈' }).click()
     await expect(member.getByTestId('feedback-status')).toHaveText('待处理')
     await expect(member.getByText('initial.png', { exact: true })).toBeVisible()
+    const savedDiagnostics = member.getByRole('region', { name: '首帖现场' })
+    await expect(savedDiagnostics.getByText('页面截图', { exact: true })).toHaveCount(0)
+    await expect(savedDiagnostics.getByText('浏览器日志', { exact: true })).toBeVisible()
+    await expect(savedDiagnostics.getByText('短录屏', { exact: true })).toBeVisible()
 
     await staff.request.post('/api/auth/logout')
     await loginOnPage(staff, dutyAccounts.operator.username, dutyAccounts.operator.password)
@@ -54,6 +101,10 @@ test('用户与处理人员在同一份反馈中交换图片、文件和处理�
       name: new RegExp(title),
     }).click()
     const processing = staff.getByTestId('feedback-detail')
+    const replay = processing.getByRole('region', { name: '首帖现场' }).locator('li').filter({ hasText: '页面回放' })
+    await replay.getByRole('button', { name: '查看材料' }).click()
+    await expect(processing.getByRole('button', { name: '播放', exact: true })).toBeVisible()
+    await expect(processing.getByRole('button', { name: '录屏', exact: true })).toHaveCount(0)
     await processing.getByRole('textbox', { name: '回复内容' }).fill('请补充打开订单失败时的截图')
     await processing.locator('input[type=file]').setInputFiles({
       name: 'steps.txt',

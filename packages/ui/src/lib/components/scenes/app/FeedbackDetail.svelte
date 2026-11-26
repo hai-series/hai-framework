@@ -1,13 +1,14 @@
 <!-- @component FeedbackDetail 展示首帖、处理状态、双方消息和授权附件。 -->
 <script lang='ts'>
-  import type { FeedbackDetail as Detail, FeedbackAttachment, FeedbackMessage, FeedbackSetStatusInput, FeedbackSubmitInput } from '@h-ai/api-contract/feedback'
+  import type { FeedbackDetail as Detail, FeedbackAttachment, FeedbackAttachmentKind, FeedbackMessage, FeedbackSetStatusInput, FeedbackSubmitInput } from '@h-ai/api-contract/feedback'
   import type { FeedbackViewActions } from './feedback-types.js'
   import { onMount } from 'svelte'
   import { uiM } from '../../../messages.js'
   import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import Pagination from '../../compounds/Pagination.svelte'
   import Button from '../../primitives/Button.svelte'
-  import { createFeedbackFileUrl, isPreviewImage, statusLabel } from './feedback-functions.js'
+  import { captureLabels, decodeFeedbackFile, isPreviewImage, statusLabel } from './feedback-functions.js'
+  import FeedbackCapturePreview from './FeedbackCapturePreview.svelte'
   import FeedbackForm from './FeedbackForm.svelte'
 
   interface Props {
@@ -27,16 +28,13 @@
   let loading = $state(true)
   let busy = $state(false)
   let error = $state('')
-  let activePreview = $state<{ name: string, url: string }>()
+  let activePreview = $state.raw<{ file: File, kind: FeedbackAttachmentKind }>()
   let gettingFile = $state('')
   let request = 0
   let disposed = false
 
   function closePreview() {
-    if (activePreview) {
-      URL.revokeObjectURL(activePreview.url)
-      activePreview = undefined
-    }
+    activePreview = undefined
   }
 
   async function load(nextPage = 1) {
@@ -122,15 +120,14 @@
         error = errorMessage(result.error, uiM('feedback_action_failed'))
         return
       }
-      if (preview && isPreviewImage(result.data.contentType)) {
-        closePreview()
+      if (preview && (file.kind !== 'file' || isPreviewImage(result.data.contentType))) {
         activePreview = {
-          name: result.data.name,
-          url: createFeedbackFileUrl(result.data, true),
+          file: decodeFeedbackFile(result.data),
+          kind: file.kind,
         }
       }
       else {
-        const url = createFeedbackFileUrl(result.data, false)
+        const url = URL.createObjectURL(decodeFeedbackFile(result.data, true))
         const link = document.createElement('a')
         link.href = url
         link.download = result.data.name
@@ -164,8 +161,12 @@
     <ul class='space-y-1'>
       {#each items as item (item.id)}
         <li class='flex flex-wrap items-center gap-x-2'>
-          <span class='break-all text-sm'>{item.name}</span>
-          {#if isPreviewImage(item.contentType)}
+          <span class='break-all text-sm'>{item.kind === 'file'
+            ? item.name
+            : uiM(captureLabels[item.kind])}</span>
+          {#if item.kind !== 'file'}
+            <Button size='xs' variant='ghost' disabled={!!gettingFile && gettingFile !== item.id} onclick={() => void fileAction(item, true)}>{uiM('feedback_capture_preview')}</Button>
+          {:else if isPreviewImage(item.contentType)}
             <Button size='xs' variant='ghost' disabled={!!gettingFile && gettingFile !== item.id} onclick={() => void fileAction(item, true)}>{uiM('feedback_preview')}</Button>
           {/if}
           <Button size='xs' variant='ghost' disabled={!!gettingFile && gettingFile !== item.id} onclick={() => void fileAction(item, false)}>{uiM('feedback_download')}</Button>
@@ -191,15 +192,23 @@
     </div>
     <div class='space-y-2 rounded-xl border border-base-content/15 p-3'>
       <p class='whitespace-pre-wrap break-words'>{report.report.body}</p>
-      {@render files(report.attachments)}
+      {@render files(report.attachments.filter(attachment => attachment.kind === 'file'))}
+      {#if report.attachments.some(attachment => attachment.kind !== 'file')}
+        <section class='mt-3 space-y-2' aria-label={uiM('feedback_capture_title')}>
+          <h3 class='text-sm font-medium'>{uiM('feedback_capture_title')}</h3>
+          {@render files(report.attachments.filter(attachment => attachment.kind !== 'file'))}
+        </section>
+      {/if}
     </div>
     {#if activePreview}
       <figure class='space-y-2 rounded-xl bg-base-200 p-3'>
         <figcaption class='flex items-center justify-between gap-3 break-all'>
-          {activePreview.name}
+          {activePreview.file.name}
           <Button size='xs' variant='ghost' onclick={closePreview}>{uiM('feedback_close')}</Button>
         </figcaption>
-        <img src={activePreview.url} alt={activePreview.name} class='max-h-96 max-w-full object-contain' />
+        {#key activePreview}
+          <FeedbackCapturePreview file={activePreview.file} kind={activePreview.kind} />
+        {/key}
       </figure>
     {/if}
     <section aria-label={uiM('feedback_conversation')} class='space-y-3'>

@@ -153,6 +153,8 @@
     "@h-ai/api-contract": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@internationalized/date": "catalog:",
+    "@rrweb/record": "catalog:",
+    "@rrweb/replay": "catalog:",
     "@shikijs/langs": "catalog:",
     "altcha": "catalog:",
     "bits-ui": "catalog:",
