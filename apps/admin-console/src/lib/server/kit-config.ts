@@ -2,6 +2,7 @@
 import type { KitConfig } from '@h-ai/kit'
 import { apiContract } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
+import { feedback } from '@h-ai/feedback'
 import { KitConfigSchema } from '@h-ai/kit'
 
 let current: KitConfig | undefined
@@ -23,7 +24,7 @@ export function getAdminKitConfig(basePath = ''): KitConfig {
       : {
           ...result.data.transport,
           routePlaintextBytes: {
-            ...apiContract.feedbackTransportRoutes(`${basePath}/api`),
+            ...apiContract.feedbackTransportRoutes(`${basePath}/api`, feedback.config?.limits.maxTotalFileBytes),
             ...result.data.transport.routePlaintextBytes,
           },
         },

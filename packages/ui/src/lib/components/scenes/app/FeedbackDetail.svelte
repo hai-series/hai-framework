@@ -1,6 +1,6 @@
 <!-- @component FeedbackDetail 展示首帖、处理状态、双方消息和授权附件。 -->
 <script lang='ts'>
-  import type { FeedbackDetail as Detail, FeedbackAttachment, FeedbackAttachmentKind, FeedbackMessage, FeedbackSetStatusInput, FeedbackSubmitInput } from '@h-ai/api-contract/feedback'
+  import type { FeedbackDetail as Detail, FeedbackAttachment, FeedbackAttachmentKind, FeedbackLimits, FeedbackMessage, FeedbackSetStatusInput, FeedbackSubmitInput } from '@h-ai/api-contract/feedback'
   import type { FeedbackViewActions } from './feedback-types.js'
   import { onMount } from 'svelte'
   import { uiM } from '../../../messages.js'
@@ -21,6 +21,7 @@
 
   const { id, actions, canProcess = false, canReply = true, onchange }: Props = $props()
   let report = $state<Detail>()
+  let limits = $state.raw<FeedbackLimits['limits']>()
   let messages = $state<FeedbackMessage[]>([])
   let total = $state(0)
   let page = $state(1)
@@ -42,9 +43,12 @@
     error = ''
     loading = true
     try {
-      const [summary, conversation] = await Promise.all([
+      const [summary, conversation, settings] = await Promise.all([
         actions.get({ id }),
         actions.listMessages({ id, page: nextPage }),
+        canReply && !limits
+          ? actions.getLimits?.()
+          : undefined,
       ])
       if (disposed || token !== request)
         return
@@ -61,6 +65,10 @@
       total = conversation.data.total
       page = conversation.data.page
       pageSize = conversation.data.pageSize
+      if (settings?.success)
+        limits = settings.data.limits
+      else if (settings)
+        error = errorMessage(settings.error, uiM('feedback_action_failed'))
     }
     catch (cause) {
       if (!disposed && token === request)
@@ -231,8 +239,8 @@
         </article>
       {/each}
     </section>
-    {#if canReply}
-      <FeedbackForm reply onsubmit={input => send(input, 'reply')} onrequestinfo={canProcess
+    {#if canReply && (!actions.getLimits || limits)}
+      <FeedbackForm reply {limits} onsubmit={input => send(input, 'reply')} onrequestinfo={canProcess
         ? input => send(input, 'request_info')
         : undefined} oncomplete={() => {
         if (!disposed) {

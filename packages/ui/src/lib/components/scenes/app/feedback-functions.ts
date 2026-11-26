@@ -27,6 +27,14 @@ export function captureSize(capture?: FeedbackCaptureDraft) {
   return captureFileKeys.reduce((sum, key) => sum + (capture?.[key]?.size ?? 0), 0)
 }
 
+export function formatFeedbackBytes(bytes: number) {
+  if (bytes % (1024 * 1024) === 0)
+    return `${bytes / (1024 * 1024)} MiB`
+  if (bytes % 1024 === 0)
+    return `${bytes / 1024} KiB`
+  return `${bytes} B`
+}
+
 export async function encodeFeedbackCapture(capture: FeedbackCaptureDraft): Promise<FeedbackCaptureInput> {
   const encoded: FeedbackCaptureInput = { includeServerLogs: capture.includeServerLogs }
   await Promise.all(captureFileKeys.map(async (key) => {

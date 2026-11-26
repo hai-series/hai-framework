@@ -1,18 +1,17 @@
-import { feedbackLimits } from '@h-ai/api-contract/feedback'
-
 const PRIVATE_SELECTOR = 'input[type="password"],[data-feedback-private],.rr-block,.rr-mask'
 const CONTROL_SELECTOR = 'input,textarea,select,[contenteditable]:not([contenteditable="false"])'
 
 /**
  * 捕获当前可见页面，在克隆中遮挡私密内容。
+ * @param maxBytes - 截图可以使用的原始字节容量。
  * @param signal - 取消等待或克隆；底层渲染不可中断时由调用方保留实际任务的单飞约束。
  * @example 模块内部上下文
  * ```ts
- * const file = await captureFeedbackScreenshot()
+ * const file = await captureFeedbackScreenshot(5 * 1024 * 1024)
  * const length = file.size
  * ```
  */
-export async function captureFeedbackScreenshot(signal?: AbortSignal): Promise<File> {
+export async function captureFeedbackScreenshot(maxBytes: number, signal?: AbortSignal): Promise<File> {
   signal?.throwIfAborted()
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT)
   let nodes = 0
@@ -127,7 +126,7 @@ export async function captureFeedbackScreenshot(signal?: AbortSignal): Promise<F
       ? resolve(value)
       : reject(new Error('Screenshot encoding failed')), 'image/png'))
     signal?.throwIfAborted()
-    if (!blob.size || blob.size > feedbackLimits.maxFileBytes)
+    if (!blob.size || blob.size > maxBytes)
       throw new RangeError('Screenshot exceeds the file limit')
     return new File([blob], 'screenshot.png', { type: 'image/png' })
   }

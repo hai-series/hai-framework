@@ -1,15 +1,16 @@
 <!-- 浏览器原生短录屏；用户主动授权，无声音，停止后交给宿主准备附件。 -->
 <script lang='ts'>
-  import { feedbackLimits } from '@h-ai/api-contract/feedback'
   import { onMount } from 'svelte'
   import { uiM } from '../../../messages.js'
   import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import { portal } from '../../../utils.js'
   import Button from '../../primitives/Button.svelte'
+  import { formatFeedbackBytes } from './feedback-functions.js'
 
-  const { disabled = false, maxBytes = feedbackLimits.maxFileBytes, onrecord, onactive }: {
+  const { disabled = false, maxBytes, maxSeconds, onrecord, onactive }: {
     disabled?: boolean
-    maxBytes?: number
+    maxBytes: number
+    maxSeconds: number
     onrecord: (file: File) => Promise<void>
     onactive: (active: boolean) => void
   } = $props()
@@ -88,7 +89,7 @@
         const started = Date.now()
         timer = setInterval(() => {
           seconds = Math.floor((Date.now() - started) / 1000)
-          if (seconds >= feedbackLimits.maxRecordingSeconds)
+          if (seconds >= maxSeconds)
             stop()
         }, 250)
       }
@@ -151,7 +152,8 @@
   {#if expanded}
     <p class='text-xs text-base-content/65'>{supported
       ? uiM('feedback_record_hint', {
-        size: (maxBytes / 1048576).toFixed(1),
+        seconds: maxSeconds,
+        size: formatFeedbackBytes(maxBytes),
       })
       : uiM('feedback_record_unsupported')}</p>
     {#if supported}<Button size='sm' loading={busy} disabled={disabled || active} onclick={start}>{uiM('feedback_record_start')}</Button>{/if}

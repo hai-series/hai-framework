@@ -23,6 +23,7 @@ describe('反馈短录屏', () => {
     if (action === '超时' || action === '延迟启动')
       vi.useFakeTimers()
     let beginEncoding = () => {}
+    let encodingStartedAt = 0
     const track = Object.assign(new EventTarget(), {
       stop: vi.fn(),
     })
@@ -46,7 +47,10 @@ describe('反馈短录屏', () => {
       constructor(_stream: unknown, readonly options: MediaRecorderOptions) {}
       start() {
         this.state = 'recording'
-        beginEncoding = () => this.onstart?.()
+        beginEncoding = () => {
+          encodingStartedAt = Date.now()
+          this.onstart?.()
+        }
         if (action !== '延迟启动')
           queueMicrotask(beginEncoding)
       }
@@ -85,7 +89,12 @@ describe('反馈短录屏', () => {
     const onactive = vi.fn()
     const component = mount(FeedbackRecorder, {
       target,
-      props: { onrecord, onactive },
+      props: {
+        onrecord,
+        onactive,
+        maxSeconds: 4,
+        maxBytes: 1024 * 1024,
+      },
     })
     let disposed = false
     try {
@@ -110,7 +119,9 @@ describe('反馈短录屏', () => {
         track.dispatchEvent(new Event('ended'))
       }
       else if (action === '超时') {
-        await vi.advanceTimersByTimeAsync(60_000)
+        await vi.advanceTimersByTimeAsync(3_999 - (Date.now() - encodingStartedAt))
+        expect(onrecord).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(1)
       }
       else {
         button(document.body, action === '取消'
@@ -153,6 +164,8 @@ describe('反馈短录屏', () => {
     const component = mount(FeedbackRecorder, {
       target,
       props: {
+        maxSeconds: 4,
+        maxBytes: 1024 * 1024,
         onrecord: vi.fn(),
         onactive,
       },

@@ -17,7 +17,7 @@
   import * as m from '#lib/paraglide/messages.js'
   import { getLocale } from '#lib/paraglide/runtime.js'
   import { authActions } from '#lib/services/auth.js'
-  import { myFeedbackActions, submitFeedback } from '#lib/services/feedback.js'
+  import { getFeedbackLimits, myFeedbackActions, submitFeedback } from '#lib/services/feedback.js'
   import { sensitiveActions } from '#lib/services/sensitive-actions.svelte.js'
   import { sessionRecovery } from '#lib/services/session-recovery.svelte.js'
   import { setAdminTheme } from '#lib/theme-context.js'
@@ -476,7 +476,7 @@
   </WorkspaceLayout>
 </div>
 {#if data.feedbackEnabled && hasPerm('feedback:create')}
-  <FeedbackModal bind:open={feedbackOpen} captureKey={data.user.id} onsubmit={submitFeedback} oncomplete={openMyFeedback} />
+  <FeedbackModal bind:open={feedbackOpen} captureKey={data.user.id} getLimits={getFeedbackLimits} onsubmit={submitFeedback} oncomplete={openMyFeedback} />
 {/if}
 <Modal bind:open={myFeedbackOpen} title={m.feedback_mine()} size='xl'>
   {#if myFeedbackOpen}

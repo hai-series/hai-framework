@@ -6,7 +6,7 @@ import { apiContract } from '@h-ai/api-contract'
 import { apiFetch } from '#lib/utils/api.js'
 
 const http = apiClient.create(apiContract.create({ feedback: apiContract.feedback }))
-const { reports, attachments } = http.feedback
+const { reports, attachments, limits } = http.feedback
 let initialization: Promise<HaiResult<void>> | undefined
 
 async function request<T>(action: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
@@ -26,8 +26,10 @@ async function request<T>(action: () => Promise<HaiResult<T>>): Promise<HaiResul
 }
 
 export const submitFeedback: FeedbackSubmitAction = input => request(() => reports.submit(input))
+export const getFeedbackLimits = () => request(() => limits())
 
 const detail: Omit<FeedbackViewActions, 'list'> = {
+  getLimits: getFeedbackLimits,
   get: input => request(() => reports.get(input)),
   listMessages: input => request(() => reports.listMessages(input)),
   addMessage: input => request(() => reports.addMessage(input)),

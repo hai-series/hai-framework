@@ -1,5 +1,6 @@
 <!-- @component FeedbackForm 发送文本和本次手动选择的附件。 -->
 <script lang='ts'>
+  import type { FeedbackLimits } from '@h-ai/api-contract/feedback'
   import type { FeedbackCaptureDraft } from './feedback-functions.js'
   import type { FeedbackSubmitAction } from './feedback-types.js'
   import { feedbackLimits } from '@h-ai/api-contract/feedback'
@@ -7,7 +8,7 @@
   import { uiM } from '../../../messages.js'
   import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import Button from '../../primitives/Button.svelte'
-  import { captureSize, encodeFeedbackCapture, encodeFeedbackFile } from './feedback-functions.js'
+  import { captureSize, encodeFeedbackCapture, encodeFeedbackFile, formatFeedbackBytes } from './feedback-functions.js'
 
   interface Props {
     onsubmit: FeedbackSubmitAction
@@ -17,9 +18,10 @@
     reply?: boolean
     capture?: FeedbackCaptureDraft
     preparing?: boolean
+    limits?: FeedbackLimits['limits']
   }
 
-  const { onsubmit, onrequestinfo, oncomplete, onbusy, reply = false, capture, preparing = false }: Props = $props()
+  const { onsubmit, onrequestinfo, oncomplete, onbusy, reply = false, capture, preparing = false, limits = feedbackLimits }: Props = $props()
   const formId = $props.id()
   let body = $state('')
   let files = $state.raw<File[]>([])
@@ -29,6 +31,17 @@
   const selectedCapture = $derived(reply ? undefined : capture)
   const captureBytes = $derived(captureSize(selectedCapture))
   const canSend = $derived(Boolean(body.trim() || files.length || captureBytes || selectedCapture?.includeServerLogs))
+  const fileLimitText = $derived(uiM('feedback_file_limits', {
+    count: limits.maxFiles,
+    fileSize: formatFeedbackBytes(limits.maxFileBytes),
+    totalSize: formatFeedbackBytes(limits.maxTotalFileBytes),
+  }))
+
+  function validFiles(selected: File[]) {
+    return selected.length <= limits.maxFiles
+      && selected.every(file => file.size > 0 && file.size <= limits.maxFileBytes && file.name.length <= 255)
+      && selected.reduce((total, file) => total + file.size, captureBytes) <= limits.maxTotalFileBytes
+  }
 
   function edit() {
     attempt = undefined
@@ -42,10 +55,8 @@
       ...Array.from(input.files ?? []),
     ]
     input.value = ''
-    if (selected.length > feedbackLimits.maxFiles
-      || selected.some(file => file.size === 0 || file.size > feedbackLimits.maxFileBytes || file.name.length > 255)
-      || selected.reduce((total, file) => total + file.size, captureBytes) > feedbackLimits.maxTotalFileBytes) {
-      error = uiM('feedback_file_limits')
+    if (!validFiles(selected)) {
+      error = fileLimitText
       return
     }
     files = selected
@@ -62,8 +73,8 @@
       error = uiM('feedback_error_empty')
       return
     }
-    if (files.reduce((sum, file) => sum + file.size, captureBytes) > feedbackLimits.maxTotalFileBytes) {
-      error = uiM('feedback_file_limits')
+    if (!validFiles(files)) {
+      error = fileLimitText
       return
     }
     if (attempt?.requestInfo !== requestInfo || attempt.capture !== selectedCapture) {
@@ -114,12 +125,12 @@
 }}>
   <div class='space-y-1'>
     <label for={`${formId}-body`} class='block text-sm font-medium'>{uiM(reply ? 'feedback_reply' : 'feedback_content_label')}</label>
-    <textarea id={`${formId}-body`} class='textarea w-full min-h-24' bind:value={body} maxlength={feedbackLimits.maxBodyLength} oninput={edit} disabled={busy}></textarea>
+    <textarea id={`${formId}-body`} class='textarea w-full min-h-24' bind:value={body} maxlength={limits.maxBodyLength} oninput={edit} disabled={busy}></textarea>
   </div>
   <div class='space-y-1'>
     <label for={`${formId}-files`} class='block text-sm font-medium'>{uiM('feedback_attachments')}</label>
     <input id={`${formId}-files`} class='file-input file-input-sm w-full' type='file' multiple onchange={selectFiles} disabled={busy} aria-describedby={`${formId}-limits`}>
-    <p id={`${formId}-limits`} class='text-xs text-base-content/70'>{uiM('feedback_file_limits')}</p>
+    <p id={`${formId}-limits`} class='text-xs text-base-content/70'>{fileLimitText}</p>
     {#if files.length}
       <ul class='space-y-1'>
         {#each files as file, index (file)}

@@ -3,6 +3,7 @@ import type {
   FeedbackAttachmentData,
   FeedbackAttachmentQuery,
   FeedbackDetail,
+  FeedbackLimits,
   FeedbackListInput,
   FeedbackMessage,
   FeedbackMessageQuery,
@@ -14,6 +15,7 @@ import type { HaiResult, PaginatedResult } from '@h-ai/core'
 
 /** 反馈视图通过宿主已鉴权的操作访问服务。 */
 export interface FeedbackViewActions {
+  getLimits?: FeedbackLimitsAction
   list: (query: FeedbackListInput) => Promise<HaiResult<PaginatedResult<FeedbackReport>>>
   get: (input: { id: string }) => Promise<HaiResult<FeedbackDetail>>
   listMessages: (query: FeedbackMessageQuery) => Promise<HaiResult<PaginatedResult<FeedbackMessage>>>
@@ -24,3 +26,6 @@ export interface FeedbackViewActions {
 
 /** 验证并发送本次选中的正文与附件，成功结果可由宿主接收。 */
 export type FeedbackSubmitAction = (input: FeedbackSubmitInput) => Promise<HaiResult<unknown>>
+
+/** 读取服务端生效的发送与采集上限。 */
+export type FeedbackLimitsAction = () => Promise<HaiResult<FeedbackLimits>>

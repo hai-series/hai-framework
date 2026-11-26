@@ -6,6 +6,46 @@ import { expect, it, vi } from 'vitest'
 import FeedbackForm from '../src/lib/components/scenes/app/FeedbackForm.svelte'
 import FeedbackList from '../src/lib/components/scenes/app/FeedbackList.svelte'
 
+it('表单显示已配置的容量并拦住超大文件', async () => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const onsubmit = vi.fn<FeedbackSubmitAction>(async () => core.ok(undefined))
+  const component = mount(FeedbackForm, {
+    target,
+    props: {
+      onsubmit,
+      limits: {
+        maxBodyLength: 17,
+        maxFiles: 1,
+        maxFileBytes: 1024,
+        maxTotalFileBytes: 2048,
+      },
+    },
+  })
+  try {
+    flushSync()
+    expect(target.querySelector('textarea')?.maxLength).toBe(17)
+    expect(target.textContent).toContain('1 KiB')
+    expect(target.textContent).toContain('2 KiB')
+    const selector = target.querySelector<HTMLInputElement>('input[type=file]')!
+    Object.defineProperty(selector, 'files', {
+      value: [
+        new File([
+          'a'.repeat(1025),
+        ], 'too-large.txt'),
+      ],
+    })
+    selector.dispatchEvent(new Event('change', { bubbles: true }))
+    flushSync()
+    expect(target.textContent).not.toContain('too-large.txt')
+    expect(target.querySelector<HTMLButtonElement>('button[type=submit]')?.disabled).toBe(true)
+    expect(onsubmit).not.toHaveBeenCalled()
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})
+
 it('提交失败保留正文和文件，使用同一个 UUID 再发送', async () => {
   const target = document.body.appendChild(document.createElement('div'))
   const onsubmit = vi.fn<FeedbackSubmitAction>()

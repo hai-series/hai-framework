@@ -1,5 +1,5 @@
+import type { FeedbackLimits } from '@h-ai/api-contract/feedback'
 import type { LogRecord } from '@h-ai/core'
-import { feedbackLimits } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
 
 const encoder = new TextEncoder()
@@ -76,7 +76,10 @@ function jsonFile(name: string, lines: string[]) {
 }
 
 /** 由已登录的反馈弹窗拥有。缓冲只在当前页面内存中保留。 */
-export function startBrowserFeedbackCapture() {
+export function startBrowserFeedbackCapture({ limits, capture }: FeedbackLimits) {
+  const windowMs = capture.windowSeconds * 1000
+  const maxLogBytes = Math.min(limits.maxFileBytes, capture.maxLogBytes)
+  const maxReplayBytes = Math.min(limits.maxFileBytes, capture.maxReplayBytes)
   const logs: Array<{ time: number, json: string, bytes: number }> = []
   const segments: ReplaySegment[] = []
   let active: ReplaySegment | undefined
@@ -88,8 +91,8 @@ export function startBrowserFeedbackCapture() {
   let stopReplay: (() => void) | undefined
 
   function trimLogs(now: number) {
-    while (logs[0] && (logs[0].time < now - feedbackLimits.captureWindowMs
-      || logs.length > feedbackLimits.maxLogEntries || logBytes > feedbackLimits.maxLogBytes)) {
+    while (logs[0] && (logs[0].time < now - windowMs
+      || logs.length > capture.maxLogEntries || logBytes > maxLogBytes)) {
       logBytes -= logs.shift()!.bytes
     }
   }
@@ -108,8 +111,8 @@ export function startBrowserFeedbackCapture() {
   }
 
   function trimReplay(now: number) {
-    while (segments[0] && (segments[0].since < now - feedbackLimits.captureWindowMs
-      || replayBytes > feedbackLimits.maxReplayBytes || replayCount > 2000)) {
+    while (segments[0] && (segments[0].since < now - windowMs
+      || replayBytes > maxReplayBytes || replayCount > capture.maxReplayEvents)) {
       const removed = segments.shift()!
       replayBytes -= removed.bytes
       replayCount -= removed.lines.length
@@ -170,7 +173,7 @@ export function startBrowserFeedbackCapture() {
         inlineImages: false,
         inlineStylesheet: true,
         collectFonts: false,
-        checkoutEveryNms: 30_000,
+        checkoutEveryNms: Math.min(30_000, windowMs / 2),
         emit: recordReplay,
       })
     }
