@@ -234,6 +234,8 @@ fullstack 与 Admin Console 在已登录页面遇到明确的服务端会话失�
 
 `idleTimeout`、`absoluteTimeout`、`maxSessions` 的 0 分别关闭对应限制。`sliding` 控制 access 滑动延长，不会取消闲置/绝对期限。并发数包含 access 已到期但仍可刷新的有效会话，达到额度会拒绝新登录；应从旧会话退出或安排撤销。
 
+关闭闲置期限并启用滑动续期时，`touchMinInterval` 默认按 5 秒合并续期写入，实际间隔不超过会话 access 时长的十分之一。设为 `0` 可在活动时间变化时立即写入。
+
 若只允许同一用户一个登录会话，把 `singleDevice` 改为 true。`singleDeviceMode: replace` 顶掉旧会话；`reject` 保留旧会话、拒绝新登录。它限制登录会话，不是采集硬件设备标识；与 `maxSessions` 同时配置时，单会话策略更严格。额度在新登录提交时原子执行，切换配置不承诺立即清退所有存量会话。
 
 按终端分别限制时保持 `singleDevice: false`，并设置：

@@ -106,7 +106,7 @@ export interface Session {
   permissions: string[]
   /** 来源（如 pc/android/ios） */
   source?: string
-  /** 访问令牌 */
+  /** 访问令牌；读取会话时由缓存记录的键填回。 */
   accessToken: string
   /** 创建时间 */
   createdAt: Date
@@ -118,7 +118,7 @@ export interface Session {
   expiresAt: Date
   /** 本会话 access 的签发/滑动有效期，单位秒；创建时固化，刷新沿用该值。 */
   maxAge: number
-  /** 扩展数据（内部保留 _tokenPair 供 logout 时吊销 refreshToken） */
+  /** 扩展数据；新建会话的返回值附带本次签发的令牌对。 */
   data?: SessionData
 }
 
@@ -133,7 +133,7 @@ export interface Session {
  * ```
  */
 export type SessionData = Record<string, unknown> & {
-  /** 令牌对（内部保留字段，由 session.create 写入，logout 时读取） */
+  /** 仅附在 session.create 的返回值中，登录用它组装 AuthResult.tokens。 */
   _tokenPair?: TokenPair
 }
 
@@ -198,15 +198,16 @@ export interface SessionOperations {
    * 单设备模式在同一次原子提交内替换用户同一凭据代的已有会话；提交失败保留旧会话。
    *
    * @param options - 会话创建选项（用户 ID、角色、来源等）
-   * @returns 成功返回完整的 Session 对象（含生成的访问令牌和过期时间）
+   * @returns 成功返回 Session 对象，data._tokenPair 提供本次签发的令牌对
    */
   create: (options: CreateSessionOptions) => Promise<HaiResult<Session>>
 
   /**
    * 获取会话
    *
-   * 查询缓存中的会话数据。API Key 会话先重新校验持久化 key 与 scopes；滑动窗口模式下自动续期。
-   * access 到期返回 null；记录保留到 refresh 到期或撤销，允许独立刷新。
+   * 查询共享缓存中的会话。API Key 会话重新校验持久化 key 与 scopes。
+   * 滑动续期受 touchMinInterval 控制，返回共享存储中已提交的活动时间和 access 期限。
+   * access 到期返回 null，仍有效的 refresh 可以独立刷新。
    *
    * @param accessToken - 访问令牌
    * @returns 成功返回会话对象或 null（会话不存在/已过期）

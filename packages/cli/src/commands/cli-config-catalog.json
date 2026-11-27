@@ -4947,7 +4947,7 @@
     "name": "HAI_IAM_SESSION_SLIDING",
     "module": "iam",
     "path": "iam.session.sliding",
-    "description": "是否滑动窗口（每次访问刷新过期时间）",
+    "description": "是否在验证通过的访问后滑动延长 access 期限。",
     "value": "true",
     "constraint": "true | false"
   },
@@ -4966,6 +4966,14 @@
     "description": "各终端类型的最大会话数，例如 {web:2,app:1}；空对象关闭。启用后未列终端不能新登录，旧会话归为 web；仍受全局上限约束。",
     "value": "{}",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_SESSION_TOUCHMININTERVAL",
+    "module": "iam",
+    "path": "iam.session.touchMinInterval",
+    "description": "滑动续期最小写入间隔（秒）；仅闲置策略关闭时生效，0 禁用跳写。",
+    "value": "5",
+    "constraint": "整数；>= 0；<= 9007199254740991"
   },
   {
     "name": "HAI_IAM_UI",

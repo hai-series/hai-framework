@@ -455,8 +455,10 @@ export const SessionConfigSchema = z.object({
   maxAge: z.number().int().min(60).default(86400),
   /** 页面离开时尽力撤销会话；浏览器关闭不可保证，仍应配置服务端闲置/绝对期限。 */
   endOnPageHide: z.boolean().default(false),
-  /** 是否滑动窗口（每次访问刷新过期时间） */
+  /** 是否在验证通过的访问后滑动延长 access 期限。 */
   sliding: z.boolean().default(true),
+  /** 滑动续期最小写入间隔（秒）；仅闲置策略关闭时生效，0 禁用跳写。 */
+  touchMinInterval: z.number().int().min(0).default(5),
   /** 单设备登录（踢掉其他设备） */
   singleDevice: z.boolean().default(false),
   /** 单设备超限策略：replace 顶旧保新，reject 保留旧会话并拒绝新登录。 */

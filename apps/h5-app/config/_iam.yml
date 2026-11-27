@@ -70,10 +70,13 @@ session:
   # 说明：refreshToken 独立有效期（秒，默认 604800 = 7天）；从签发时刻起算，access 到期仍可刷新。
   # 取值：整数；>= 3600
   refreshTokenMaxAge: ${HAI_IAM_SESSION_REFRESHTOKENMAXAGE:604800}
-  # 是否滑动窗口（每次访问刷新过期时间）
-  # 说明：是否滑动窗口（每次访问刷新过期时间）
+  # 是否启用滑动续期
+  # 说明：是否在验证通过的访问后滑动延长 access 期限。
   # 取值：true | false
   sliding: ${HAI_IAM_SESSION_SLIDING:true}
+  # 说明：滑动续期最小写入间隔（秒）；仅闲置策略关闭时生效，0 禁用跳写。
+  # 取值：整数；>= 0
+  touchMinInterval: ${HAI_IAM_SESSION_TOUCHMININTERVAL:5}
   # 单设备登录（踢掉其他设备）
   # 说明：单设备登录（踢掉其他设备）
   # 取值：true | false

@@ -20,24 +20,6 @@ import { HaiIamError } from '../iam-types.js'
 import { createCacheSessionRepository } from './iam-session-repository-cache.js'
 import { buildSession, generateSessionToken } from './iam-session-utils.js'
 
-/**
- * 移除 session 中仅供内部使用的敏感保留字段（如 _tokenPair 中的 refreshToken）。
- *
- * 内部路径（如 authn.buildAuthResult、session.refresh）仍可从 create/repo 原始返回
- * 值读取 _tokenPair；此函数仅作用于对外暴露的 get / verifyToken 出口。
- */
-function stripInternalSessionFields(session: Session): Session {
-  if (!session.data || !('_tokenPair' in session.data))
-    return session
-  const { _tokenPair, ...rest } = session.data as { _tokenPair?: unknown, [key: string]: unknown }
-  void _tokenPair
-  const hasExtraKeys = Object.keys(rest).length > 0
-  return {
-    ...session,
-    data: hasExtraKeys ? rest : undefined,
-  }
-}
-
 const logger = core.logger.child({ module: 'iam', scope: 'session' })
 
 // ─── 子功能依赖 ───
@@ -196,7 +178,6 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionRuntimeOper
       tokenType: 'Bearer',
     }
     const session = buildSession(options, now, ttl, accessToken, credentialVersion)
-    session.data = { ...session.data, _tokenPair: tokens }
     return core.ok({ session, tokens })
   }
 
@@ -262,12 +243,9 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionRuntimeOper
       return core.ok(null)
     }
 
-    if (new Date() > session.expiresAt) {
-      const removeResult = await repo.removeByAccessToken(accessToken)
-      if (!removeResult.success)
-        return removeResult
+    // access 到期后仍可能有有效的 refresh，读会话不撤销整条记录。
+    if (session.expiresAt <= new Date())
       return core.ok(null)
-    }
 
     if (typeof session.credentialVersion !== 'string')
       return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
@@ -290,11 +268,11 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionRuntimeOper
       const updateResult = await repo.touchByAccessToken(accessToken, session.version, new Date())
       if (!updateResult.success)
         return updateResult
-      // 保留 API Key 已收敛的权限，只使用成功提交后的时间字段。
+      // 保留 API Key 已收敛的权限，只用共享记录中已提交的会话时间。
       output = { ...output, lastActiveAt: updateResult.data.lastActiveAt, expiresAt: updateResult.data.expiresAt }
     }
 
-    return core.ok(stripInternalSessionFields(output))
+    return core.ok(output)
   }
 
   async function verifySession(accessToken: string, includeAuthorization = false): Promise<HaiResult<Session>> {
@@ -335,7 +313,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionRuntimeOper
         }
 
         logger.debug('Session created', { userId: options.userId })
-        return core.ok(session)
+        return core.ok({
+          ...session,
+          data: { ...session.data, _tokenPair: tokens },
+        })
       }
       catch (error) {
         return core.err(
@@ -409,9 +390,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionRuntimeOper
           source: oldSession.source,
           terminalType: oldSession.terminalType,
           maxAge: oldSession.maxAge,
-          data: oldSession.data
-            ? { ...oldSession.data, _tokenPair: undefined }
-            : undefined,
+          data: oldSession.data,
         }, oldSession.credentialVersion)
 
         if (!next.success)

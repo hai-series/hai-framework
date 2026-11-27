@@ -114,6 +114,42 @@ it('迟到批量权限不能覆盖后续登录的会话', async () => {
   expect(latest.success && latest.data?.roles).toEqual(['new-user'])
 })
 
+it('空分区和相同授权不改版本或提交缓存', async () => {
+  const ops = await operations()
+  const userId = 'unchanged-authorization'
+  const write = vi.spyOn(cache.kv, 'compareAndSwap')
+  const auth = {
+    roles: ['reader'],
+    permissions: ['orders:read'],
+  }
+  expect((await ops.patchUserSessions(userId, auth)).success).toBe(true)
+  expect(write).not.toHaveBeenCalled()
+
+  const created = await ops.create({ userId, ...auth })
+  if (!created.success)
+    throw new Error(created.error.message)
+  write.mockClear()
+  expect((await ops.patchUserSessions(userId, {
+    roles: ['reader'],
+    permissions: ['orders:read'],
+  })).success).toBe(true)
+  expect(write).not.toHaveBeenCalled()
+  expect(await ops.get(created.data.accessToken)).toMatchObject({
+    success: true,
+    data: { ...auth, version: created.data.version },
+  })
+
+  expect((await ops.patchUserSessions(userId, { permissions: [] })).success).toBe(true)
+  expect(write).toHaveBeenCalledOnce()
+  const updated = await ops.get(created.data.accessToken)
+  if (!updated.success || !updated.data)
+    throw new Error('Expected the updated authorization snapshot')
+  expect(updated.data.permissions).toEqual([])
+  expect(updated.data.roles).toEqual(auth.roles)
+  expect(updated.data.version).not.toBe(created.data.version)
+  expect(updated.data.lastActiveAt).toEqual(created.data.lastActiveAt)
+})
+
 it('迟到批量权限不能覆盖较新的会话内容版本', async () => {
   const ops = await operations()
   const created = await ops.create({

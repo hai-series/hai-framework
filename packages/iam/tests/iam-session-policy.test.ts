@@ -3,6 +3,7 @@ import type { IamConfigInput } from '../src/index.js'
 import { cache } from '@h-ai/cache'
 import { afterEach, expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/index.js'
+import { getUserSessionScope } from '../src/session/iam-session-utils.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 function tests() {
@@ -12,8 +13,9 @@ function tests() {
     const iam = await initIam({ session })
     const username = `policy-${crypto.randomUUID()}`
     const created = await iam.user.register({ username, password: TEST_PASSWORD })
-    expect(created.success).toBe(true)
-    return { iam, username }
+    if (!created.success)
+      throw new Error(created.error.message)
+    return { iam, username, userId: created.data.user.id }
   }
 
   it('web与App分别限制且共享全局额度，刷新保留终端分组', async () => {
@@ -68,6 +70,58 @@ function tests() {
     }
     expect(await iam.session.get(accessToken)).toMatchObject(rejected)
     expect(await iam.session.refresh(refreshToken)).toMatchObject(rejected)
+  })
+
+  it('登录、滑动续期、更新和刷新均只缓存一份 access 与 refresh', async () => {
+    const { iam, username, userId } = await account({ sliding: true })
+    const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
+    if (!login.success)
+      throw new Error(login.error.message)
+    const { tokens } = login.data
+    const key = `hai:iam:sessions:{${getUserSessionScope(userId)}}`
+
+    async function stored(pair: typeof tokens) {
+      const state = await cache.kv.get<{ sessions: Record<string, { session: Record<string, unknown>, refreshToken?: string }> }>(key)
+      if (!state.success || !state.data)
+        throw new Error('Missing cached session state')
+      expect(Object.keys(state.data.sessions)).toHaveLength(1)
+      const entry = state.data.sessions[pair.accessToken]
+      if (!entry)
+        throw new Error('Missing session under the access token')
+      expect(entry.refreshToken === pair.refreshToken).toBe(true)
+      expect(Object.hasOwn(entry.session, 'accessToken')).toBe(false)
+      return entry.session
+    }
+
+    const issued = await stored(tokens)
+    expect(issued.data).toBeUndefined()
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
+    vi.setSystemTime(Date.now() + 5000)
+    const verified = await iam.auth.verifyToken(tokens.accessToken)
+    if (!verified.success)
+      throw new Error(verified.error.message)
+    expect(verified.data.accessToken === tokens.accessToken).toBe(true)
+    expect(verified.data.expiresAt.getTime()).toBeGreaterThan(new Date(String(issued.expiresAt)).getTime())
+    expect((await stored(tokens)).data).toBeUndefined()
+
+    const updated = await iam.session.update(tokens.accessToken, {
+      data: { theme: 'dark', _tokenPair: tokens },
+    }, verified.data.version)
+    expect(updated.success).toBe(true)
+    expect((await stored(tokens)).data).toEqual({ theme: 'dark' })
+
+    const refreshed = await iam.session.refresh(tokens.refreshToken)
+    if (!refreshed.success)
+      throw new Error(refreshed.error.message)
+    expect((await stored(refreshed.data)).data).toEqual({ theme: 'dark' })
+    const successor = await iam.auth.verifyToken(refreshed.data.accessToken)
+    if (!successor.success)
+      throw new Error(successor.error.message)
+    expect(successor.data.accessToken === refreshed.data.accessToken).toBe(true)
+    expect(successor.data.data).toEqual({ theme: 'dark' })
+    expect((await iam.session.refresh(tokens.refreshToken)).success).toBe(false)
   })
 
   it('同类终端替换不踢掉其他终端，全局单会话仍优先', async () => {
@@ -185,6 +239,39 @@ function tests() {
     vi.setSystemTime(start + 121_000)
     expect((await iam.session.refresh(refreshed.data.refreshToken)).success).toBe(false)
     expect((await iam.auth.verifyToken(refreshed.data.accessToken)).success).toBe(false)
+  })
+
+  it('管理端同步会话授权时保留原闲置期限', async () => {
+    const { iam, username, userId } = await account({ maxAge: 3600, idleTimeout: 120 })
+    const role = await iam.authz.createRole({ code: `policy-role-${crypto.randomUUID()}`, name: 'Policy fixture' })
+    if (!role.success)
+      throw new Error(role.error.message)
+    vi.useFakeTimers({
+      toFake: ['Date'],
+    })
+    const start = Date.now()
+    const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
+    if (!login.success)
+      throw new Error(login.error.message)
+
+    vi.setSystemTime(start + 100_000)
+    expect((await iam.authz.assignRole(userId, role.data.id)).success).toBe(true)
+    expect(await iam.authz.getUserAuthorization(userId)).toMatchObject({
+      success: true,
+      data: {
+        roles: expect.arrayContaining([role.data.code]),
+      },
+    })
+
+    vi.setSystemTime(start + 121_000)
+    expect(await iam.auth.verifyToken(login.data.tokens.accessToken)).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.SESSION_INVALID.code },
+    })
+    expect(await iam.session.refresh(login.data.tokens.refreshToken)).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.TOKEN_EXPIRED.code },
+    })
   })
 
   it('有成功活动时滑动闲置期限，但不会缩短已提交的最后活动时间', async () => {

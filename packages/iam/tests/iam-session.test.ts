@@ -284,7 +284,7 @@ describe('iam.session', () => {
 
       beforeAll(async () => {
         slidingIam = await initIam({
-          session: { maxAge: 3600, sliding: true },
+          session: { maxAge: 3600, sliding: true, touchMinInterval: 0 },
         })
       })
 
