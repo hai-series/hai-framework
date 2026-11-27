@@ -249,7 +249,7 @@ async function manageSum() {
 
 文件的保存位置由宿主实现的 `files` 回调决定。本页示例把文件放在进程内存里，退出进程后就会丢失。Agent 工作台使用 `@h-ai/storage`，默认将字节写入服务启动目录下的 `./data/uploads`。加载采用 `s3` 的生产配置时，字节写入配置的 S3 兼容桶。 [保存位置与文件标识](../data/tools.md#artifact-storage)
 
-`artifact_create` 保存一份已有内容。Markdown 和 HTML 直接传正文，表格和图表传对应的 JSON 字符串。`artifact_read` 按一个文件 ID 取回一份正文。`data_analyze` 的输入是已经解析好的数据行 `rows`，文件是它的**输出**。例如，销量来自 Excel 时，应用先把工作表解析成数据行，再交给工具。工具返回统计值，并通过 `files.publish` 创建表格数据和图表配置两份 JSON 文件，让用户能在文件库里分别打开。
+`artifact_create` 保存一份已有内容。Markdown 和 HTML 直接传正文，表格和图表传对应的 JSON 字符串。`artifact_read` 按一个文件 ID 取回一份正文。`data_analyze` 的输入是已经解析好的数据行 `rows`，文件是它的**输出**。例如，销量来自 Excel 时，应用先把工作表解析成数据行，再交给工具。工具返回统计值，并通过 `files.publishBatch` 一次提交表格数据和图表配置两份 JSON 文件，让用户能在文件库里分别打开。
 
 工厂返回的 `set.tools` 包含这些内置工具。`registry.registerMany(set.tools)` 按 `tool.name` 登记，随后可用 `registry.execute('artifact_create', input)` 调用。创建成功返回的是文件引用，例如 `id: 'artifact-1'` 和标题。页面可以用这个 ID 打开文件。需要在代码里再次取得正文时，例如让智能体接着处理这份笔记，再调用 `artifact_read`。
 
@@ -269,6 +269,7 @@ async function manageSum() {
 | --- | --- | --- |
 | `files.read(context, { id })` | 可信主体及要读取的文件 ID | 必填。复核权限后返回包含 `data: Uint8Array` 的文件。文件不存在或读取被拒绝时返回失败 |
 | `files.publish(context, input)` | 可信主体、`name`、`kind`、`mediaType`、字节 `data` 及可选目标 `id` | 必填。成功保存后返回产物引用。受管任务可传入稳定 ID，重试时由宿主复核内容一致性 |
+| `files.publishBatch(context, [table, chart])` | 两份待提交的文件 | 可选。一次提交表格与图表，按顺序返回两个引用。两份均提交后才成功，失败时本次新产物均不可读。启用 `data_analyze` 时提供此回调。 |
 | `files.save(context, { id, baseVersion, content })` | 文件 ID、编辑所基于的版本及新文本 | 可选。核对归属、权限与版本后返回新引用。省略时工具集合不包含 `artifact_save` |
 
 `createArtifactTools()` 只构造工具。执行 `artifact_create`、`artifact_read` 或 `artifact_save` 时，每次各处理一个文件。多份文件各传一次调用，直接使用注册器时可用 `registry.executeAll()` 顺序执行。任何一项失败时，本批返回错误，之前已保存的文件仍在。接入 Tools Runner 时，每份新文件单独提交一条任务，让它取得独立的执行 ID 和产物 ID。一次 `data_analyze` 则为同一份数据生成固定的两种结果。
@@ -283,7 +284,7 @@ async function manageSum() {
 
 ##### 准备产物示例共用的注册器
 
-在 Node 26 示例项目中安装依赖，把下面的代码保存为 `artifact-setup.mts`。下方各场景都导入这里的注册器，各自独立运行。示例让 `demo/alice` 充当认证后的用户，文件放在进程内的 `Map`。应用接入时，把这两个文件回调接到自己的文件库和权限检查。
+在 Node 26 示例项目中安装依赖，把下面的代码保存为 `artifact-setup.mts`。下方各场景都导入这里的注册器，各自独立运行。示例让 `demo/alice` 充当认证后的用户，文件放在进程内的 `Map`。应用接入时，把文件回调接到自己的文件库和权限检查。
 
 ```sh
 pnpm add @h-ai/core @h-ai/tools
@@ -292,7 +293,7 @@ pnpm add @h-ai/core @h-ai/tools
 <!-- example: tools-artifact-setup -->
 
 ```ts
-import type { ToolArtifact, ToolArtifactAccess, ToolServiceContext } from '@h-ai/tools/server'
+import type { ToolArtifact, ToolArtifactAccess, ToolArtifactPublishInput, ToolServiceContext } from '@h-ai/tools/server'
 import { core } from '@h-ai/core'
 import { HaiToolsError } from '@h-ai/tools'
 import { tools } from '@h-ai/tools/server'
@@ -304,6 +305,15 @@ function owns({ scope }: ToolServiceContext) {
   return scope.tenantId === owner.tenantId && scope.userId === owner.userId
 }
 
+function prepare(input: ToolArtifactPublishInput, sequence: number) {
+  const { id = `artifact-${sequence}`, name, kind, mediaType, data } = input
+  const version = 1
+  return {
+    file: { id, name, kind, mediaType, data, version },
+    ref: { id, title: name, kind, mediaType, version },
+  }
+}
+
 const files: ToolArtifactAccess = {
   async read(context, { id }) {
     if (!owns(context))
@@ -311,12 +321,23 @@ const files: ToolArtifactAccess = {
     const file = stored.get(id)
     return file ? core.ok(file) : core.err(HaiToolsError.NOT_FOUND, 'Artifact not found')
   },
-  async publish(context, { id = `artifact-${stored.size + 1}`, name, kind, mediaType, data }) {
+  async publish(context, input) {
     if (!owns(context))
       return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
-    const version = 1
-    stored.set(id, { id, name, kind, mediaType, data, version })
-    return core.ok({ id, title: name, kind, mediaType, version })
+    const prepared = prepare(input, stored.size + 1)
+    stored.set(prepared.file.id, prepared.file)
+    return core.ok(prepared.ref)
+  },
+  async publishBatch(context, [table, chart]) {
+    if (!owns(context))
+      return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
+    const first = prepare(table, stored.size + 1)
+    const second = prepare(chart, stored.size + 2)
+    if (first.file.id === second.file.id)
+      return core.err(HaiToolsError.VALIDATION_FAILED, 'Artifact IDs must be distinct')
+    stored.set(first.file.id, first.file)
+    stored.set(second.file.id, second.file)
+    return core.ok([first.ref, second.ref] as const)
   },
 }
 

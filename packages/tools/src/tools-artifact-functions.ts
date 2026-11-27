@@ -1,4 +1,4 @@
-import type { ToolArtifact, ToolArtifactAccess } from './tools-artifact-types.js'
+import type { ToolArtifact, ToolArtifactAccess, ToolArtifactPublishInput } from './tools-artifact-types.js'
 import type { ToolServiceContext, ToolSet } from './tools-invocation-types.js'
 import type { Tool } from './tools-types.js'
 import { Buffer } from 'node:buffer'
@@ -57,7 +57,7 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
       ? 'text/html'
       : 'application/json'
   const invalid = () => core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
-  const publish = (signal: AbortSignal, name: string, kind: string, text: string, output: string) => files.publish(binding(signal), {
+  const toArtifact = (name: string, kind: string, text: string, output: string): ToolArtifactPublishInput => ({
     ...(context.execution
       ? {
           id: identifierFor(context.execution.id, output),
@@ -92,7 +92,7 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
           }
           catch { return invalid() }
         }
-        return publish(signal, input.title, input.kind, input.content, 'artifact_create:artifact')
+        return files.publish(binding(signal), toArtifact(input.title, input.kind, input.content, 'artifact_create:artifact'))
       },
     }, context.signal),
     defineTool({
@@ -121,7 +121,10 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
           : invalid()
       },
     }, context.signal),
-    defineTool({
+  ]
+  const publishBatch = files.publishBatch?.bind(files)
+  if (publishBatch) {
+    definitions.push(defineTool({
       name: 'data_analyze',
       title: toolsM('tools_dataAnalyze'),
       description: toolsM('tools_dataAnalyzeDescription'),
@@ -165,10 +168,9 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
         }),
       }),
       resultHandler: async (input, { signal }) => {
-        const values = input.rows.map(row => row[input.y])
-        if (values.some(value => typeof value !== 'number') || input.rows.some(row => !(input.x in row)))
+        if (input.rows.some(row => !Object.hasOwn(row, input.x) || !Object.hasOwn(row, input.y) || typeof row[input.y] !== 'number'))
           return invalid()
-        const numbers = z.array(z.number().finite()).parse(values)
+        const numbers = z.array(z.number().finite()).parse(input.rows.map(row => row[input.y]))
         const sum = numbers.reduce((sum, value) => sum + value, 0)
         if (!Number.isFinite(sum))
           return invalid()
@@ -184,7 +186,7 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
         const keyFor = (key: string) => key === 'row_id'
           ? rowColumn
           : key
-        const table = await publish(signal, `${input.title.slice(0, 149)}.table.json`, 'table', JSON.stringify({
+        const table = toArtifact(`${input.title.slice(0, 149)}.table.json`, 'table', JSON.stringify({
           table_columns: keys.map(key => ({
             key: keyFor(key),
             label: key,
@@ -200,16 +202,17 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
             row_id: `row-${index + 1}`,
           })),
         }), 'data_analyze:table')
-        if (!table.success)
-          return table
-        const chart = await publish(signal, `${input.title.slice(0, 149)}.chart.json`, 'chart', JSON.stringify({
+        const chart = toArtifact(`${input.title.slice(0, 149)}.chart.json`, 'chart', JSON.stringify({
           type: input.chartType,
           data: input.rows,
           x: input.x,
           y: input.y,
         }), 'data_analyze:chart')
-        if (!chart.success)
-          return chart
+        if (table.data.byteLength > maxArtifactBytes || chart.data.byteLength > maxArtifactBytes)
+          return invalid()
+        const published = await publishBatch(binding(signal), [table, chart])
+        if (!published.success)
+          return published
         return core.ok({
           statistics: {
             count: numbers.length,
@@ -218,11 +221,11 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
             min: Math.min(...numbers),
             max: Math.max(...numbers),
           },
-          artifacts: [table.data, chart.data],
+          artifacts: published.data,
         })
       },
-    }, context.signal),
-  ]
+    }, context.signal))
+  }
   if (files.save) {
     const save = files.save
     definitions.push(defineTool({
@@ -247,11 +250,15 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
         title: toolsM('tools_documents'),
         tools: ['artifact_create', 'artifact_read', 'artifact_save'],
       },
-      {
-        id: 'analysis',
-        title: toolsM('tools_dataAnalyze'),
-        tools: ['data_analyze'],
-      },
+      ...(publishBatch
+        ? [
+            {
+              id: 'analysis',
+              title: toolsM('tools_dataAnalyze'),
+              tools: ['data_analyze'],
+            },
+          ]
+        : []),
     ],
   }
 }

@@ -28,6 +28,7 @@
 | --- | --- |
 | `read(context, { id })` | 检查当前主体能否读取文件，返回含 `id/name/mediaType/data` 的文件，按需带上 `kind/version` |
 | `publish(context, { name, kind, mediaType, data, id? })` | 核验发布权限，保存字节并返回产物引用。工具可提供稳定 ID，例如 `artifact_create` 会从可信的执行 ID 派生产物 ID。宿主负责去重和保留期 |
+| `publishBatch(context, [table, chart])` | 可选。一次提交表格与图表，按顺序返回两个引用。两份均提交后才成功，失败时本次新产物均不可读。启用 `data_analyze` 时提供此回调。 |
 | `save(context, { id, baseVersion, content })` | 可选。核对归属和基础版本后保存新内容，版本冲突由宿主返回 |
 
 <a id="artifact-storage"></a>

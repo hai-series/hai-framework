@@ -253,7 +253,7 @@ In the Agent workspace, users can save a project note in their file library or t
 
 The host's `files` callbacks determine where files are stored. The examples on this page keep files in memory until the process exits. The Agent workspace uses `@h-ai/storage` and defaults to writing bytes to `./data/uploads` relative to the service's working directory. With a production configuration that selects `s3`, it writes bytes to the configured S3-compatible bucket. [Storage locations and file IDs](../data/tools.en.md#artifact-storage)
 
-`artifact_create` saves one piece of existing content. Pass the body for Markdown or HTML, or a JSON string for a table or chart. `artifact_read` retrieves one body by file ID. `data_analyze` takes already parsed `rows`, and the files are its **outputs**. If sales data comes from Excel, the application first parses the worksheet into rows. The tool returns statistics and calls `files.publish` to create two JSON files, one for the table data and one for the chart configuration. Users can open each file separately from their library.
+`artifact_create` saves one piece of existing content. Pass the body for Markdown or HTML, or a JSON string for a table or chart. `artifact_read` retrieves one body by file ID. `data_analyze` takes already parsed `rows`, and the files are its **outputs**. If sales data comes from Excel, the application first parses the worksheet into rows. The tool returns statistics and calls `files.publishBatch` to commit two JSON files together, one for the table data and one for the chart configuration. Users can open each file separately from their library.
 
 The factory returns the built-in tools in `set.tools`. `registry.registerMany(set.tools)` registers them by `tool.name`, so `registry.execute('artifact_create', input)` can look up and call the tool. A successful creation returns a file reference with an ID such as `artifact-1` and the title. A page can use that ID to open the file. Call `artifact_read` when your code needs the content again, for example when an agent wants to continue working on the saved note.
 
@@ -270,6 +270,7 @@ The factory returns the built-in tools in `set.tools`. `registry.registerMany(se
 | `context` | Required `ToolServiceContext`. Bind `scope` from authentication and pass the request signal if available |
 | `files.read(context, { id })` | Required. Check access to `id` and return the file as `HaiResult<ToolArtifact>` with its bytes in `data: Uint8Array` |
 | `files.publish(context, { name, kind, mediaType, data, id? })` | Required. Check publication permission and return `HaiResult<ToolArtifactReference>` after storing the bytes. Honor the supplied ID when present and verify matching content on retries |
+| `files.publishBatch(context, [table, chart])` | Optional. Commit the table and chart together, then return both references in order. If the commit fails, neither new artifact is visible. Provide this callback to enable `data_analyze`. |
 | `files.save(context, { id, baseVersion, content })` | Optional. Check ownership and the base version before writing. Return the new reference, or a failure if the version changed. Provide this callback to include `artifact_save` |
 
 | Tool | Input | Successful data |
@@ -293,7 +294,7 @@ Either the host `context.signal` or the per-call `signal` can cancel the tool. T
 
 ##### Set up the registry for the artifact examples
 
-In a Node 26 project, install the dependencies and save the code as `artifact-setup.mts`. Each of the following scenarios imports this registry and runs independently. The demo uses `demo/alice` as the authenticated user and stores files in an in-memory `Map`. In an application, connect these two file callbacks to your file library and permission checks.
+In a Node 26 project, install the dependencies and save the code as `artifact-setup.mts`. Each of the following scenarios imports this registry and runs independently. The demo uses `demo/alice` as the authenticated user and stores files in an in-memory `Map`. In an application, connect these file callbacks to your file library and permission checks.
 
 ```sh
 pnpm add @h-ai/core @h-ai/tools
@@ -302,7 +303,7 @@ pnpm add @h-ai/core @h-ai/tools
 <!-- example: tools-artifact-setup -->
 
 ```ts
-import type { ToolArtifact, ToolArtifactAccess, ToolServiceContext } from '@h-ai/tools/server'
+import type { ToolArtifact, ToolArtifactAccess, ToolArtifactPublishInput, ToolServiceContext } from '@h-ai/tools/server'
 import { core } from '@h-ai/core'
 import { HaiToolsError } from '@h-ai/tools'
 import { tools } from '@h-ai/tools/server'
@@ -314,6 +315,15 @@ function owns({ scope }: ToolServiceContext) {
   return scope.tenantId === owner.tenantId && scope.userId === owner.userId
 }
 
+function prepare(input: ToolArtifactPublishInput, sequence: number) {
+  const { id = `artifact-${sequence}`, name, kind, mediaType, data } = input
+  const version = 1
+  return {
+    file: { id, name, kind, mediaType, data, version },
+    ref: { id, title: name, kind, mediaType, version },
+  }
+}
+
 const files: ToolArtifactAccess = {
   async read(context, { id }) {
     if (!owns(context))
@@ -321,12 +331,23 @@ const files: ToolArtifactAccess = {
     const file = stored.get(id)
     return file ? core.ok(file) : core.err(HaiToolsError.NOT_FOUND, 'Artifact not found')
   },
-  async publish(context, { id = `artifact-${stored.size + 1}`, name, kind, mediaType, data }) {
+  async publish(context, input) {
     if (!owns(context))
       return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
-    const version = 1
-    stored.set(id, { id, name, kind, mediaType, data, version })
-    return core.ok({ id, title: name, kind, mediaType, version })
+    const prepared = prepare(input, stored.size + 1)
+    stored.set(prepared.file.id, prepared.file)
+    return core.ok(prepared.ref)
+  },
+  async publishBatch(context, [table, chart]) {
+    if (!owns(context))
+      return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
+    const first = prepare(table, stored.size + 1)
+    const second = prepare(chart, stored.size + 2)
+    if (first.file.id === second.file.id)
+      return core.err(HaiToolsError.VALIDATION_FAILED, 'Artifact IDs must be distinct')
+    stored.set(first.file.id, first.file)
+    stored.set(second.file.id, second.file)
+    return core.ok([first.ref, second.ref] as const)
   },
 }
 

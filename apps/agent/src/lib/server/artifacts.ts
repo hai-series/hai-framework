@@ -5,7 +5,7 @@ import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { storage } from '@h-ai/storage'
+import { HaiStorageError, storage } from '@h-ai/storage'
 import { z } from 'zod'
 import { insertResource, missing, resource, stored, value, withResource, WorkspaceError, writeResource } from './data.js'
 
@@ -44,6 +44,7 @@ const inputSchema = z.object({
 })
 
 interface VersionRecord { ref: AgentResource, key: string, checksum: string }
+interface PreparedArtifact { snapshot: VersionRecord, bytes: Uint8Array, mediaType: string }
 
 export interface ArtifactInput {
   id?: string
@@ -135,6 +136,105 @@ async function discardUnpublished(key: string, user: string, id: string, number:
     core.logger.warn('Artifact temporary object cleanup failed', { module: 'agent', errorCode: removed.error.code })
 }
 
+function prepareArtifact(user: string, input: ArtifactInput): PreparedArtifact {
+  const normalized = normalize(input)
+  const id = normalized.id ?? randomUUID()
+  const now = Date.now()
+  const ref: AgentResource = {
+    id,
+    kind: 'artifact',
+    title: normalized.title,
+    artifactKind: normalized.kind,
+    mediaType: normalized.mediaType,
+    version: 1,
+    size: normalized.bytes.length,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const key = `agent/${createHash('sha256').update(user).digest('hex')}/artifacts/${id}/${randomUUID()}`
+  return {
+    snapshot: { ref, key, checksum: normalized.checksum },
+    bytes: normalized.bytes,
+    mediaType: normalized.mediaType,
+  }
+}
+
+async function insertArtifact(user: string, snapshot: VersionRecord, sql: DmlOperations, signal?: AbortSignal): Promise<AgentResource> {
+  const { ref, checksum } = snapshot
+  signal?.throwIfAborted()
+  if (await insertResource(user, ref, sql)) {
+    signal?.throwIfAborted()
+    await record(user, snapshot, sql)
+    return ref
+  }
+  signal?.throwIfAborted()
+  await resource(user, ref.id, 'artifact', sql)
+  signal?.throwIfAborted()
+  const prior = await version(user, ref.id, 1, sql)
+  if (prior.checksum !== checksum || prior.ref.title !== ref.title || prior.ref.artifactKind !== ref.artifactKind || prior.ref.mediaType !== ref.mediaType)
+    throw new WorkspaceError(409, 'artifact-conflict', prior.ref.version)
+  return prior.ref
+}
+
+async function publishArtifacts(user: string, prepared: readonly [PreparedArtifact], signal?: AbortSignal): Promise<readonly [AgentResource]>
+async function publishArtifacts(user: string, prepared: readonly [PreparedArtifact, PreparedArtifact], signal?: AbortSignal): Promise<readonly [AgentResource, AgentResource]>
+async function publishArtifacts(
+  user: string,
+  prepared: readonly PreparedArtifact[],
+  signal?: AbortSignal,
+): Promise<readonly AgentResource[]> {
+  const staged = new Set<PreparedArtifact>()
+  const inserted = new Set<PreparedArtifact>()
+  let committed = false
+  try {
+    for (const artifact of prepared) {
+      signal?.throwIfAborted()
+      // 响应丢失时对象仍可能写入，因此从尝试上传开始记录待清理的键。
+      staged.add(artifact)
+      const result = await storage.file.put(artifact.snapshot.key, artifact.bytes, {
+        ifNoneMatch: '*',
+        contentType: artifact.mediaType,
+        ...(signal && { signal }),
+      })
+      if (!result.success && result.error.code === HaiStorageError.ALREADY_EXISTS.code)
+        staged.delete(artifact)
+      value(result)
+    }
+    signal?.throwIfAborted()
+    const transaction = value(await reldb.tx.begin())
+    let commitAttempted = false
+    try {
+      const refs: AgentResource[] = []
+      for (const artifact of prepared) {
+        const ref = await insertArtifact(user, artifact.snapshot, transaction, signal)
+        if (ref === artifact.snapshot.ref)
+          inserted.add(artifact)
+        refs.push(ref)
+      }
+      signal?.throwIfAborted()
+      commitAttempted = true
+      value(await transaction.commit())
+      committed = true
+      return refs
+    }
+    finally {
+      if (!commitAttempted) {
+        const rolledBack = await transaction.rollback()
+        if (!rolledBack.success)
+          core.logger.error('Artifact creation rollback failed', { module: 'agent', errorCode: rolledBack.error.code })
+      }
+    }
+  }
+  finally {
+    for (const artifact of staged) {
+      if (committed && inserted.has(artifact))
+        continue
+      const { key, ref } = artifact.snapshot
+      await discardUnpublished(key, user, ref.id, 1)
+    }
+  }
+}
+
 export const artifactStore = {
   prepare() {
     return reldb.prepareSchema('hai:agent:artifact-schema', async ({ ddl }) => {
@@ -154,56 +254,19 @@ export const artifactStore = {
       })
     })
   },
-  async create(user: string, input: ArtifactInput): Promise<AgentResource> {
-    const normalized = normalize(input)
-    const id = normalized.id ?? randomUUID()
-    const now = Date.now()
-    const ref: AgentResource = {
-      id,
-      kind: 'artifact',
-      title: normalized.title,
-      artifactKind: normalized.kind,
-      mediaType: normalized.mediaType,
-      version: 1,
-      size: normalized.bytes.length,
-      createdAt: now,
-      updatedAt: now,
-    }
-    const key = `agent/${createHash('sha256').update(user).digest('hex')}/artifacts/${id}/${randomUUID()}`
-    value(await storage.file.put(key, normalized.bytes, { ifNoneMatch: '*', contentType: normalized.mediaType }))
-    let published = false
-    try {
-      const transaction = value(await reldb.tx.begin())
-      let committed = false
-      try {
-        let result = ref
-        if (await insertResource(user, ref, transaction)) {
-          await record(user, { ref, key, checksum: normalized.checksum }, transaction)
-        }
-        else {
-          await resource(user, id, 'artifact', transaction)
-          const prior = await version(user, id, 1, transaction)
-          if (prior.checksum !== normalized.checksum || prior.ref.title !== ref.title || prior.ref.artifactKind !== ref.artifactKind || prior.ref.mediaType !== ref.mediaType)
-            throw new WorkspaceError(409, 'artifact-conflict', prior.ref.version)
-          result = prior.ref
-        }
-        value(await transaction.commit())
-        committed = true
-        published = result === ref
-        return result
-      }
-      finally {
-        if (!committed) {
-          const rolledBack = await transaction.rollback()
-          if (!rolledBack.success)
-            core.logger.error('Artifact creation rollback failed', { module: 'agent', errorCode: rolledBack.error.code })
-        }
-      }
-    }
-    finally {
-      if (!published)
-        await discardUnpublished(key, user, id, 1)
-    }
+  async create(user: string, input: ArtifactInput, signal?: AbortSignal): Promise<AgentResource> {
+    signal?.throwIfAborted()
+    const artifact = prepareArtifact(user, input)
+    const [ref] = await publishArtifacts(user, [artifact], signal)
+    return ref
+  },
+  async createBatch(user: string, inputs: readonly [ArtifactInput, ArtifactInput], signal?: AbortSignal): Promise<readonly [AgentResource, AgentResource]> {
+    signal?.throwIfAborted()
+    const first = prepareArtifact(user, inputs[0])
+    const second = prepareArtifact(user, inputs[1])
+    if (first.snapshot.ref.id === second.snapshot.ref.id)
+      throw new WorkspaceError(422, 'invalid-artifact')
+    return publishArtifacts(user, [first, second], signal)
   },
   async describe(user: string, id: string, number?: number): Promise<AgentResource> {
     const current = await resource(user, id, 'artifact')

@@ -35273,6 +35273,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ToolArtifactPublishInput",
+              "kind": "type",
+              "declaration": "ToolArtifactPublishInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "ToolArtifactReference",
               "kind": "type",
               "declaration": "ToolArtifactReference",
@@ -35364,6 +35370,12 @@
               "name": "ToolArtifactAccess",
               "kind": "type",
               "declaration": "ToolArtifactAccess",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolArtifactPublishInput",
+              "kind": "type",
+              "declaration": "ToolArtifactPublishInput",
               "declarationKind": "InterfaceDeclaration"
             },
             {

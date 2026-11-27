@@ -35,6 +35,22 @@ export interface ToolArtifactReference {
 }
 
 /**
+ * 宿主保存一份产物所需的字节和描述。执行器可提供稳定的宿主文件 ID。
+ * @example
+ * ```ts
+ * import type { ToolArtifactPublishInput } from '@h-ai/tools/server'
+ * const note: ToolArtifactPublishInput = { name: 'Notes', kind: 'markdown', mediaType: 'text/markdown', data: new TextEncoder().encode('# Notes') }
+ * ```
+ */
+export interface ToolArtifactPublishInput {
+  name: string
+  kind: string
+  mediaType: string
+  data: Uint8Array
+  id?: string
+}
+
+/**
  * 授权文件读写由宿主复核主体、任务、版本和最终提交条件。
  * @example
  * ```ts
@@ -44,6 +60,8 @@ export interface ToolArtifactReference {
  */
 export interface ToolArtifactAccess {
   read: (context: ToolServiceContext, input: { id: string }) => Promise<HaiResult<ToolArtifact>>
-  publish: (context: ToolServiceContext, input: { name: string, kind: string, mediaType: string, data: Uint8Array, id?: string }) => Promise<HaiResult<ToolArtifactReference>>
+  publish: (context: ToolServiceContext, input: ToolArtifactPublishInput) => Promise<HaiResult<ToolArtifactReference>>
+  /** 一次提交两份产物。按输入顺序返回引用，失败时任一新产物均不可读。 */
+  publishBatch?: (context: ToolServiceContext, inputs: readonly [ToolArtifactPublishInput, ToolArtifactPublishInput]) => Promise<HaiResult<readonly [ToolArtifactReference, ToolArtifactReference]>>
   save?: (context: ToolServiceContext, input: { id: string, baseVersion: number, content: string }) => Promise<HaiResult<ToolArtifactReference>>
 }

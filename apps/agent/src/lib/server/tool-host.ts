@@ -1,7 +1,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { RunnerScope } from '@h-ai/runner'
 import type { ToolRun, ToolService } from '@h-ai/tools-runner'
-import type { ToolArtifactAccess, ToolArtifactReference, ToolServiceContext, ToolSet } from '@h-ai/tools/server'
+import type { ToolArtifactAccess, ToolArtifactPublishInput, ToolArtifactReference, ToolServiceContext, ToolSet } from '@h-ai/tools/server'
 import type { ToolRun as WorkspaceToolRun } from '@h-ai/ui'
 import type { AgentResource } from '#lib/workspace.js'
 import { Buffer } from 'node:buffer'
@@ -69,6 +69,20 @@ function reference(ref: AgentResource): ToolArtifactReference {
   }
 }
 
+function artifactInput(executionId: string | undefined, input: ToolArtifactPublishInput) {
+  const digest = executionId && createHash('sha256').update(JSON.stringify([executionId, input.kind, input.name])).digest('hex')
+  const id = input.id ?? (digest
+    ? `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`
+    : undefined)
+  return {
+    id,
+    title: input.name,
+    kind: kinds.parse(input.kind),
+    mediaType: input.mediaType,
+    content: input.data,
+  }
+}
+
 async function resourceOperation<T>(operation: () => Promise<T>): Promise<HaiResult<T>> {
   try {
     return core.ok(await operation())
@@ -101,22 +115,27 @@ const files: ToolArtifactAccess = {
     context.signal?.throwIfAborted()
     if (!await allowed(context))
       throw new WorkspaceError(403, 'forbidden')
-    const digest = context.execution && createHash('sha256').update(JSON.stringify([context.execution.id, input.kind, input.name])).digest('hex')
-    const id = input.id ?? (digest
-      ? `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`
-      : undefined)
-    return reference(await artifactStore.create(owner(context.scope), {
-      id,
-      title: input.name,
-      kind: kinds.parse(input.kind),
-      mediaType: input.mediaType,
-      content: input.data,
-    }))
+    return reference(await artifactStore.create(owner(context.scope), artifactInput(context.execution?.id, input), context.signal))
+  }),
+  publishBatch: (context, [first, second]) => resourceOperation(async () => {
+    context.signal?.throwIfAborted()
+    if (!await allowed(context))
+      throw new WorkspaceError(403, 'forbidden')
+    const executionId = context.execution?.id
+    const [one, two] = await artifactStore.createBatch(owner(context.scope), [
+      artifactInput(executionId, first),
+      artifactInput(executionId, second),
+    ], context.signal)
+    return [
+      reference(one),
+      reference(two),
+    ] as const
   }),
   save: (context, input) => resourceOperation(async () => {
     context.signal?.throwIfAborted()
     if (!await allowed(context))
       throw new WorkspaceError(403, 'forbidden')
+    context.signal?.throwIfAborted()
     return reference(await artifactStore.save(owner(context.scope), input))
   }),
 }

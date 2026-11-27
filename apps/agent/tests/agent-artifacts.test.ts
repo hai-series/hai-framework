@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { core } from '@h-ai/core'
-import { reldb } from '@h-ai/reldb'
-import { storage } from '@h-ai/storage'
+import { HaiReldbError, reldb } from '@h-ai/reldb'
+import { HaiStorageError, storage } from '@h-ai/storage'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { artifactDocument, artifactMedia } from '#lib/server/artifact-http.js'
@@ -195,6 +195,114 @@ it('deduplicates the same stable artifact id and rejects different bytes under t
     content: 'Different',
   })).rejects.toMatchObject({ status: 409 })
   expect(await artifactStore.history('alice', first.id)).toHaveLength(1)
+})
+
+const analysisOutputs = [
+  {
+    id: '10000000-0000-4000-8000-000000000001',
+    title: 'report.table.json',
+    kind: 'table',
+    content: '{}',
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000002',
+    title: 'report.chart.json',
+    kind: 'chart',
+    content: '{}',
+  },
+] as const
+
+it('publishes two artifacts together and preserves their original references on retry', async () => {
+  const [table, chart] = analysisOutputs
+  const refs = await artifactStore.createBatch('alice', analysisOutputs)
+  expect(refs.map(ref => ref.id)).toEqual([table.id, chart.id])
+  await expect(artifactStore.createBatch('alice', analysisOutputs)).resolves.toEqual(refs)
+  expect((await listResources('alice', 'artifact')).items).toHaveLength(2)
+  const objects = await storage.dir.list()
+  expect(objects.success && objects.data.files).toHaveLength(2)
+})
+
+it('rolls back the first artifact and removes staged objects when the second artifact conflicts', async () => {
+  const [table, chart] = analysisOutputs
+  const existing = await artifactStore.create('alice', { ...chart, content: '{"current":true}' })
+  await expect(artifactStore.createBatch('alice', analysisOutputs)).rejects.toMatchObject({ status: 409, code: 'artifact-conflict' })
+  await expect(artifactStore.read('alice', table.id)).rejects.toMatchObject({ status: 404 })
+  expect((await artifactStore.read('alice', chart.id)).bytes.toString()).toBe('{"current":true}')
+  expect((await listResources('alice', 'artifact')).items).toEqual([existing])
+  const objects = await storage.dir.list()
+  expect(objects.success && objects.data.files).toHaveLength(1)
+})
+
+it('cleans both staged files when the second upload succeeds without a successful response', async () => {
+  const upload = storage.file.put.bind(storage.file)
+  vi.spyOn(storage.file, 'put').mockImplementationOnce(upload).mockImplementationOnce(async (...args) => {
+    expect((await upload(...args)).success).toBe(true)
+    return core.err(HaiStorageError.UPLOAD_FAILED, 'Upload response was lost')
+  })
+  await expect(artifactStore.createBatch('alice', analysisOutputs)).rejects.toMatchObject({ code: HaiStorageError.UPLOAD_FAILED.code })
+  expect((await listResources('alice', 'artifact')).items).toEqual([])
+  const objects = await storage.dir.list()
+  expect(objects.success && objects.data.files).toEqual([])
+})
+
+it('cleans a staged artifact and stops before the second upload on batch cancellation', async () => {
+  const abort = new AbortController()
+  const upload = storage.file.put.bind(storage.file)
+  const put = vi.spyOn(storage.file, 'put').mockImplementationOnce(async (...args) => {
+    const result = await upload(...args)
+    abort.abort()
+    return result
+  })
+  await expect(artifactStore.createBatch('alice', analysisOutputs, abort.signal)).rejects.toMatchObject({ name: 'AbortError' })
+  expect(put).toHaveBeenCalledOnce()
+  expect((await listResources('alice', 'artifact')).items).toEqual([])
+  const objects = await storage.dir.list()
+  expect(objects.success && objects.data.files).toEqual([])
+})
+
+it('rolls back both artifacts on batch cancellation before commit', async () => {
+  const abort = new AbortController()
+  const chart = analysisOutputs[1]
+  const begin = reldb.tx.begin.bind(reldb.tx)
+  vi.spyOn(reldb.tx, 'begin').mockImplementationOnce(async () => {
+    const transaction = await begin()
+    if (transaction.success) {
+      const execute = transaction.data.execute.bind(transaction.data)
+      vi.spyOn(transaction.data, 'execute').mockImplementation(async (sql, params) => {
+        const written = await execute(sql, params)
+        if (written.success && sql.startsWith('INSERT INTO hai_agent_resource_versions') && params?.[2] === chart.id)
+          abort.abort()
+        return written
+      })
+    }
+    return transaction
+  })
+  await expect(artifactStore.createBatch('alice', analysisOutputs, abort.signal)).rejects.toMatchObject({ name: 'AbortError' })
+  expect((await listResources('alice', 'artifact')).items).toEqual([])
+  const objects = await storage.dir.list()
+  expect(objects.success && objects.data.files).toEqual([])
+})
+
+it('keeps both referenced objects and can retry after a lost batch commit result', async () => {
+  const begin = reldb.tx.begin.bind(reldb.tx)
+  vi.spyOn(reldb.tx, 'begin').mockImplementationOnce(async () => {
+    const transaction = await begin()
+    if (transaction.success) {
+      const commit = transaction.data.commit.bind(transaction.data)
+      vi.spyOn(transaction.data, 'commit').mockImplementationOnce(async () => {
+        expect((await commit()).success).toBe(true)
+        return core.err(HaiReldbError.TRANSACTION_FAILED, 'Commit response was lost')
+      })
+    }
+    return transaction
+  })
+  await expect(artifactStore.createBatch('alice', analysisOutputs)).rejects.toMatchObject({ status: 500, code: HaiReldbError.TRANSACTION_FAILED.code })
+  for (const input of analysisOutputs)
+    expect((await artifactStore.read('alice', input.id)).bytes.toString()).toBe(input.content)
+  const refs = await artifactStore.createBatch('alice', analysisOutputs)
+  expect(refs.map(ref => ref.id)).toEqual(analysisOutputs.map(input => input.id))
+  const objects = await storage.dir.list()
+  expect(objects.success && objects.data.files).toHaveLength(2)
 })
 
 it('rejects media type spoofing and binary edits', async () => {

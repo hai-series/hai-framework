@@ -249,7 +249,7 @@ Agent ワークスペースでは、プロジェクトのメモをファイル�
 
 ファイルの保存先は、ホストが実装する `files` コールバックで決まります。このページの利用例は、プロセスが終了するまでファイルをメモリーに保持します。Agent ワークスペースは `@h-ai/storage` を利用し、既定ではサービスの作業ディレクトリにある `./data/uploads` にファイル本体を書き込みます。本番設定で `s3` を選ぶと、構成済みの S3 互換バケットに書き込みます。[保存先とファイル ID](../data/tools.ja.md#artifact-storage)
 
-`artifact_create` は既存のコンテンツを 1 件保存します。Markdown と HTML は本文を、表とグラフは JSON 文字列を渡します。`artifact_read` はファイル ID で本文を 1 件読み取ります。`data_analyze` は解析済みのデータ行 `rows` を受け取り、ファイルはその**出力**です。売上が Excel にある場合は、アプリがシートを先にデータ行へ変換します。ツールは集計値を返し、`files.publish` で表データとグラフ設定を 2 つの JSON ファイルとして保存します。利用者はファイル一覧から個別に開けます。
+`artifact_create` は既存のコンテンツを 1 件保存します。Markdown と HTML は本文を、表とグラフは JSON 文字列を渡します。`artifact_read` はファイル ID で本文を 1 件読み取ります。`data_analyze` は解析済みのデータ行 `rows` を受け取り、ファイルはその**出力**です。売上が Excel にある場合は、アプリがシートを先にデータ行へ変換します。ツールは集計値を返し、`files.publishBatch` で表データとグラフ設定を 2 つの JSON ファイルとしてまとめて保存します。利用者はファイル一覧から個別に開けます。
 
 ファクトリーは組み込みツールを `set.tools` に返します。`registry.registerMany(set.tools)` が `tool.name` で登録するため、`registry.execute('artifact_create', input)` で名前を指定して実行できます。作成に成功すると、タイトルと `artifact-1` のようなファイル ID を含む参照が返ります。画面はこの ID でファイルを開けます。エージェントが保存済みのメモを引き続き使うなど、コードから本文を再取得する場合に `artifact_read` を呼びます。
 
@@ -270,6 +270,7 @@ Agent ワークスペースでは、プロジェクトのメモをファイル�
 | `context: ToolServiceContext` | 認証済みの `scope: { tenantId, userId }`。セッション ID や中止シグナルは任意 | 認証済みの主体をホストから渡す。実行用コンテキストは Runner の実行ノードが設定する |
 | `files.read` | `context`、`{ id }` | 必須。主体の読み取り権限を確認し、`data: Uint8Array` を含む `ToolArtifact` を返す |
 | `files.publish` | `context`、`{ name, kind, mediaType, data, id? }` | 必須。書き込みを認可してバイト列を保存し、`{ id, title, kind, mediaType, version }` を返す |
+| `files.publishBatch` | `context` と表・グラフ | 任意。表とグラフをまとめてコミットし、順に参照を返します。失敗時は今回の新規成果物をどちらも公開しません。`data_analyze` の利用時に指定します。 |
 | `files.save` | `context`、`{ id, baseVersion, content }` | 任意。主体、版、最終書き込み条件を確認し、更新した参照を返す |
 
 `artifact_create` の `kind` は `markdown`、`html`、`table`、`chart` です。表とグラフの本文は JSON オブジェクトを表す文字列です。`artifact_read` で読み取れるのはUTF-8 Markdown、HTML、プレーンテキスト、JSON です。`data_analyze` には 1～2000 行を渡します。各行に `x` 列と有限の数値をもつ `y` 列が必要です。使えるグラフは `bar`、`line`、`area`、`pie`、`scatter` です。
@@ -286,7 +287,7 @@ Agent ワークスペースでは、プロジェクトのメモをファイル�
 
 ##### 成果物の利用例に共通するレジストリを用意する
 
-Node 26 のプロジェクトに依存関係を追加し、次のコードを `artifact-setup.mts` として保存します。以下の利用例はこのレジストリを読み込み、それぞれ独立して実行できます。デモでは認証済みユーザーを `demo/alice` とし、ファイルをメモリー内の `Map` に保存します。アプリに組み込むときは、2 つのファイルコールバックをファイルライブラリと権限チェックに接続します。
+Node 26 のプロジェクトに依存関係を追加し、次のコードを `artifact-setup.mts` として保存します。以下の利用例はこのレジストリを読み込み、それぞれ独立して実行できます。デモでは認証済みユーザーを `demo/alice` とし、ファイルをメモリー内の `Map` に保存します。アプリに組み込むときは、ファイルコールバックをファイルライブラリと権限チェックに接続します。
 
 ```sh
 pnpm add @h-ai/core @h-ai/tools
@@ -295,7 +296,7 @@ pnpm add @h-ai/core @h-ai/tools
 <!-- example: tools-artifact-setup -->
 
 ```ts
-import type { ToolArtifact, ToolArtifactAccess, ToolServiceContext } from '@h-ai/tools/server'
+import type { ToolArtifact, ToolArtifactAccess, ToolArtifactPublishInput, ToolServiceContext } from '@h-ai/tools/server'
 import { core } from '@h-ai/core'
 import { HaiToolsError } from '@h-ai/tools'
 import { tools } from '@h-ai/tools/server'
@@ -307,6 +308,15 @@ function owns({ scope }: ToolServiceContext) {
   return scope.tenantId === owner.tenantId && scope.userId === owner.userId
 }
 
+function prepare(input: ToolArtifactPublishInput, sequence: number) {
+  const { id = `artifact-${sequence}`, name, kind, mediaType, data } = input
+  const version = 1
+  return {
+    file: { id, name, kind, mediaType, data, version },
+    ref: { id, title: name, kind, mediaType, version },
+  }
+}
+
 const files: ToolArtifactAccess = {
   async read(context, { id }) {
     if (!owns(context))
@@ -314,12 +324,23 @@ const files: ToolArtifactAccess = {
     const file = stored.get(id)
     return file ? core.ok(file) : core.err(HaiToolsError.NOT_FOUND, 'Artifact not found')
   },
-  async publish(context, { id = `artifact-${stored.size + 1}`, name, kind, mediaType, data }) {
+  async publish(context, input) {
     if (!owns(context))
       return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
-    const version = 1
-    stored.set(id, { id, name, kind, mediaType, data, version })
-    return core.ok({ id, title: name, kind, mediaType, version })
+    const prepared = prepare(input, stored.size + 1)
+    stored.set(prepared.file.id, prepared.file)
+    return core.ok(prepared.ref)
+  },
+  async publishBatch(context, [table, chart]) {
+    if (!owns(context))
+      return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
+    const first = prepare(table, stored.size + 1)
+    const second = prepare(chart, stored.size + 2)
+    if (first.file.id === second.file.id)
+      return core.err(HaiToolsError.VALIDATION_FAILED, 'Artifact IDs must be distinct')
+    stored.set(first.file.id, first.file)
+    stored.set(second.file.id, second.file)
+    return core.ok([first.ref, second.ref] as const)
   },
 }
 

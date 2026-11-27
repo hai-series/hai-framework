@@ -1,4 +1,4 @@
-import type { ToolArtifactAccess } from '../src/tools-node-main.js'
+import type { ToolArtifactAccess, ToolArtifactPublishInput } from '../src/tools-node-main.js'
 import { core } from '@h-ai/core'
 import { expect, it, vi } from 'vitest'
 import { z } from 'zod'
@@ -7,6 +7,15 @@ import { tools } from '../src/tools-node-main.js'
 
 const context = {
   scope: { tenantId: 'team', userId: 'alice' },
+}
+function reference(input: ToolArtifactPublishInput) {
+  return {
+    id: input.id ?? input.name,
+    title: input.name,
+    kind: input.kind,
+    mediaType: input.mediaType,
+    version: 1,
+  }
 }
 const files: ToolArtifactAccess = {
   read: vi.fn(async () => core.ok({
@@ -23,6 +32,10 @@ const files: ToolArtifactAccess = {
     version: 1,
     mediaType: input.mediaType,
   })),
+  publishBatch: async (_context, [table, chart]) => core.ok([
+    reference(table),
+    reference(chart),
+  ] as const),
   save: vi.fn(async () => core.ok({
     id: 'report',
     title: 'report.md',
@@ -211,10 +224,10 @@ it('creates interoperable table/chart artifacts and computes finite numeric summ
 })
 
 it('preserves a source row_id column and produces stable row data and bounded artifact names', async () => {
-  const publish = vi.fn(files.publish)
+  const publishBatch = vi.fn(files.publishBatch!)
   const set = tools.createArtifactTools({
     context,
-    files: { ...files, publish },
+    files: { ...files, publishBatch },
   })
   const analyze = set.tools.find(tool => tool.name === 'data_analyze')!
   const input = {
@@ -227,18 +240,19 @@ it('preserves a source row_id column and produces stable row data and bounded ar
   }
   for (let attempt = 0; attempt < 2; attempt++)
     expect((await analyze.execute(input)).success).toBe(true)
-  const tables = publish.mock.calls.filter(([, input]) => input.kind === 'table').map(([, input]) => JSON.parse(new TextDecoder().decode(input.data)))
-  const charts = publish.mock.calls.filter(([, input]) => input.kind === 'chart').map(([, input]) => JSON.parse(new TextDecoder().decode(input.data)))
+  const tables = publishBatch.mock.calls.map(([, [table]]) => JSON.parse(new TextDecoder().decode(table.data)))
+  const charts = publishBatch.mock.calls.map(([, [, chart]]) => JSON.parse(new TextDecoder().decode(chart.data)))
   expect(tables[0]).toEqual(tables[1])
   const sourceColumn = tables[0].table_columns.find((column: { label: string }) => column.label === 'row_id')
   expect(sourceColumn.key).not.toBe('row_id')
   expect(tables[0].table_rows[0][sourceColumn.key]).toBe(charts[0].data[0].row_id)
   expect(tables[0].table_rows[0].source_row_id).toBe(2)
-  expect(publish.mock.calls.every(([, input]) => input.name.length <= 160)).toBe(true)
+  expect(publishBatch.mock.calls.every(([, pair]) => pair.every(input => input.name.length <= 160))).toBe(true)
 })
 
 it('uses stable, distinct output identifiers for retries of the same managed execution', async () => {
   const publish = vi.fn(files.publish)
+  const publishBatch = vi.fn(files.publishBatch!)
   const execution = {
     id: 'a'.repeat(64),
     scope: context.scope,
@@ -249,7 +263,7 @@ it('uses stable, distinct output identifiers for retries of the same managed exe
   }
   const make = () => tools.createArtifactTools({
     context: { ...context, execution },
-    files: { ...files, publish },
+    files: { ...files, publish, publishBatch },
   })
   for (let attempt = 0; attempt < 2; attempt++) {
     const set = make()
@@ -263,8 +277,68 @@ it('uses stable, distinct output identifiers for retries of the same managed exe
       y: 'y',
     })).success).toBe(true)
   }
-  const ids = publish.mock.calls.map(([, input]) => input.id)
+  const ids = publish.mock.calls.flatMap(([, input], index) => [
+    input.id,
+    ...publishBatch.mock.calls[index]![1].map(entry => entry.id),
+  ])
   expect(ids.every(id => typeof id === 'string' && /^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(id))).toBe(true)
   expect(ids.slice(0, 3)).toEqual(ids.slice(3))
   expect(new Set(ids.slice(0, 3)).size).toBe(3)
+})
+
+it('advertises analysis only when the host can publish both outputs atomically', () => {
+  const set = tools.createArtifactTools({
+    context,
+    files: { read: files.read, publish: files.publish },
+  })
+  expect(set.tools.map(tool => tool.name)).toEqual(['artifact_create', 'artifact_read'])
+  expect(set.groups?.some(group => group.id === 'analysis')).toBe(false)
+})
+
+it('rejects inherited axes and over-budget analysis outputs before publication', async () => {
+  const publishBatch = vi.fn(files.publishBatch!)
+  const set = tools.createArtifactTools({
+    context,
+    files: { ...files, publishBatch },
+    maxArtifactBytes: 128,
+  })
+  const analyze = set.tools.find(tool => tool.name === 'data_analyze')!
+  const input = {
+    title: 'Sales',
+    rows: [
+      { month: 'Jan', sales: 10 },
+    ],
+    x: 'month',
+    y: 'sales',
+  }
+  expect(await analyze.execute({ ...input, x: 'toString' })).toMatchObject({
+    success: false,
+    error: { code: HaiToolsError.VALIDATION_FAILED.code },
+  })
+  expect(await analyze.execute(input)).toMatchObject({
+    success: false,
+    error: { code: HaiToolsError.VALIDATION_FAILED.code },
+  })
+  expect(publishBatch).not.toHaveBeenCalled()
+})
+
+it('propagates a rejected analysis batch without falling back to separate publication', async () => {
+  const publish = vi.fn(files.publish)
+  const failure = core.err(HaiToolsError.EXECUTION_FAILED, 'Batch rolled back')
+  const publishBatch = vi.fn(async () => failure)
+  const set = tools.createArtifactTools({
+    context,
+    files: { ...files, publish, publishBatch },
+  })
+  const analyze = set.tools.find(tool => tool.name === 'data_analyze')!
+  expect(await analyze.execute({
+    title: 'Sales',
+    rows: [
+      { month: 'Jan', sales: 10 },
+    ],
+    x: 'month',
+    y: 'sales',
+  })).toEqual(failure)
+  expect(publishBatch).toHaveBeenCalledOnce()
+  expect(publish).not.toHaveBeenCalled()
 })

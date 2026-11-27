@@ -28,6 +28,7 @@ When tools need files, the host implements `ToolArtifactAccess`. The host can us
 | --- | --- |
 | `read(context, { id })` | Check that the current principal can read the file. Return `id/name/mediaType/data` and optionally `kind/version` |
 | `publish(context, { name, kind, mediaType, data, id? })` | Check permission to publish, save bytes, and return an artifact reference. Tools can supply a stable ID. For example, `artifact_create` derives one from a trusted execution ID. The host handles deduplication and retention |
+| `publishBatch(context, [table, chart])` | Optional. Commit the table and chart together, then return both references in order. If the commit fails, neither new artifact is visible. Provide this callback to enable `data_analyze`. |
 | `save(context, { id, baseVersion, content })` | Optional. Check ownership and the base version before saving new content. The host returns any version conflict |
 
 <a id="artifact-storage"></a>

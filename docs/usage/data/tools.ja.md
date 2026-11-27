@@ -28,6 +28,7 @@
 | --- | --- |
 | `read(context, { id })` | 現在の主体にファイルの読み取り権限があることを確認する。`id/name/mediaType/data` と、必要に応じて `kind/version` を返す |
 | `publish(context, { name, kind, mediaType, data, id? })` | 公開権限を確認してファイル本体を保存し、成果物参照を返す。ツールは安定した ID を渡せる。たとえば `artifact_create` は信頼済みの実行 ID から成果物 ID を生成する。重複排除と保持期間はホストが管理する |
+| `publishBatch(context, [table, chart])` | 任意。表とグラフをまとめてコミットし、順に参照を返します。失敗時は今回の新規成果物をどちらも公開しません。`data_analyze` の利用時に指定します。 |
 | `save(context, { id, baseVersion, content })` | 任意。所有者と基準バージョンを確認して新しい内容を保存する。バージョンが競合した場合はホストがエラーを返す |
 
 <a id="artifact-storage"></a>

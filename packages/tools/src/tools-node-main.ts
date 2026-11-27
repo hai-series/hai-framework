@@ -29,7 +29,7 @@ export const tools: ToolsServerFunctions = {
   createArtifactTools,
 }
 export type { ArtifactToolOptions } from './tools-artifact-functions.js'
-export type { ToolArtifact, ToolArtifactAccess, ToolArtifactReference } from './tools-artifact-types.js'
+export type { ToolArtifact, ToolArtifactAccess, ToolArtifactPublishInput, ToolArtifactReference } from './tools-artifact-types.js'
 export type {
   ToolCatalog,
   ToolGroup,
