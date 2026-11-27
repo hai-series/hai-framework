@@ -1,9 +1,10 @@
 import type { RunnerExecution } from '../src/index.js'
 import { Buffer } from 'node:buffer'
 import { setTimeout as delay } from 'node:timers/promises'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { runner } from '../src/index.js'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { HaiRunnerError, runner } from '../src/index.js'
 
 const scope = { tenantId: 'studio', userId: 'alice' }
 const other = { ...scope, userId: 'bob' }
@@ -32,6 +33,129 @@ afterEach(async () => {
 })
 
 describe('managed execution', () => {
+  it('does not start a removed handler when an in-flight claim completes after deregistration', async () => {
+    expect((await runner.init({ nodeId: 'alpha', pollMs: 20 })).success).toBe(true)
+    const entered = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    const handler = vi.fn(async () => 'completed')
+    const registered = runner.register('deregister', handler)
+    if (!registered.success)
+      throw new Error(registered.error.message)
+    const sql = reldb.sql
+    const get = sql.get.bind(sql)
+    const paused = vi.spyOn(sql, 'get').mockImplementation(async (statement, params) => {
+      if (statement.includes('SELECT q.id FROM hai_runner_executions q')) {
+        entered.resolve()
+        await resume.promise
+      }
+      return get(statement, params)
+    })
+    try {
+      const task = await runner.submit({ scope, kind: 'deregister', input: null })
+      if (!task.success)
+        throw new Error(task.error.message)
+      await entered.promise
+      registered.data()
+      resume.resolve()
+      await status(task.data.id, 'failed')
+      expect(handler).not.toHaveBeenCalled()
+    }
+    finally {
+      resume.resolve()
+      paused.mockRestore()
+    }
+  })
+
+  it('signals local handlers and returns within the close budget while cancellation storage waits', async () => {
+    expect((await runner.init({ nodeId: 'alpha', closeTimeoutMs: 100 })).success).toBe(true)
+    const started = Promise.withResolvers<void>()
+    const observed = Promise.withResolvers<void>()
+    const unblock = Promise.withResolvers<void>()
+    let aborted = false
+    expect(runner.register('shutdown', async (_input, context) => {
+      await new Promise<void>((resolve) => {
+        context.signal.addEventListener('abort', () => {
+          aborted = true
+          resolve()
+        }, { once: true })
+        started.resolve()
+      })
+      return 'completed'
+    }).success).toBe(true)
+    const task = await runner.submit({ scope, kind: 'shutdown', input: null })
+    expect(task.success).toBe(true)
+    if (!task.success)
+      throw new Error(task.error.message)
+    await started.promise
+    const sql = reldb.sql
+    const execute = sql.execute.bind(sql)
+    const patched = vi.spyOn(sql, 'execute').mockImplementation(async (statement, params) => {
+      if (statement.includes('SET state = \'cancelling\'') && statement.includes('owner_generation = ?')) {
+        observed.resolve()
+        await unblock.promise
+      }
+      return execute(statement, params)
+    })
+    try {
+      const closing = runner.close()
+      await observed.promise
+      expect(aborted).toBe(true)
+      await expect(closing).resolves.toMatchObject({
+        success: false,
+        error: { code: HaiRunnerError.CLEANUP_UNCONFIRMED.code },
+      })
+      unblock.resolve()
+      await status(task.data.id, 'cancelled')
+      expect((await runner.close()).success).toBe(true)
+    }
+    finally {
+      unblock.resolve()
+      patched.mockRestore()
+    }
+  })
+
+  it('retains close state until the outstanding cancellation succeeds', async () => {
+    expect((await runner.init({ nodeId: 'alpha' })).success).toBe(true)
+    const started = Promise.withResolvers<void>()
+    expect(runner.register('shutdown', async (_input, context) => {
+      await new Promise<void>((resolve) => {
+        context.signal.addEventListener('abort', () => resolve(), { once: true })
+        started.resolve()
+      })
+      return 'completed'
+    }).success).toBe(true)
+    const task = await runner.submit({ scope, kind: 'shutdown', input: null })
+    expect(task.success).toBe(true)
+    if (!task.success)
+      throw new Error(task.error.message)
+    await started.promise
+    const sql = reldb.sql
+    const execute = sql.execute.bind(sql)
+    const patched = vi.spyOn(sql, 'execute').mockImplementation(async (statement, params) => {
+      if (statement.includes('SET state = \'cancelling\'') && statement.includes('owner_generation = ?'))
+        return core.err('test:runner:unavailable', 'Cancellation storage is temporarily unavailable')
+      return execute(statement, params)
+    })
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        expect(await runner.close()).toMatchObject({
+          success: false,
+          error: { code: HaiRunnerError.CLEANUP_UNCONFIRMED.code },
+        })
+      }
+      expect(await runner.get(scope, task.data.id)).toMatchObject({
+        success: true,
+        data: { status: 'running' },
+      })
+    }
+    finally {
+      patched.mockRestore()
+    }
+    expect((await runner.close()).success).toBe(true)
+    expect((await runner.init({ nodeId: 'api', executor: false })).success).toBe(true)
+    await status(task.data.id, 'cancelled')
+  })
+
   it('bounds the aggregate event payload of a single execution', async () => {
     expect((await runner.init({ nodeId: 'alpha' })).success).toBe(true)
     const event = Buffer.alloc(500 * 1024, 'x').toString()
@@ -154,6 +278,38 @@ describe('managed execution', () => {
       })
   })
 
+  it('does not start a handler after the stored execution deadline', async () => {
+    const kind = 'expired-start.v1'
+    const handler = vi.fn(async () => 'executed')
+    expect((await runner.init({ nodeId: 'alpha' })).success).toBe(true)
+    expect(runner.register(kind, handler).success).toBe(true)
+
+    const execute = reldb.sql.execute
+    const renewal = vi.spyOn(reldb.sql, 'execute').mockImplementation(async (sql, params) => {
+      if (sql.startsWith('UPDATE hai_runner_executions SET leased_until =')) {
+        expect(await execute('UPDATE hai_runner_executions SET run_until = 0 WHERE kind = ?', [kind]))
+          .toMatchObject({
+            success: true,
+            data: { changes: 1 },
+          })
+      }
+      return execute(sql, params)
+    })
+    try {
+      const receipt = await runner.submit({ scope, kind, input: null })
+      if (!receipt.success)
+        throw new Error(receipt.error.message)
+      await expect.poll(() => runner.get(scope, receipt.data.id)).toMatchObject({
+        success: true,
+        data: { status: 'failed', failure: 'run-timeout', output: undefined },
+      })
+      expect(handler).not.toHaveBeenCalled()
+    }
+    finally {
+      renewal.mockRestore()
+    }
+  })
+
   it('scopes idempotency and preserves events and output after executor shutdown', async () => {
     expect((await runner.init({ nodeId: 'alpha' })).success).toBe(true)
     const first = await runner.submit({
@@ -204,6 +360,123 @@ describe('managed execution', () => {
       ],
     })
     expect(await runner.events(scope, first.data.id, 1)).toEqual({ success: true, data: [] })
+  })
+
+  it('retains every acknowledged idempotency key for a reused execution until retention removes it', async () => {
+    expect((await runner.init({ nodeId: 'primary' })).success).toBe(true)
+    const kind = 'reuse.v1'
+    const request = {
+      scope,
+      kind,
+      input: { count: 1 },
+      reuseKey: 'worker',
+    }
+    const first = await runner.submit({ ...request, idempotencyKey: 'original' })
+    if (!first.success)
+      throw new Error(first.error.message)
+    const { id } = first.data
+    const aliases = ['retry-one', 'retry-two']
+    const accepted = await Promise.all(aliases.map(idempotencyKey => runner.submit({ ...request, idempotencyKey })))
+    for (const receipt of accepted) {
+      expect(receipt).toMatchObject({
+        success: true,
+        data: { id },
+      })
+    }
+
+    expect(await runner.cancel(scope, id)).toMatchObject({
+      success: true,
+      data: { status: 'cancelled' },
+    })
+    for (const idempotencyKey of aliases) {
+      expect(await runner.find(scope, kind, idempotencyKey)).toMatchObject({
+        success: true,
+        data: { id, status: 'cancelled' },
+      })
+      expect(await runner.submit({ ...request, idempotencyKey })).toMatchObject({
+        success: true,
+        data: { id, status: 'cancelled' },
+      })
+    }
+    expect(await runner.find(other, kind, aliases[0])).toEqual({ success: true, data: undefined })
+    expect(await runner.submit({
+      ...request,
+      idempotencyKey: aliases[0],
+      input: { count: 2 },
+    })).toMatchObject({
+      success: false,
+      error: { code: HaiRunnerError.CONFLICT.code },
+    })
+
+    expect((await reldb.sql.execute('UPDATE hai_runner_executions SET updated_at = 0 WHERE id = ?', [id])).success).toBe(true)
+    await expect.poll(() => runner.find(scope, kind, 'original'), { timeout: 5000 }).toEqual({ success: true, data: undefined })
+    expect(await runner.submit({ ...request, idempotencyKey: 'original' })).toMatchObject({
+      success: true,
+      data: { id, status: 'queued' },
+    })
+    expect(await runner.find(scope, kind, aliases[0])).toEqual({ success: true, data: undefined })
+  })
+
+  it('replays and claims a warm-pool request when API and executor differ only in minReady', async () => {
+    const api = runner.create()
+    const environment = { id: 'tools', image: `sha256:${'a'.repeat(64)}`, resources: capacity }
+    const pool = {
+      kind: 'prewarm-policy.v1',
+      key: 'tools',
+      environmentId: environment.id,
+      minReady: 1,
+      maxRunning: 1,
+      maxTotal: 1,
+    }
+    const request = {
+      scope,
+      kind: pool.kind,
+      input: { task: 'check' },
+      idempotencyKey: 'prewarm-policy',
+      capacityClass: 'tool',
+      environmentId: environment.id,
+      warmPool: true,
+      concurrency: { key: pool.key, limit: pool.maxRunning },
+    } as const
+    try {
+      expect((await api.init({
+        nodeId: 'api',
+        executor: false,
+        environments: [environment],
+      })).success).toBe(true)
+      const originalPool = api.registerWarmPool(pool)
+      if (!originalPool.success)
+        throw new Error(originalPool.error.message)
+      const first = await api.submit(request)
+      if (!first.success)
+        throw new Error(first.error.message)
+      originalPool.data()
+      const changedPool = { ...pool, minReady: 0 }
+      expect(api.registerWarmPool(changedPool).success).toBe(true)
+      expect(await api.submit(request)).toEqual(first)
+      expect(await api.submit({
+        ...request,
+        input: { task: 'changed' },
+      })).toMatchObject({
+        success: false,
+        error: { code: HaiRunnerError.CONFLICT.code },
+      })
+
+      expect((await runner.init({
+        nodeId: 'tools',
+        toolCapacity: capacity,
+        environments: [environment],
+      })).success).toBe(true)
+      expect(runner.register(pool.kind, async input => input).success).toBe(true)
+      expect(runner.registerWarmPool(changedPool).success).toBe(true)
+      await expect.poll(() => api.get(scope, first.data.id)).toMatchObject({
+        success: true,
+        data: { status: 'succeeded', output: request.input },
+      })
+    }
+    finally {
+      await api.close()
+    }
   })
 
   it('counts resources through cleanup, routes pinned work, and waits for cancellation', async () => {

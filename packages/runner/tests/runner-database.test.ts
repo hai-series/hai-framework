@@ -90,10 +90,20 @@ for (const [backend, setup] of [
       }
       for (const instance of [first, second]) {
         expect((await instance.register(pool.kind, async (_input, context) => {
+          const previousUmask = process.umask(0o077)
           const launched = await context.start({
-            command: 'cat',
-            args: ['/input/fixture'],
+            command: '/bin/sh',
+            args: [
+              '-ec',
+              [
+                'test "$(stat -c %a /run/hai-config/warm-launch.json)" = 444',
+                'test "$(stat -c %a /input/fixture)" = 444',
+                'cat /input/fixture',
+              ].join('\n'),
+            ],
             inputs: { fixture: 'dmVyaWZpZWQ=' },
+          }).finally(() => {
+            process.umask(previousUmask)
           })
           if (!launched.success)
             throw new Error(launched.error.message)
@@ -101,9 +111,15 @@ for (const [backend, setup] of [
           let output = ''
           for await (const chunk of launched.data.stdout)
             output += String(chunk)
+          expect((await launched.data.wait()).code).toBe(0)
           return output
         })).success).toBe(true)
-        expect(instance.registerWarmPool(pool).success).toBe(true)
+        expect(instance.registerWarmPool({
+          ...pool,
+          minReady: instance === first
+            ? 1
+            : 0,
+        }).success).toBe(true)
       }
       const ready = () => reldb.sql.get<{ container_json: string | { id: string } }>(
         'SELECT container_json FROM hai_runner_executions WHERE state = \'running\' AND warm_state = \'ready\'',
@@ -115,7 +131,7 @@ for (const [backend, setup] of [
         },
       })
       const before = await ready()
-      const job = await first.submit({
+      const job = await second.submit({
         scope,
         kind: pool.kind,
         input: null,
@@ -183,6 +199,71 @@ for (const [backend, setup] of [
         data: { id: a.data.id },
       })
     })
+
+    it.skipIf(backend !== 'postgresql').each(['renewal', 'completion'] as const)(
+      'keeps expired ownership fenced when %s waits for a database row lock',
+      async (operation) => {
+        const executor = runner.create()
+        const release = Promise.withResolvers<void>()
+        const nodeId = `lease-lock-${operation}`
+        const kind = 'lease-lock.v1'
+        try {
+          expect((await executor.init({ nodeId, leaseMs: 1000, pollMs: 20 })).success).toBe(true)
+          expect(executor.register(kind, async (_input, context) => {
+            expect((await context.emit('started')).success).toBe(true)
+            const stopped = new Promise<void>((resolve) => {
+              context.signal.addEventListener('abort', () => resolve(), { once: true })
+              if (context.signal.aborted)
+                resolve()
+            })
+            await Promise.race([release.promise, stopped])
+            return 'completed'
+          }).success).toBe(true)
+
+          const receipt = await first.submit({ scope, kind, nodeId, input: null })
+          if (!receipt.success)
+            throw new Error(receipt.error.message)
+          const { id } = receipt.data
+          await expect.poll(() => second.events(scope, id)).toMatchObject({
+            success: true,
+            data: [
+              { data: 'started' },
+            ],
+          })
+
+          const locked = await reldb.tx.begin()
+          if (!locked.success)
+            throw new Error(locked.error.message)
+          try {
+            expect(await locked.data.get('SELECT id FROM hai_runner_executions WHERE id = ? FOR UPDATE', [id]))
+              .toMatchObject({
+                success: true,
+                data: { id },
+              })
+            if (operation === 'completion')
+              release.resolve()
+            await expect.poll(() => locked.data.get(`SELECT leased_until <= FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000) AS expired
+              FROM hai_runner_executions WHERE id = ?`, [id]), { timeout: 5000 })
+              .toMatchObject({
+                success: true,
+                data: { expired: true },
+              })
+          }
+          finally {
+            expect((await locked.data.commit()).success).toBe(true)
+          }
+          await expect.poll(() => second.get(scope, id), { timeout: 5000 }).toMatchObject({
+            success: true,
+            data: { status: 'unknown', failure: 'owner-lost', output: undefined },
+          })
+        }
+        finally {
+          release.resolve()
+          await executor.close()
+        }
+      },
+      15_000,
+    )
 
     it('removes expired terminal jobs and their events in bounded maintenance while preserving unresolved children', async () => {
       const live = Promise.withResolvers<void>()

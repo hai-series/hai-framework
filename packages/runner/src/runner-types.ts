@@ -45,11 +45,11 @@ export type RunnerJson = z.infer<typeof json>
 export type RunnerScope = RunnerSubmit['scope']
 
 /**
- * 不含密钥或本机文件路径的持久提交参数。
+ * 不含密钥或本机文件路径的持久提交参数。可选 locale 由可信宿主提供，使用 1–64 个字符的语言标签；同一幂等任务沿用首条记录的语言。
  * @example
  * ```ts
  * import type { RunnerSubmit } from '@h-ai/runner'
- * const task: RunnerSubmit = { scope: { tenantId: 'team', userId: 'alice' }, kind: 'reports.v1', input: { page: 1 } }
+ * const task: RunnerSubmit = { scope: { tenantId: 'team', userId: 'alice' }, kind: 'reports.v1', input: { page: 1 }, locale: 'en-US' }
  * ```
  */
 export type RunnerSubmit = z.input<typeof submitSchema>
@@ -99,7 +99,7 @@ export interface RunnerExecution {
 export interface RunnerReconciliation {
   operatorId: string
   reason: string
-  /** 核对宿主处理器的所有应用侧资源均已停止。没有容器凭据时必须提供。 */
+  /** 核对宿主处理器资源均已停止，或原节点的容器创建尝试已收尾且未留下容器。 */
   hostResourcesStopped?: true
 }
 
@@ -115,6 +115,7 @@ export interface RunnerWarmPool {
   key: string
   kind: string
   environmentId: string
+  /** 就绪容器的目标数，可以与其他节点不同。 */
   minReady: number
   maxRunning: number
   maxTotal: number
@@ -139,7 +140,11 @@ export interface RunnerEvent {
  * @example
  * ```ts
  * import type { RunnerLaunch } from '@h-ai/runner'
- * const launch: RunnerLaunch = { command: 'cat', args: ['/state/manifest.json'], files: { 'manifest.json': '{}' } }
+ * const launch: RunnerLaunch = {
+ *   command: './scripts/check.sh',
+ *   workspace: { 'scripts/check.sh': 'IyEvYmluL3NoCmV4aXQgMAo=' },
+ *   workspaceExecutables: ['scripts/check.sh'],
+ * }
  * ```
  */
 export interface RunnerLaunch {
@@ -151,6 +156,8 @@ export interface RunnerLaunch {
   inputs?: Record<string, string>
   /** 规范 Base64 普通文件树，按相对路径初始化私有可写 /workspace。 */
   workspace?: Record<string, string>
+  /** 冷容器中可执行的工作区文件。每个相对路径须唯一且存在于 workspace。 */
+  workspaceExecutables?: string[]
   cwd?: string
 }
 
@@ -187,7 +194,7 @@ export interface RunnerContext {
   scope: RunnerScope
   owner: RunnerOwner
   parentId?: string
-  /** 首次提交保存的语言，早期或省略语言的任务无此字段。 */
+  /** 首次提交时保存的语言供处理器按需使用；较早记录或提交时省略语言的任务无此字段。 */
   locale?: RunnerSubmit['locale']
   /** 持久任务结果序列化为 JSON 后的 UTF-8 字节预算。 */
   maxResultBytes?: number
@@ -223,9 +230,9 @@ export interface RunnerFunctions {
   close: () => Promise<HaiResult<void>>
   /** 当前环境快照。 */
   environment: (id: string) => HaiResult<RunnerEnvironment>
-  /** 注册处理器并返回仅移除该处理器的回调。 */
+  /** 注册处理器。注销时回收尚未交给任务的本地预热资源。 */
   register: (kind: string, handler: RunnerHandler) => HaiResult<() => void>
-  /** 在 API 和执行节点登记同一部署快照。只在执行节点创建实例。 */
+  /** API 和执行节点的环境及容量边界须一致。只有执行节点会预热。 */
   registerWarmPool: (pool: RunnerWarmPool) => HaiResult<() => void>
   /** 持久化接收，在可用节点领取。 */
   submit: (request: RunnerSubmit) => Promise<HaiResult<RunnerExecution>>

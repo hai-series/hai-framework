@@ -4,20 +4,23 @@ import type { RunnerSerializationJob } from './runner-serialization-worker.js'
 import type { RunnerLaunch, RunnerProcess } from './runner-types.js'
 import { Buffer } from 'node:buffer'
 import { execFile, spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { once } from 'node:events'
-import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { chmod, lstat, mkdir, mkdtemp, open, readFile, realpath, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join, posix } from 'node:path'
+import { basename, join, posix } from 'node:path'
 import { promisify } from 'node:util'
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 import { runnerM } from './runner-i18n.js'
 import { HaiRunnerError } from './runner-types.js'
-import { captureWorkspace, decodeWorkspace, maxWorkspaceBytes, maxWorkspaceFiles, parseWorkspaceSnapshot, workspaceSchema } from './runner-workspace.js'
+import { captureWorkspace, decodeWorkspace, maxWorkspaceBytes, maxWorkspaceFiles, parseWorkspaceSnapshot, workspacePath, workspaceSchema } from './runner-workspace.js'
 
 const execute = promisify(execFile)
 const containerId = /^[\da-f]{64}$/u
+const attemptLabel = 'hai.runner.attempt'
+const containerIdFile = 'container-id'
 const envKey = /^[A-Z_]\w*$/iu
 const MAX_FILE_BYTES = 50 * 1024 * 1024
 const artifactName = /^[\da-z][\w.-]{0,127}$/iu
@@ -30,8 +33,11 @@ const launchSchema = z.strictObject({
   files: z.record(z.string().regex(fileName).refine(value => value !== '.' && value !== '..'), z.string().max(128_000)).default({}),
   inputs: z.record(z.string().regex(artifactName), z.string().max(4 * Math.ceil(MAX_FILE_BYTES / 3))).optional(),
   workspace: workspaceSchema.optional(),
+  workspaceExecutables: z.array(z.string().refine(workspacePath)).max(maxWorkspaceFiles).optional(),
   cwd: z.string().max(1024).default('/workspace'),
-})
+}).refine(({ workspace, workspaceExecutables }) => workspaceExecutables === undefined
+  || (workspace !== undefined && new Set(workspaceExecutables).size === workspaceExecutables.length
+    && workspaceExecutables.every(path => Object.hasOwn(workspace, path))))
 
 const serializationPool = core.worker.createPool<RunnerSerializationJob, string | Record<string, string> | undefined>(
   new URL(import.meta.url.endsWith('.ts')
@@ -80,19 +86,29 @@ function uncertain() {
 }
 
 /**
- * 持久化的实际容器及暂存身份，用于原节点核验资源。
+ * 持久化的创建尝试或实际容器身份，用于原节点核验资源。
  * @example 模块内部上下文
  * ```ts
  * function engineName(record: RunnerContainerIdentity) { return record.engine }
  * ```
  */
 export interface RunnerContainerIdentity {
-  id: string
+  id?: string
+  attempt?: string
   engine: RunnerConfig['engine']
   engineKey: string
   stageName: string
   stageKey: string
 }
+
+/**
+ * 持久化创建凭据。补记完整 ID 时传入此前已记录的尝试作为写入条件。
+ * @example 模块内部上下文
+ * ```ts
+ * async function recordAttempt(save: RecordContainer, attempt: RunnerContainerIdentity) { return save(attempt) }
+ * ```
+ */
+type RecordContainer = (identity: RunnerContainerIdentity, previous?: RunnerContainerIdentity) => Promise<HaiResult<void>>
 
 const stageName = /^hai-runner-[a-z\d]{6}$/iu
 
@@ -128,17 +144,52 @@ async function engineKey(engine: RunnerConfig['engine']) {
   return createHash('sha256').update(JSON.stringify([host, engine, root.key, value])).digest('hex')
 }
 
-async function containerAbsent(engine: RunnerConfig['engine'], id: string) {
+async function containerAbsent(engine: RunnerConfig['engine'], filter: string) {
   return !(await cli(engine, [
     'container',
     'ls',
     '--all',
     '--no-trunc',
     '--filter',
-    `id=${id}`,
+    filter,
     '--format',
     '{{.ID}}',
   ]))
+}
+
+async function stagedContainerId(directory: string) {
+  try {
+    const file = await open(join(directory, containerIdFile), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    try {
+      const info = await file.stat()
+      if (!info.isFile() || info.size > 65)
+        return undefined
+      const data = Buffer.alloc(66)
+      const { bytesRead } = await file.read(data)
+      const id = data.subarray(0, bytesRead).toString('utf8').trim()
+      return containerId.test(id)
+        ? id
+        : undefined
+    }
+    finally {
+      await file.close()
+    }
+  }
+  catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+      return undefined
+    throw error
+  }
+}
+
+function createRejected(error: unknown, engine: RunnerConfig['engine']) {
+  if (!(error instanceof Error) || !('code' in error) || typeof error.code !== 'number' || error.code === 0
+    || ('signal' in error && error.signal) || ('killed' in error && error.killed)) {
+    return false
+  }
+  // 本地 Podman 在 CLI 进程内完成创建；Docker 需取得守护进程已返回错误的凭据。
+  return engine === 'podman'
+    || ('stderr' in error && typeof error.stderr === 'string' && /^Error response from daemon:/mu.test(error.stderr))
 }
 
 async function identityOf(path: string) {
@@ -148,6 +199,22 @@ async function identityOf(path: string) {
   return `${info.dev}:${info.ino}`
 }
 
+async function writeStagedFile(path: string, content: string | Uint8Array, mode: number) {
+  const file = await open(path, 'wx', 0o600)
+  try {
+    await file.writeFile(content)
+    // 容器 UID 可能不同于宿主文件所有者，挂载文件的权限不由进程 umask 决定。
+    await file.chmod(mode)
+  }
+  finally {
+    await file.close()
+  }
+}
+
+async function allStagedFilesWritten(writes: Promise<void>[]) {
+  return (await Promise.allSettled(writes)).every(result => result.status === 'fulfilled')
+}
+
 /**
  * 仅在相同的真实引擎与暂存根上确认已停止，并清理已登记的专属暂存目录。
  * @example 模块内部上下文
@@ -155,11 +222,13 @@ async function identityOf(path: string) {
  * async function verify(record: RunnerContainerIdentity) { return confirmContainerReleased(record) }
  * ```
  */
-export async function confirmContainerReleased(record: RunnerContainerIdentity): Promise<HaiResult<void>> {
-  if (!containerId.test(record.id) || !stageName.test(record.stageName))
+export async function confirmContainerReleased(record: RunnerContainerIdentity, attemptCompleted = false): Promise<HaiResult<void>> {
+  if ((!record.id && !record.attempt) || (record.id !== undefined && !containerId.test(record.id))
+    || (record.attempt !== undefined && !containerId.test(record.attempt)) || !stageName.test(record.stageName)) {
     return uncertain()
+  }
   try {
-    if (record.engineKey !== await engineKey(record.engine) || !await containerAbsent(record.engine, record.id))
+    if (record.engineKey !== await engineKey(record.engine))
       return uncertain()
     const path = join((await stagingRoot()).path, record.stageName)
     let actual: string | undefined
@@ -170,9 +239,20 @@ export async function confirmContainerReleased(record: RunnerContainerIdentity):
       if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
         return uncertain()
     }
+    if (actual && actual !== record.stageKey)
+      return uncertain()
+    const id = record.id ?? (actual
+      ? await stagedContainerId(path)
+      : undefined)
+    if (!id && !attemptCompleted)
+      return uncertain()
+    async function released() {
+      return (!id || await containerAbsent(record.engine, `id=${id}`))
+        && (!record.attempt || await containerAbsent(record.engine, `label=${attemptLabel}=${record.attempt}`))
+    }
+    if (!await released())
+      return uncertain()
     if (actual) {
-      if (actual !== record.stageKey)
-        return uncertain()
       for (const name of ['input', 'configuration']) {
         const directory = join(path, name)
         try {
@@ -187,7 +267,7 @@ export async function confirmContainerReleased(record: RunnerContainerIdentity):
       }
       await rm(path, { recursive: true, force: true })
     }
-    return record.engineKey === await engineKey(record.engine) && await containerAbsent(record.engine, record.id)
+    return record.engineKey === await engineKey(record.engine) && await released()
       ? core.ok(undefined)
       : uncertain()
   }
@@ -253,13 +333,15 @@ export async function startContainer(
   resources: RunnerResources,
   launch: RunnerLaunch,
   signal: AbortSignal,
-  record: (identity: RunnerContainerIdentity) => Promise<HaiResult<void>>,
+  record: RecordContainer,
   warm = false,
 ): Promise<HaiResult<WarmContainer>> {
   const parsed = launchSchema.safeParse(launch)
   if (!parsed.success || signal.aborted)
     return invalid()
   const options = parsed.data
+  if (resources.pids < 2 || (options.inputs !== undefined && resources.scratchMiB < 4))
+    return invalid()
   const cwd = posix.normalize(options.cwd)
   if (cwd !== options.cwd || (cwd !== '/workspace' && !cwd.startsWith('/workspace/')) || cwd.includes('\0')
     || Object.keys(options.env).length > 128 || Object.keys(options.files).length > 32) {
@@ -278,14 +360,24 @@ export async function startContainer(
     : decodeWorkspace(options.workspace, workspaceBudget)
   if ((options.workspace && !project) || (project && warm))
     return invalid()
+  const executablePaths = new Set(options.workspaceExecutables)
 
   let temporary: string | undefined
   let id: string | undefined
   let envFile: string | undefined
+  let attempt: RunnerContainerIdentity | undefined
   const readOnlyDirs: string[] = []
   let creationStarted = false
+  let conflictingIds = false
 
   async function removeContainer(container: string) {
+    try {
+      if (!attempt || attempt.engineKey !== await engineKey(engine))
+        return false
+    }
+    catch {
+      return false
+    }
     try {
       await cli(engine, [
         'container',
@@ -302,7 +394,9 @@ export async function startContainer(
       // 查询引擎确认容器确实不在；单独收到 rm 失败不能推断已经停止。
     }
     try {
-      return await containerAbsent(engine, container)
+      return await containerAbsent(engine, `id=${container}`)
+        && await containerAbsent(engine, `label=${attemptLabel}=${attempt.attempt}`)
+        && attempt.engineKey === await engineKey(engine)
     }
     catch {
       return false
@@ -310,7 +404,15 @@ export async function startContainer(
   }
 
   async function removeFiles() {
-    await Promise.all(readOnlyDirs.map(dir => chmod(dir, 0o700)))
+    for (const directory of readOnlyDirs) {
+      try {
+        await chmod(directory, 0o700)
+      }
+      catch (error) {
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
+          throw error
+      }
+    }
     if (temporary)
       await rm(temporary, { recursive: true, force: true })
   }
@@ -349,36 +451,67 @@ export async function startContainer(
 
     const key = await engineKey(engine)
     temporary = await mkdtemp(join((await stagingRoot()).path, 'hai-runner-'))
+    await chmod(temporary, 0o700)
+    attempt = {
+      attempt: randomBytes(32).toString('hex'),
+      engine,
+      engineKey: key,
+      stageName: basename(temporary),
+      stageKey: await identityOf(temporary),
+    }
+    const recorded = await record(attempt)
+    if (!recorded.success || signal.aborted) {
+      await removeFiles()
+      return recorded.success
+        ? invalid()
+        : recorded
+    }
     envFile = join(temporary, 'environment')
     const files = join(temporary, 'configuration')
-    await writeFile(envFile, Object.entries({
+    await writeStagedFile(envFile, Object.entries({
       HOME: '/state',
       XDG_CACHE_HOME: '/state/cache',
       XDG_CONFIG_HOME: '/state/config',
       TMPDIR: '/tmp',
       ...options.env,
-    }).map(([key, value]) => `${key}=${value}`).join('\n'), { mode: 0o600, flag: 'wx' })
+    }).map(([key, value]) => `${key}=${value}`).join('\n'), 0o600)
     await mkdir(files)
     readOnlyDirs.push(files)
-    await Promise.all(Object.entries(options.files).map(([name, content]) =>
-      writeFile(join(files, name), content, { mode: 0o444, flag: 'wx' })))
+    await chmod(files, 0o700)
+    if (!await allStagedFilesWritten(Object.entries(options.files).map(([name, content]) =>
+      writeStagedFile(join(files, name), content, 0o444)))) {
+      throw new Error('Runner configuration files could not be staged')
+    }
     // 外层目录由节点账户私有持有；容器内 UID 可读挂入的目录。
     await chmod(files, 0o555)
     const inputDir = join(temporary, 'input')
     if (decoded) {
       await mkdir(inputDir)
       readOnlyDirs.push(inputDir)
-      await Promise.all(decoded.map(item => writeFile(join(inputDir, item.name), item.bytes, { mode: 0o444, flag: 'wx' })))
+      await chmod(inputDir, 0o700)
+      if (!await allStagedFilesWritten(decoded.map(item => writeStagedFile(join(inputDir, item.name), item.bytes, 0o444))))
+        throw new Error('Runner input files could not be staged')
       await chmod(inputDir, 0o555)
     }
     const projectDir = join(temporary, 'project')
     if (project) {
       await mkdir(projectDir)
+      await chmod(projectDir, 0o755)
+      const directories = new Set<string>()
       // 外层暂存由执行节点账户持有。容器通过独立只读挂载复制到限额内工作区。
       for (const file of project) {
-        const target = join(projectDir, file.name)
-        await mkdir(dirname(target), { recursive: true, mode: 0o755 })
-        await writeFile(target, file.bytes, { mode: 0o644, flag: 'wx' })
+        let directory = projectDir
+        for (const part of file.name.split('/').slice(0, -1)) {
+          directory = join(directory, part)
+          if (!directories.has(directory)) {
+            await mkdir(directory)
+            await chmod(directory, 0o755)
+            directories.add(directory)
+          }
+        }
+        await writeStagedFile(join(projectDir, file.name), file.bytes, executablePaths.has(file.name)
+          ? 0o755
+          : 0o644)
       }
     }
     if (signal.aborted) {
@@ -388,13 +521,9 @@ export async function startContainer(
 
     const state = Math.max(1, Math.floor(resources.scratchMiB / 8))
     const output = decoded
-      ? Math.max(1, Math.floor(resources.scratchMiB / 2))
+      ? Math.min(Math.floor(resources.scratchMiB / 2), resources.scratchMiB - state - workspaceMiB - 1)
       : 0
     const scratch = resources.scratchMiB - state - workspaceMiB - output
-    if (scratch < 1) {
-      await removeFiles()
-      return invalid()
-    }
     const mounts = [
       ['state', state],
       ['workspace', workspaceMiB],
@@ -404,12 +533,20 @@ export async function startContainer(
             ['output', output],
           ]
         : []),
-    ].flatMap(([name, size]) => ['--tmpfs', `/${name}:rw,nosuid,nodev,mode=1777,size=${size}m`])
+    ].flatMap(([name, size]) => {
+      const execution = name === 'workspace' && executablePaths.size > 0
+        ? ',exec'
+        : ''
+      return ['--tmpfs', `/${name}:rw,nosuid,nodev,mode=1777,size=${size}m${execution}`]
+    })
 
-    creationStarted = true
-    const created = await cli(engine, [
+    const create = [
       'container',
       'create',
+      '--cidfile',
+      join(temporary, containerIdFile),
+      '--label',
+      `${attemptLabel}=${attempt.attempt}`,
       '--pull=never',
       '--interactive',
       '--user=1000:1000',
@@ -442,24 +579,34 @@ export async function startContainer(
       environment.image,
       '-c',
       project
-        ? 'cp -R /run/hai-project/. /workspace/ && cp -R /run/hai-config/. /state/ && cd "$1" && shift && exec "$@"'
+        ? '(umask 022 && exec cp -R /run/hai-project/. /workspace/) && cp -R /run/hai-config/. /state/ && cd "$1" && shift && exec "$@"'
         : 'cp -R /run/hai-config/. /state/ && cd "$1" && shift && exec "$@"',
       'hai-runner',
       cwd,
       options.command,
       ...options.args,
-    ])
+    ]
+    creationStarted = true
+    let created: string
+    try {
+      created = await cli(engine, create)
+    }
+    catch (error) {
+      const notStarted = error instanceof Error && 'syscall' in error && error.syscall === `spawn ${engine}`
+      if (notStarted || (createRejected(error, engine) && (await confirmContainerReleased(attempt, true)).success))
+        creationStarted = false
+      throw error
+    }
     if (!containerId.test(created))
-      return uncertain()
+      throw new Error('Container engine did not return a full ID')
+    const cid = await stagedContainerId(temporary)
+    if (cid && cid !== created) {
+      conflictingIds = true
+      throw new Error('Container engine returned inconsistent IDs')
+    }
     id = created
     await rm(envFile, { force: true })
-    const receipt = await record({
-      id,
-      engine,
-      engineKey: key,
-      stageName: basename(temporary),
-      stageKey: await identityOf(temporary),
-    })
+    const receipt = await record({ ...attempt, id }, attempt)
     if (signal.aborted || !receipt.success) {
       const stopped = await removeContainer(id)
       if (stopped)
@@ -484,21 +631,27 @@ export async function startContainer(
       child.once('error', () => resolve({ code: null, signal: null }))
       child.once('close', (code, exited) => resolve({ code, signal: exited }))
     })
-    let closing: Promise<HaiResult<void>> | undefined
+    let stopRequested = false
+    let stopping: Promise<HaiResult<void>> | undefined
     const stop = () => {
-      closing ??= (async () => {
+      stopRequested = true
+      stopping ??= (async () => {
         if (!await removeContainer(created))
           return uncertain()
-        child.kill()
         try {
+          child.kill()
           await removeFiles()
           return core.ok(undefined)
         }
         catch {
           return uncertain()
         }
-      })()
-      return closing
+      })().then((result) => {
+        if (!result.success)
+          stopping = undefined
+        return result
+      })
+      return stopping
     }
     let activated = false
     const process: WarmContainer = {
@@ -507,7 +660,7 @@ export async function startContainer(
       stderr: child.stderr,
       wait: () => completion,
       async activate(launch, activationSignal, authorize) {
-        if (!warm || activated || closing || activationSignal.aborted)
+        if (!warm || activated || stopRequested || activationSignal.aborted)
           return invalid()
         activated = true
         const parsed = launchSchema.safeParse(launch)
@@ -523,27 +676,29 @@ export async function startContainer(
           await chmod(inputDir, 0o755)
           await chmod(files, 0o755)
           // 所有写入结算后才允许移除容器或暂存；失败也不会重新分配给另一主体。
-          const writes = await Promise.allSettled([
-            ...staged.map(item => writeFile(join(inputDir, item.name), item.bytes, { mode: 0o444, flag: 'wx' })),
-            writeFile(join(files, 'warm-launch.json'), request, { mode: 0o444, flag: 'wx' }),
+          const written = await allStagedFilesWritten([
+            ...staged.map(item => writeStagedFile(join(inputDir, item.name), item.bytes, 0o444)),
+            writeStagedFile(join(files, 'warm-launch.json'), request, 0o444),
           ])
           await chmod(inputDir, 0o555)
           await chmod(files, 0o555)
-          if (writes.some(item => item.status === 'rejected') || !await authorize() || activationSignal.aborted || closing)
+          if (!written || !await authorize() || activationSignal.aborted || stopRequested)
             return invalid()
           await new Promise<void>((resolve, reject) => {
             child.stdin.write('+', error => error
               ? reject(error)
               : resolve())
           })
-          return core.ok(process)
+          return stopRequested || activationSignal.aborted
+            ? invalid()
+            : core.ok(process)
         }
         catch {
           return unavailable()
         }
       },
       async artifact(name, maxBytes) {
-        if (!decoded || closing || signal.aborted || !artifactName.test(name)
+        if (!decoded || stopRequested || signal.aborted || !artifactName.test(name)
           || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_FILE_BYTES) {
           return invalid()
         }
@@ -567,13 +722,13 @@ export async function startContainer(
             windowsHide: true,
             signal,
           })
-          if (stdout.length > maxBytes)
+          if (stopRequested || signal.aborted || stdout.length > maxBytes)
             return invalid()
           if (stdout.length < workerThreshold)
             return core.ok(stdout.toString('base64'))
           const bytes = new Uint8Array(stdout)
           const encoded = await serializationPool.run({ type: 'artifact', bytes }, [bytes.buffer])
-          return encoded.success && typeof encoded.data === 'string' && !closing && !signal.aborted
+          return encoded.success && typeof encoded.data === 'string' && !stopRequested && !signal.aborted
             ? core.ok(encoded.data)
             : invalid()
         }
@@ -582,7 +737,7 @@ export async function startContainer(
         }
       },
       async snapshot(maxBytes) {
-        if (!project || closing || signal.aborted || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > workspaceBudget)
+        if (!project || stopRequested || signal.aborted || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > workspaceBudget)
           return invalid()
         try {
           const { stdout } = await execute(engine, [
@@ -604,6 +759,8 @@ export async function startContainer(
             windowsHide: true,
             signal,
           })
+          if (stopRequested || signal.aborted)
+            return invalid()
           if (stdout.length < workerThreshold) {
             const files = parseWorkspaceSnapshot(stdout, maxBytes)
             return files
@@ -611,7 +768,7 @@ export async function startContainer(
               : invalid()
           }
           const files = await serializationPool.run({ type: 'snapshot', content: stdout, budget: maxBytes })
-          return files.success && files.data && typeof files.data !== 'string' && !closing && !signal.aborted
+          return files.success && files.data && typeof files.data !== 'string' && !stopRequested && !signal.aborted
             ? core.ok(files.data)
             : invalid()
         }
@@ -649,8 +806,18 @@ export async function startContainer(
         // 继续清理容器，随后再核对临时目录。
       }
     }
-    if (id && await removeContainer(id))
-      creationStarted = false
+    if (creationStarted && !conflictingIds) {
+      try {
+        id ??= temporary
+          ? await stagedContainerId(temporary)
+          : undefined
+        if (id && await removeContainer(id))
+          creationStarted = false
+      }
+      catch {
+        // 创建请求的结果不明确时，保留已登记的尝试与暂存区供原节点核验。
+      }
+    }
     if (!creationStarted) {
       try {
         await removeFiles()
@@ -678,7 +845,7 @@ export async function prepareWarmContainer(
   engine: RunnerConfig['engine'],
   environment: RunnerEnvironment,
   signal: AbortSignal,
-  record: (identity: RunnerContainerIdentity) => Promise<HaiResult<void>>,
+  record: RecordContainer,
 ) {
   if (environment.networkPolicy !== 'offline')
     return invalid()

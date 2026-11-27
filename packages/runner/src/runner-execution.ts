@@ -23,8 +23,9 @@ const inactive = core.module.createNotInitializedKit(HaiRunnerError.NOT_INITIALI
  */
 interface LocalExecution {
   abort: AbortController
-  done: Promise<boolean>
+  done: Promise<void>
   renewAt: number
+  cancellation?: Promise<HaiResult<void>>
 }
 
 const MAX_PAYLOAD_BYTES = 512 * 1024
@@ -93,66 +94,96 @@ interface RunnerRuntime {
 export function createRunnerExecution(runtime: RunnerRuntime) {
   let timer: NodeJS.Timeout | undefined
   let tick: Promise<void> | undefined
+  let toolClaim: Promise<void> | undefined
   let sweepAt = 0
   let pruneAt = 0
-  let unconfirmedCleanup = false
+  let draining: Promise<boolean> | undefined
   const running = new Map<string, LocalExecution>()
-  const handlers = new Map<string, RunnerHandler>()
+  const pendingCleanup = new Map<string, () => Promise<boolean>>()
+  const handlers = new Map<string, { handler: RunnerHandler }>()
   const pools = new Map<string, RunnerWarmPool>()
   const warmReservations = new Map<string, RunnerWarmPool>()
-  const standby = new Map<string, { handle: WarmContainer, pool: RunnerWarmPool, transferred: () => void }>()
+  const standby = new Map<string, { handle: WarmContainer, pool: RunnerWarmPool, available: boolean, transferred: () => void }>()
   let warmAt = 0
   const poolKey = (kind: string, key: string) => `${kind}:${key}`
+  const stillUnconfirmed = async () => false
+
+  async function settle(id: string, current: RunnerStore, output: RunnerJson | undefined, release: () => Promise<boolean>, requested?: Promise<HaiResult<void>>) {
+    const stopped = await release()
+    if (!stopped)
+      pendingCleanup.set(id, release)
+    const cancellation = await (requested ?? running.get(id)?.cancellation)
+    if (cancellation && !cancellation.success) {
+      pendingCleanup.set(id, async () => {
+        if (!(await current.cancelOwned(id)).success || !await release())
+          return false
+        await current.finish(id, undefined, true)
+        return true
+      })
+      return
+    }
+    const result = await current.finish(id, output, stopped)
+    if (!result.success)
+      logger.warn('Managed execution final state could not be committed', { executionId: id, code: result.error.code })
+  }
 
   function prewarm(claim: RunnerClaim, pool: RunnerWarmPool, current: RunnerStore, settings: RunnerConfig) {
     const abort = new AbortController()
     const environment = claim.request.environment!
+    let release = stillUnconfirmed
     warmReservations.set(claim.id, pool)
     const done = (async () => {
-      const launched = await prepareWarmContainer(settings.engine, environment, abort.signal, identity =>
-        current.recordContainer(claim.id, identity))
+      const launched = await prepareWarmContainer(settings.engine, environment, abort.signal, (identity, previous) =>
+        current.recordContainer(claim.id, identity, previous))
       if (!launched.success) {
         const stopped = launched.error.code !== HaiRunnerError.CLEANUP_UNCONFIRMED.code
-        await current.finish(claim.id, undefined, stopped)
-        if (!stopped)
-          unconfirmedCleanup = true
-        return stopped
+        release = async () => stopped
+        await settle(claim.id, current, undefined, release)
+        return
       }
       const handle = launched.data
+      release = async () => (await handle.close()).success
       handle.stderr.resume()
       let transferred = false
+      let releaseOnAbort!: () => void
       const released = new Promise<void>((resolve) => {
-        standby.set(claim.id, {
-          handle,
-          pool,
-          transferred: () => {
-            transferred = true
-            resolve()
-          },
-        })
-        abort.signal.addEventListener('abort', () => resolve(), { once: true })
-        if (abort.signal.aborted)
-          resolve()
+        releaseOnAbort = resolve
       })
-      const ready = await current.markWarmReady(claim.id)
-      if (ready.success && !abort.signal.aborted) {
-        await Promise.race([
-          released,
-          handle.wait(),
-        ])
+      const candidate = {
+        handle,
+        pool,
+        available: true,
+        transferred: () => {
+          transferred = true
+          releaseOnAbort()
+        },
       }
-      standby.delete(claim.id)
-      if (transferred)
-        return true
-      const closed = await handle.close()
-      await current.finish(claim.id, undefined, closed.success)
-      if (!closed.success)
-        unconfirmedCleanup = true
-      return closed.success
+      standby.set(claim.id, candidate)
+      abort.signal.addEventListener('abort', releaseOnAbort, { once: true })
+      if (abort.signal.aborted)
+        releaseOnAbort()
+      try {
+        const ready = await current.markWarmReady(claim.id)
+        if (ready.success && !abort.signal.aborted) {
+          await Promise.race([
+            released,
+            handle.wait(),
+          ])
+        }
+      }
+      finally {
+        candidate.available = false
+        abort.signal.removeEventListener('abort', releaseOnAbort)
+        // 等待已经携带这个容器 ID 的领取请求结算，后续领取将跳过该容器。
+        await toolClaim?.catch(() => {})
+        standby.delete(claim.id)
+      }
+      if (!transferred)
+        await settle(claim.id, current, undefined, release)
     })().catch(() => {
-      unconfirmedCleanup = true
+      if (!pendingCleanup.has(claim.id))
+        pendingCleanup.set(claim.id, release)
       logger.warn('Warm container cleanup could not be confirmed', { executionId: claim.id })
-      return false
     }).finally(() => {
       running.delete(claim.id)
       warmReservations.delete(claim.id)
@@ -189,8 +220,8 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
               const lease = await current.renew(claim.id)
               return lease.success && lease.data === 'running'
             })
-          : await startContainer(settings.engine, environment, resources, options, abort.signal, identity =>
-              current.recordContainer(claim.id, identity))
+          : await startContainer(settings.engine, environment, resources, options, abort.signal, (identity, previous) =>
+              current.recordContainer(claim.id, identity, previous))
         if (!started.success && started.error.code === HaiRunnerError.CLEANUP_UNCONFIRMED.code)
           uncertain = true
         return started
@@ -198,7 +229,7 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
       return process
     }
 
-    async function execute(): Promise<boolean> {
+    async function execute(): Promise<void> {
       const context: RunnerContext = {
         id: claim.id,
         parentId: claim.parentId,
@@ -223,7 +254,7 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
         },
       }
       const stop = () => {
-        void closeProcess()
+        void closeProcess().catch(() => {})
       }
       abort.signal.addEventListener('abort', stop, { once: true })
       let output: RunnerJson | undefined
@@ -244,21 +275,58 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
       finally {
         abort.signal.removeEventListener('abort', stop)
       }
-      const stopped = await closeProcess()
-      if (!stopped)
-        unconfirmedCleanup = true
-      const result = await current.finish(claim.id, output, stopped)
-      if (!result.success)
-        logger.warn('Managed execution final state could not be committed', { executionId: claim.id, code: result.error.code })
-      return stopped
+      await settle(claim.id, current, output, closeProcess)
     }
 
     const done = Promise.resolve().then(execute).catch(() => {
-      unconfirmedCleanup = true
+      if (!pendingCleanup.has(claim.id))
+        pendingCleanup.set(claim.id, closeProcess)
       logger.warn('Managed execution failed to finish', { executionId: claim.id })
-      return false
     }).finally(() => running.delete(claim.id))
     running.set(claim.id, { abort, done, renewAt: performance.now() + settings.pollMs })
+  }
+
+  async function claimWork(current: RunnerStore, settings: RunnerConfig, holder: RunnerOwner, category: 'control' | 'tool' | 'default') {
+    const registrations = new Map(handlers)
+    const currentPools = [
+      ...pools.values(),
+    ].filter(pool => registrations.has(pool.kind))
+    const available = [...standby].flatMap(([id, candidate]) =>
+      candidate.available && pools.get(poolKey(candidate.pool.kind, candidate.pool.key)) === candidate.pool
+      && registrations.has(candidate.pool.kind) && !running.get(id)?.abort.signal.aborted
+        ? [id]
+        : [])
+    const claimed = await current.claim([
+      ...registrations.keys(),
+    ], category, currentPools, available)
+    if (!claimed.success) {
+      logger.warn('Managed execution claim failed', { code: claimed.error.code })
+      return
+    }
+    if (!claimed.data)
+      return
+    const claim = claimed.data
+    const registration = registrations.get(claim.kind)
+    const warmed = claim.warmId
+      ? standby.get(claim.warmId)
+      : undefined
+    if (warmed && claim.warmId) {
+      warmReservations.delete(claim.warmId)
+      warmed.transferred()
+    }
+    if (registration && handlers.get(claim.kind) === registration
+      && !runtime.closingRequested && (!claim.warmId || warmed)) {
+      launch(claim, registration.handler, current, settings, holder, warmed?.handle)
+    }
+    else {
+      const cancellation = runtime.closingRequested
+        ? current.cancelOwned(claim.id).catch(cleanupUnconfirmed)
+        : undefined
+      const release = warmed
+        ? async () => (await warmed.handle.close()).success
+        : async () => !claim.warmId
+      await settle(claim.id, current, undefined, release, cancellation)
+    }
   }
 
   function poll() {
@@ -293,44 +361,41 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
           ? 250
           : 1000)
       }
-      const kinds = [
-        ...handlers.keys(),
-      ]
-      if (!kinds.length)
+      if (!handlers.size)
         return
-      const configuredPools = [
-        ...pools.values(),
-      ].filter(pool => handlers.has(pool.kind))
       for (const category of ['control', 'tool', 'default'] as const) {
-        const available = [...standby].filter(([, candidate]) => pools.get(poolKey(candidate.pool.kind, candidate.pool.key)) === candidate.pool).map(([id]) => id)
-        const claimed = await current.claim(kinds, category, configuredPools, available)
-        if (!claimed.success) {
-          logger.warn('Managed execution claim failed', { code: claimed.error.code })
-          continue
+        if (runtime.closingRequested)
+          return
+        const operation = claimWork(current, settings, holder, category)
+        if (category === 'tool')
+          toolClaim = operation
+        try {
+          await operation
         }
-        if (!claimed.data)
-          continue
-        const handler = handlers.get(claimed.data.kind)
-        const warmed = claimed.data.warmId
-          ? standby.get(claimed.data.warmId)
-          : undefined
-        warmed?.transferred()
-        if (handler && !runtime.closingRequested && (!claimed.data.warmId || warmed)) {
-          launch(claimed.data, handler, current, settings, holder, warmed?.handle)
-        }
-        else {
-          const stopped = warmed
-            ? (await warmed.handle.close()).success
-            : !claimed.data.warmId
-          await current.finish(claimed.data.id, undefined, stopped)
+        finally {
+          toolClaim = undefined
         }
       }
       if (!runtime.closingRequested && performance.now() >= warmAt) {
         warmAt = performance.now() + Math.max(250, settings.pollMs)
-        for (const pool of configuredPools) {
+        for (const pool of [
+          ...pools.values(),
+        ]) {
+          if (runtime.closingRequested)
+            return
+          const key = poolKey(pool.kind, pool.key)
+          const registration = handlers.get(pool.kind)
+          if (!registration || pools.get(key) !== pool)
+            continue
           const reserved = await current.reserveWarm(pool)
-          if (reserved.success && reserved.data)
-            prewarm(reserved.data, pool, current, settings)
+          if (!reserved.success || !reserved.data)
+            continue
+          if (runtime.closingRequested || handlers.get(pool.kind) !== registration || pools.get(key) !== pool) {
+            const { id } = reserved.data
+            await settle(id, current, undefined, async () => true, current.cancelOwned(id).catch(cleanupUnconfirmed))
+            continue
+          }
+          prewarm(reserved.data, pool, current, settings)
         }
       }
     })().catch(() => {
@@ -341,7 +406,6 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
   }
 
   function start(config: RunnerConfig) {
-    unconfirmedCleanup = false
     sweepAt = 0
     pruneAt = 0
     warmAt = 0
@@ -351,21 +415,59 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
     }
   }
 
-  async function close(onDrained: () => void): Promise<HaiResult<void>> {
+  function stopLocalExecution(current: RunnerStore, id: string, execution: LocalExecution) {
+    execution.cancellation ??= current.cancelOwned(id).catch(cleanupUnconfirmed)
+    execution.abort.abort()
+    return Promise.all([execution.cancellation, execution.done])
+  }
+
+  function stopWarmReservations(current: RunnerStore, matches: (pool: RunnerWarmPool) => boolean) {
+    const retiring = [...warmReservations].filter(([, pool]) => matches(pool))
+    const stop = () => {
+      for (const [id, pool] of retiring) {
+        const execution = running.get(id)
+        if (execution && warmReservations.get(id) === pool)
+          void stopLocalExecution(current, id, execution)
+      }
+    }
+    // 先结算在途领取实际接管的容器，再回收尚未转给执行任务的预热资源。
+    if (toolClaim)
+      void toolClaim.then(stop, stop)
+    else
+      stop()
+  }
+
+  function stopLocal() {
+    const current = runtime.store!
+    return [...running].map(([id, execution]) => stopLocalExecution(current, id, execution))
+  }
+
+  async function drain(): Promise<boolean> {
+    const stopping = stopLocal()
     await tick
-    await Promise.all([...running].map(async ([id, execution]) => {
-      const requested = await runtime.store?.cancelOwned(id)
-      if (!requested?.success)
-        unconfirmedCleanup = true
-      execution.abort.abort()
+    await Promise.all([
+      ...stopping,
+      ...stopLocal(),
+    ])
+    await Promise.all([...pendingCleanup].map(async ([id, release]) => {
+      if (await release().catch(() => false) && pendingCleanup.get(id) === release)
+        pendingCleanup.delete(id)
     }))
+    return pendingCleanup.size === 0
+  }
+
+  async function close(onDrained: () => void): Promise<HaiResult<void>> {
     let deadline: NodeJS.Timeout | undefined
     try {
+      const timeout = new Promise<false>((resolve) => {
+        deadline = setTimeout(resolve, runtime.config!.closeTimeoutMs, false)
+      })
+      draining ??= drain().catch(() => false).finally(() => {
+        draining = undefined
+      })
       const drained = await Promise.race([
-        Promise.all([
-          ...running.values(),
-        ].map(execution => execution.done)).then(() => true),
-        new Promise<false>((resolve) => { deadline = setTimeout(resolve, runtime.config!.closeTimeoutMs, false) }),
+        draining,
+        timeout,
       ])
       if (!drained)
         return cleanupUnconfirmed()
@@ -373,9 +475,7 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
       handlers.clear()
       pools.clear()
       onDrained()
-      return unconfirmedCleanup
-        ? cleanupUnconfirmed()
-        : core.ok(undefined)
+      return core.ok(undefined)
     }
     finally {
       clearTimeout(deadline)
@@ -393,8 +493,8 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
         : notFound()
     },
     register(kind, handler) {
-      const { config } = runtime
-      if (!config || runtime.closingRequested)
+      const { config, store } = runtime
+      if (!config || !store || runtime.closingRequested)
         return inactive()
       if (!runnerKind.safeParse(kind).success || typeof handler !== 'function')
         return invalidRunnerInput()
@@ -402,23 +502,28 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
         return core.ok(() => {})
       if (handlers.has(kind) || handlers.size >= 100)
         return core.err(HaiRunnerError.CONFLICT, runnerM('runner_conflict'))
-      handlers.set(kind, handler)
+      const registration = { handler }
+      handlers.set(kind, registration)
       return core.ok(() => {
-        if (handlers.get(kind) === handler)
-          handlers.delete(kind)
+        if (handlers.get(kind) !== registration)
+          return
+        handlers.delete(kind)
+        stopWarmReservations(store, pool => pool.kind === kind)
       })
     },
     registerWarmPool(input) {
-      const { config } = runtime
-      if (!config || runtime.closingRequested)
+      const { config, store } = runtime
+      if (!config || !store || runtime.closingRequested)
         return inactive()
       const parsed = warmPoolSchema.safeParse(input)
       if (!parsed.success)
         return invalidRunnerInput()
       const pool = parsed.data
       const environment = config.environments.find(item => item.id === pool.environmentId)
-      if (!environment || environment.networkPolicy !== 'offline' || (config.executor && !handlers.has(pool.kind)))
+      if (!environment || environment.networkPolicy !== 'offline' || environment.resources.scratchMiB < 4
+        || (config.executor && !handlers.has(pool.kind))) {
         return invalidRunnerInput()
+      }
       const key = poolKey(pool.kind, pool.key)
       if (pools.has(key) || pools.size >= 100)
         return core.err(HaiRunnerError.CONFLICT, runnerM('runner_conflict'))
@@ -427,10 +532,7 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
         if (pools.get(key) !== pool)
           return
         pools.delete(key)
-        for (const [id, candidate] of warmReservations) {
-          if (candidate === pool)
-            running.get(id)?.abort.abort()
-        }
+        stopWarmReservations(store, candidate => candidate === pool)
       })
     },
     async submit(input: RunnerSubmit) {
@@ -483,7 +585,7 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
     },
     async reconcileUnknown(scope, id, review) {
       const current = runtime.store
-      if (!current || !runtime.config?.executor || runtime.closingRequested)
+      if (!current || !runtime.config?.executor)
         return inactive()
       if (!validAddress(scope, id) || !review || typeof review.operatorId !== 'string'
         || !runnerKind.safeParse(review.operatorId).success || typeof review.reason !== 'string'
@@ -497,22 +599,24 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
       if (!evidence.success)
         return evidence
       if (evidence.data.container) {
-        const verified = await confirmContainerReleased(evidence.data.container)
+        const verified = await confirmContainerReleased(evidence.data.container, review.hostResourcesStopped)
         if (!verified.success)
           return verified
       }
       else if (review.hostResourcesStopped !== true || !await confirmRunnerProcessReleased(evidence.data.process)) {
         return cleanupUnconfirmed()
       }
-      if (current !== runtime.store || runtime.closingRequested)
+      if (current !== runtime.store)
         return inactive()
       const reconciled = await current.reconcile(scope, id, evidence.data.generation, {
         operatorId: review.operatorId,
         reason: review.reason.trim(),
-        ...(!evidence.data.container && { hostResourcesStopped: true }),
-      })
-      if (reconciled.success)
+        ...(!evidence.data.container?.id && review.hostResourcesStopped && { hostResourcesStopped: true }),
+      }, evidence.data.container)
+      if (reconciled.success) {
+        pendingCleanup.delete(id)
         logger.info('Unknown execution resources reconciled', { executionId: id, operatorId: review.operatorId })
+      }
       return reconciled
     },
     async events(scope, id, after = 0, limit = 100) {

@@ -19,6 +19,7 @@ beforeAll(async () => {
 afterEach(async () => {
   for (const name of [
     'hai_runner_events',
+    'hai_runner_idempotency',
     'hai_runner_executions',
     'hai_runner_gate',
     'hai_runner_event_cursor_idx',
@@ -103,6 +104,8 @@ it('coordinates independent nodes on an empty PostgreSQL database', async () => 
     ])
     const columns = await reldb.schemaColumns('hai_runner_executions')
     expect(columns.success && columns.data).toEqual(expect.arrayContaining(['event_bytes', 'owner_process_json']))
+    const idempotencyColumns = await reldb.schemaColumns('hai_runner_idempotency')
+    expect(idempotencyColumns.success && idempotencyColumns.data).toEqual(expect.arrayContaining(['id', 'execution_id']))
     expect((await reldb.sql.get('SELECT id FROM hai_runner_gate')).success).toBe(true)
   }
   finally {

@@ -3,7 +3,7 @@ import type { DmlOperations, ReldbFunctions, ReldbTableDef } from '@h-ai/reldb'
 import type { RunnerConfig, RunnerEnvironment, RunnerResources, submitSchema } from './runner-config.js'
 import type { RunnerContainerIdentity } from './runner-container.js'
 import type { RunnerProcessIdentity } from './runner-process.js'
-import type { RunnerEvent, RunnerExecution, RunnerJson, RunnerOwner, RunnerReconciliation, RunnerScope, RunnerWarmPool } from './runner-types.js'
+import type { RunnerEvent, RunnerExecution, RunnerJson, RunnerOwner, RunnerReconciliation, RunnerScope, RunnerSubmit, RunnerWarmPool } from './runner-types.js'
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
 import process from 'node:process'
@@ -15,6 +15,7 @@ import { HaiRunnerError } from './runner-types.js'
 const EXECUTIONS = 'hai_runner_executions'
 const EVENTS = 'hai_runner_events'
 const GATE = 'hai_runner_gate'
+const IDEMPOTENCY = 'hai_runner_idempotency'
 const ACTIVE = '(state IN (\'running\', \'cancelling\') OR (state = \'unknown\' AND reconciled_at IS NULL))'
 const RETENTION_STATES = [
   'succeeded',
@@ -24,6 +25,8 @@ const RETENTION_STATES = [
 ] as const
 const RETENTION_BATCH = 128
 const MAX_EVENT_BYTES = 16 * 1024 * 1024
+const SAME_WARM_POOL = `w.pool_fingerprint IS NOT NULL AND w.kind = q.kind AND w.environment_key = q.environment_key
+  AND w.concurrency_key = q.concurrency_key AND w.concurrency_limit = q.concurrency_limit AND w.pool_limit = q.pool_limit`
 const text = { type: 'TEXT', notNull: true } as const
 const nullableText = { type: 'TEXT' } as const
 const integer = { type: 'BIGINT', notNull: true } as const
@@ -69,7 +72,7 @@ const executions: ReldbTableDef = {
 }
 
 /**
- * 持久执行仅保存受信提交的业务输入、环境快照和已检查限额。
+ * 持久执行保存受信提交的业务输入、语言、环境快照和已检查限额。
  * @example 模块内部上下文
  * ```ts
  * function maxMillis(plan: StoredRequest) { return plan.runTimeoutMs }
@@ -166,6 +169,13 @@ function canonical(value: RunnerJson): string {
 
 function hash(value: RunnerJson) {
   return createHash('sha256').update(canonical(value)).digest('hex')
+}
+
+function warmPoolFingerprint(pool: RunnerWarmPool, environment: RunnerEnvironment) {
+  return hash({
+    pool: { ...pool },
+    environment,
+  })
 }
 
 function databaseValue<T>(value: T | string): T {
@@ -283,6 +293,16 @@ async function readySchema({ ddl, sql }: Pick<ReldbFunctions, 'ddl' | 'sql'>): P
     ],
     [EXECUTIONS, executions],
     [
+      IDEMPOTENCY,
+      {
+        id: { ...text, primaryKey: true },
+        execution_id: {
+          ...text,
+          references: { table: EXECUTIONS, column: 'id', onDelete: 'CASCADE' },
+        },
+      },
+    ],
+    [
       EVENTS,
       {
         id: { ...text, primaryKey: true },
@@ -357,6 +377,11 @@ async function readySchema({ ddl, sql }: Pick<ReldbFunctions, 'ddl' | 'sql'>): P
       'hai_runner_event_cursor_idx',
       ['execution_id', 'sequence_number'],
     ],
+    [
+      IDEMPOTENCY,
+      'hai_runner_idempotency_execution_idx',
+      ['execution_id'],
+    ],
   ] satisfies [string, string, string[]][]) {
     const result = await ddl.createIndex(table, name, { columns: fields })
     if (!result.success) {
@@ -391,33 +416,55 @@ async function readySchema({ ddl, sql }: Pick<ReldbFunctions, 'ddl' | 'sql'>): P
 export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess?: RunnerProcessIdentity) {
   const envById = new Map(config.environments.map(item => [item.id, item]))
   const envKeys = config.environments.filter(item => !item.architecture || item.architecture === process.arch).map(item => hash(item))
+  const databaseType = reldb.config?.type
   const now = clock()
-  const resultValue = reldb.config?.type === 'postgresql'
+  const resultValue = databaseType === 'postgresql'
     ? 'CAST(? AS JSONB)'
-    : reldb.config?.type === 'mysql'
+    : databaseType === 'mysql'
       ? 'CAST(CONVERT(? USING utf8mb4) AS JSON)'
       : '?'
   // 清理比较用数据库语句时间，保持同一语句内的索引范围稳定；执行栅栏仍使用实时的 now。
-  const statementTime = reldb.config?.type === 'postgresql'
+  const statementTime = databaseType === 'postgresql'
     ? 'CAST(FLOOR(EXTRACT(EPOCH FROM statement_timestamp()) * 1000) AS BIGINT)'
-    : reldb.config?.type === 'mysql'
+    : databaseType === 'mysql'
       ? 'CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000 AS SIGNED)'
       : now
   const processJson = ownerProcess
     ? JSON.stringify(ownerProcess)
     : null
   const environmentPath = reldb.json.extract('request_json', '$.environment.id')
-  const environmentProjection = reldb.config?.type === 'mysql'
+  const environmentProjection = databaseType === 'mysql'
     ? `JSON_UNQUOTE(${environmentPath.sql})`
-    : reldb.config?.type === 'postgresql'
+    : databaseType === 'postgresql'
       ? 'request_json #>> ?::text[]'
       : environmentPath.sql
 
-  async function summary(id: string, scopeKey: string) {
+  async function lockExecutionRow(sql: DmlOperations, id: string) {
+    // PostgreSQL 可能在等待行锁前已求值 WHERE；先取锁再执行带存储端时钟的条件写入。
+    if (databaseType === 'postgresql')
+      data(await sql.get(`SELECT id FROM ${EXECUTIONS} WHERE id = ? FOR UPDATE`, [id]))
+  }
+
+  async function withExecutionLock<T>(id: string, action: (sql: DmlOperations) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+    if (databaseType !== 'postgresql')
+      return action(reldb.sql)
+    const result = await reldb.tx.wrap(async (sql) => {
+      await lockExecutionRow(sql, id)
+      return action(sql)
+    })
+    return result.success
+      ? result.data
+      : unavailable()
+  }
+
+  async function summary(id: string, scopeKey: string, resolveAlias = false) {
+    const executionId = resolveAlias
+      ? `(SELECT execution_id FROM ${IDEMPOTENCY} WHERE id = ?)`
+      : '?'
     const row = data(await reldb.sql.get<ExecutionSummary & { environment_id: string | null }>(`
       SELECT id, state, reason, owner_node, owner_generation, result_json, created_at, updated_at, reconciled_at,
         ${environmentProjection} AS environment_id
-      FROM ${EXECUTIONS} WHERE id = ? AND scope_key = ?`, [...environmentPath.params, id, scopeKey]))
+      FROM ${EXECUTIONS} WHERE id = ${executionId} AND scope_key = ?`, [...environmentPath.params, id, scopeKey]))
     return row
       ? project(row, row.environment_id ?? undefined)
       : undefined
@@ -508,30 +555,61 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       const reuse = request.reuseKey === undefined
         ? null
         : hash([scopeKey, request.kind, request.reuseKey])
-      const requestKey = hash({
-        kind: request.kind,
-        input: request.input,
-        environmentId: request.environmentId ?? null,
-        resources: request.resources ?? null,
-        parentId: request.parentId ?? null,
-        nodeId: request.nodeId ?? null,
-        queueTimeoutMs: request.queueTimeoutMs,
-        capacityClass: request.capacityClass,
-        concurrency: request.concurrency ?? null,
-        warmPool: pool
-          ? { ...pool }
-          : null,
-        runTimeoutMs: request.runTimeoutMs,
-      })
+      // 界面语言可在重试时改变，执行仍沿用首次保存的语言。
+      function requestFingerprint(requestedPool: RunnerWarmPool | undefined) {
+        return hash({
+          kind: request.kind,
+          input: request.input,
+          environmentId: request.environmentId ?? null,
+          resources: request.resources ?? null,
+          parentId: request.parentId ?? null,
+          nodeId: request.nodeId ?? null,
+          queueTimeoutMs: request.queueTimeoutMs,
+          capacityClass: request.capacityClass,
+          concurrency: request.concurrency ?? null,
+          warmPool: requestedPool
+            ? { ...requestedPool }
+            : null,
+          runTimeoutMs: request.runTimeoutMs,
+        })
+      }
+
+      const requestKey = requestFingerprint(pool)
+      function matchesRequest(existing: ExecutionRow) {
+        if (existing.request_key === requestKey)
+          return true
+        if (!pool || !existing.pool_fingerprint)
+          return false
+        const environment = databaseValue<StoredRequest>(existing.request_json).environment
+        if (!environment)
+          return false
+        if (warmPoolFingerprint(pool, environment) === existing.pool_fingerprint)
+          return false
+        // 写入仍兼容已有节点。先用小型池定义定位原 minReady，再核对含完整业务输入的旧指纹。
+        for (let minReady = 0; minReady <= pool.maxTotal; minReady += 1) {
+          const previous = { ...pool, minReady }
+          if (warmPoolFingerprint(previous, environment) === existing.pool_fingerprint)
+            return existing.request_key === requestFingerprint(previous)
+        }
+        return false
+      }
+
       return serialized(async (sql) => {
-        const existing = await find(sql, id, scopeKey)
+        const keyed = await find(sql, id, scopeKey)
+          ?? (request.idempotencyKey
+            ? data(await sql.get<ExecutionRow>(`SELECT e.* FROM ${EXECUTIONS} e JOIN ${IDEMPOTENCY} k ON k.execution_id = e.id
+              WHERE k.id = ? AND e.scope_key = ?`, [id, scopeKey]))
+            : null)
+        const existing = keyed
           ?? (reuse
-            ? data(await sql.get<ExecutionRow>(`SELECT * FROM ${EXECUTIONS} WHERE reuse_key = ?`, [reuse]))
+            ? data(await sql.get<ExecutionRow>(`SELECT * FROM ${EXECUTIONS} WHERE reuse_key = ? AND scope_key = ?`, [reuse, scopeKey]))
             : null)
         if (existing) {
-          return existing.request_key === requestKey
-            ? core.ok(projectRequest(existing))
-            : conflict()
+          if (!matchesRequest(existing))
+            return conflict()
+          if (request.idempotencyKey && !keyed)
+            data(await sql.execute(`INSERT INTO ${IDEMPOTENCY} (id, execution_id) VALUES (?, ?)`, [id, existing.id]))
+          return core.ok(projectRequest(existing))
         }
 
         const environment = request.environmentId
@@ -600,10 +678,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
             : null,
           request.concurrency?.limit ?? 0,
           pool && environment
-            ? hash({
-                pool: { ...pool },
-                environment,
-              })
+            ? warmPoolFingerprint(pool, environment)
             : null,
           pool?.maxTotal ?? null,
         ]))
@@ -617,7 +692,8 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
     async find(scope: RunnerScope, kind: string, key: string): Promise<HaiResult<RunnerExecution | undefined>> {
       try {
         const scopeKey = hash([scope.tenantId, scope.userId])
-        return core.ok(await summary(hash([scopeKey, kind, key]), scopeKey))
+        const id = hash([scopeKey, kind, key])
+        return core.ok(await summary(id, scopeKey) ?? await summary(id, scopeKey, true))
       }
       catch {
         return unavailable()
@@ -656,19 +732,24 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       const environment = envById.get(pool.environmentId)
       if (!environment || !pool.minReady || !envKeys.includes(hash(environment)))
         return core.ok(null)
-      const fingerprint = hash({
-        pool: { ...pool },
-        environment,
-      })
+      const fingerprint = warmPoolFingerprint(pool, environment)
+      const environmentKey = hash(environment)
       const key = hash([pool.kind, pool.key])
       const usage = columns(environment.resources)
       async function canReserve(sql: DmlOperations) {
         const [totalsResult, reservedResult] = await Promise.all([
           sql.get<{ total: string | number, warm: string | number, ceiling: string | number }>(`
-            SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN state = 'running' AND pool_fingerprint = ?
+            SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN state = 'running' AND pool_fingerprint IS NOT NULL
+              AND environment_key = ? AND concurrency_limit = ? AND pool_limit = ?
               AND warm_state IN ('starting','ready') THEN 1 ELSE 0 END),0) AS warm,
               COALESCE(MIN(pool_limit), ?) AS ceiling
-            FROM ${EXECUTIONS} WHERE concurrency_key = ? AND ${ACTIVE}`, [fingerprint, pool.maxTotal, key]),
+            FROM ${EXECUTIONS} WHERE concurrency_key = ? AND ${ACTIVE}`, [
+            environmentKey,
+            pool.maxRunning,
+            pool.maxTotal,
+            pool.maxTotal,
+            key,
+          ]),
           sql.get<{ active: string | number, cpu: string | number, memory: string | number, pids: string | number, scratch: string | number }>(`
             SELECT COUNT(*) AS active, COALESCE(SUM(cpu_milli),0) AS cpu, COALESCE(SUM(memory_mib),0) AS memory,
               COALESCE(SUM(pids),0) AS pids, COALESCE(SUM(scratch_mib),0) AS scratch
@@ -722,7 +803,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
           id,
           pool.kind,
           JSON.stringify(request),
-          hash(environment),
+          environmentKey,
           owner.nodeId,
           owner.generation,
           config.leaseMs,
@@ -738,12 +819,14 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
     },
 
     async markWarmReady(id: string): Promise<HaiResult<void>> {
-      const result = await reldb.sql.execute(`UPDATE ${EXECUTIONS} SET warm_state = 'ready', updated_at = ${now}
-        WHERE id = ? AND owner_generation = ? AND state = 'running' AND warm_state = 'starting'
-          AND leased_until > ${now} AND container_json IS NOT NULL`, [id, owner.generation])
-      return result.success && result.data.changes === 1
-        ? core.ok(undefined)
-        : lost()
+      return withExecutionLock(id, async (sql) => {
+        const result = await sql.execute(`UPDATE ${EXECUTIONS} SET warm_state = 'ready', updated_at = ${now}
+          WHERE id = ? AND owner_generation = ? AND state = 'running' AND warm_state = 'starting'
+            AND leased_until > ${now} AND run_until > ${now} AND container_json IS NOT NULL`, [id, owner.generation])
+        return result.success && result.data.changes === 1
+          ? core.ok(undefined)
+          : lost()
+      })
     },
 
     async claim(kinds: string[], category: 'control' | 'default' | 'tool', pools: RunnerWarmPool[] = [], warmIds: string[] = []): Promise<HaiResult<RunnerClaim | null>> {
@@ -783,25 +866,28 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         if (!reserved)
           return null
 
-        const fingerprints = category === 'tool'
+        const compatiblePools = category === 'tool'
           ? pools.flatMap((pool) => {
               const environment = envById.get(pool.environmentId)
               return environment
                 ? [
-                    hash({
-                      pool: { ...pool },
-                      environment,
-                    }),
+                    [
+                      hash(environment),
+                      hash([pool.kind, pool.key]),
+                      pool.maxRunning,
+                      pool.maxTotal,
+                    ],
                   ]
                 : []
             })
           : []
-        const eligiblePool = fingerprints.length
-          ? ` OR q.pool_fingerprint IN (${fingerprints.map(() => '?').join(',')})`
+        const eligiblePool = compatiblePools.length
+          ? ` OR ${compatiblePools.map(() => '(q.environment_key = ? AND q.concurrency_key = ? AND q.concurrency_limit = ? AND q.pool_limit = ?)').join(' OR ')}`
           : ''
         const ready = category === 'tool' && warmIds.length
           ? `EXISTS (SELECT 1 FROM ${EXECUTIONS} w WHERE w.id IN (${warmIds.map(() => '?').join(',')})
-            AND w.pool_fingerprint = q.pool_fingerprint AND w.state = 'running' AND w.warm_state = 'ready' AND w.leased_until > ${now})`
+            AND ${SAME_WARM_POOL} AND w.state = 'running' AND w.warm_state = 'ready'
+            AND w.leased_until > ${now} AND w.run_until > ${now})`
           : '1 = 0'
         const canStartCold = Number(reserved.active) < maxRunning
         const eligibleEnvironment = envKeys.length
@@ -818,8 +904,9 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
           AND (q.pool_fingerprint IS NULL${eligiblePool})
           AND ((${ready}) OR (? = 1 AND q.cpu_milli <= ? AND q.memory_mib <= ? AND q.pids <= ? AND q.scratch_mib <= ?
             AND (q.pool_fingerprint IS NULL OR (
-              NOT EXISTS (SELECT 1 FROM ${EXECUTIONS} w WHERE w.pool_fingerprint = q.pool_fingerprint
+              NOT EXISTS (SELECT 1 FROM ${EXECUTIONS} w WHERE ${SAME_WARM_POOL}
                 AND w.state = 'running' AND w.warm_state IN ('starting','ready') AND w.leased_until > ${now}
+                AND w.run_until > ${now}
                 AND (q.pinned_node IS NULL OR q.pinned_node = w.owner_node))
               AND (SELECT COUNT(*) FROM ${EXECUTIONS} a WHERE a.concurrency_key = q.concurrency_key AND ${ACTIVE})
                 < ${reldb.config?.type === 'sqlite'
@@ -843,7 +930,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
           owner.generation,
           ...kinds,
           ...envKeys,
-          ...fingerprints,
+          ...compatiblePools.flat(),
           ...(category === 'tool'
             ? warmIds
             : []),
@@ -869,9 +956,14 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         const request = databaseValue<StoredRequest>(row.request_json)
         const standby = row.pool_fingerprint && warmIds.length
           ? data(await sql.get<ExecutionRow>(`
-          SELECT * FROM ${EXECUTIONS} WHERE id IN (${warmIds.map(() => '?').join(',')}) AND pool_fingerprint = ?
-            AND state = 'running' AND warm_state = 'ready' AND leased_until > ${now} ORDER BY created_at, id LIMIT 1`, [...warmIds, row.pool_fingerprint]))
+          SELECT w.id, w.container_json FROM ${EXECUTIONS} w JOIN ${EXECUTIONS} q ON q.id = ?
+          WHERE w.id IN (${warmIds.map(() => '?').join(',')}) AND ${SAME_WARM_POOL}
+            AND w.state = 'running' AND w.warm_state = 'ready' AND w.leased_until > ${now} AND w.run_until > ${now}
+            ORDER BY w.created_at, w.id LIMIT 1`, [row.id, ...warmIds]))
           : null
+        await lockExecutionRow(sql, row.id)
+        if (standby)
+          await lockExecutionRow(sql, standby.id)
         const changed = data(await sql.execute(`UPDATE ${EXECUTIONS} SET state = 'running', owner_node = ?, owner_generation = ?,
           container_json = ${resultValue}, owner_process_json = ${resultValue}, leased_until = ${now} + ?, run_until = ${now} + ?, updated_at = ${now}
           WHERE id = ? AND state = 'queued' AND queue_until > ${now}`, [
@@ -887,7 +979,8 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         ]))
         if (changed.changes === 1 && standby) {
           const transferred = data(await sql.execute(`UPDATE ${EXECUTIONS} SET state = 'succeeded', warm_state = 'transferred', updated_at = ${now}
-            WHERE id = ? AND owner_generation = ? AND state = 'running' AND warm_state = 'ready' AND leased_until > ${now}`, [standby.id, owner.generation]))
+            WHERE id = ? AND owner_generation = ? AND state = 'running' AND warm_state = 'ready'
+              AND leased_until > ${now} AND run_until > ${now}`, [standby.id, owner.generation]))
           if (transferred.changes !== 1)
             throw new Error('Warm container reservation expired')
         }
@@ -904,24 +997,36 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
     },
 
     async cancelOwned(id: string): Promise<HaiResult<void>> {
-      const result = await reldb.sql.execute(`UPDATE ${EXECUTIONS} SET state = 'cancelling', updated_at = ${now}
-        WHERE id = ? AND owner_generation = ? AND state = 'running' AND leased_until > ${now}`, [id, owner.generation])
-      return result.success
-        ? core.ok(undefined)
-        : unavailable()
+      return withExecutionLock(id, async (sql) => {
+        const result = await sql.execute(`UPDATE ${EXECUTIONS} SET state = 'cancelling', updated_at = ${now}
+          WHERE id = ? AND owner_generation = ? AND state = 'running' AND leased_until > ${now}`, [id, owner.generation])
+        return result.success
+          ? core.ok(undefined)
+          : unavailable()
+      })
     },
 
-    async recordContainer(id: string, container: RunnerContainerIdentity): Promise<HaiResult<void>> {
-      const result = await reldb.sql.execute(`UPDATE ${EXECUTIONS} SET container_json = ${resultValue}
-        WHERE id = ? AND owner_generation = ? AND state = 'running' AND container_json IS NULL
-          AND leased_until > ${now} AND run_until > ${now}`, [
-        JSON.stringify(container),
-        id,
-        owner.generation,
-      ])
-      return result.success && result.data.changes === 1
-        ? core.ok(undefined)
-        : lost()
+    async recordContainer(id: string, container: RunnerContainerIdentity, previous?: RunnerContainerIdentity): Promise<HaiResult<void>> {
+      return withExecutionLock(id, async (sql) => {
+        const expected = previous
+          ? `container_json = ${resultValue}`
+          : 'container_json IS NULL'
+        const result = await sql.execute(`UPDATE ${EXECUTIONS} SET container_json = ${resultValue}
+          WHERE id = ? AND owner_generation = ? AND state = 'running' AND ${expected}
+            AND leased_until > ${now} AND run_until > ${now}`, [
+          JSON.stringify(container),
+          id,
+          owner.generation,
+          ...(previous
+            ? [
+                JSON.stringify(previous),
+              ]
+            : []),
+        ])
+        return result.success && result.data.changes === 1
+          ? core.ok(undefined)
+          : lost()
+      })
     },
 
     async reconciliation(scope: RunnerScope, id: string) {
@@ -952,17 +1057,17 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       }
     },
 
-    async reconcile(scope: RunnerScope, id: string, generation: string, review: RunnerReconciliation): Promise<HaiResult<RunnerExecution>> {
+    async reconcile(scope: RunnerScope, id: string, generation: string, review: RunnerReconciliation, container?: RunnerContainerIdentity): Promise<HaiResult<RunnerExecution>> {
       return serialized(async (sql) => {
         const scopeKey = hash([scope.tenantId, scope.userId])
-        if (review.hostResourcesStopped) {
+        if (!container) {
           const row = await find(sql, id, scopeKey)
-          if (!row || !await parentSettled(sql, row))
+          if (!review.hostResourcesStopped || !row || !await parentSettled(sql, row))
             return conflict()
         }
-        const proof = review.hostResourcesStopped
-          ? 'container_json IS NULL AND environment_key IS NULL AND owner_process_json IS NOT NULL'
-          : 'container_json IS NOT NULL'
+        const proof = container
+          ? `container_json = ${resultValue}`
+          : 'container_json IS NULL AND environment_key IS NULL AND owner_process_json IS NOT NULL'
         const result = data(await sql.execute(`UPDATE ${EXECUTIONS}
           SET reconciled_at = ${now}, reconciliation_json = ${resultValue}, reuse_key = NULL, updated_at = ${now}
           WHERE id = ? AND scope_key = ? AND owner_node = ? AND owner_generation = ? AND state = 'unknown'
@@ -972,6 +1077,11 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
           scopeKey,
           owner.nodeId,
           generation,
+          ...(container
+            ? [
+                JSON.stringify(container),
+              ]
+            : []),
         ]))
         if (result.changes !== 1)
           return conflict()
@@ -983,31 +1093,33 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
     },
 
     async renew(id: string): Promise<HaiResult<'running' | 'cancelling'>> {
-      const renewed = await reldb.sql.execute(`UPDATE ${EXECUTIONS} SET leased_until = ${now} + ?, updated_at = ${now}
-        WHERE id = ? AND owner_generation = ? AND state IN ('running', 'cancelling') AND leased_until > ${now}`, [config.leaseMs, id, owner.generation])
-      if (!renewed.success)
-        return unavailable()
-      if (renewed.data.changes !== 1)
-        return lost()
-      const row = await reldb.sql.get<{ state: 'running' | 'cancelling', parent_id: string | null }>(
-        `SELECT state, parent_id FROM ${EXECUTIONS} WHERE id = ? AND owner_generation = ? AND leased_until > ${now}`,
-        [id, owner.generation],
-      )
+      const renewal = await withExecutionLock(id, async (sql) => {
+        const renewed = await sql.execute(`UPDATE ${EXECUTIONS} SET leased_until = ${now} + ?, updated_at = ${now}
+          WHERE id = ? AND owner_generation = ? AND state IN ('running', 'cancelling') AND leased_until > ${now}`, [config.leaseMs, id, owner.generation])
+        if (!renewed.success)
+          return unavailable()
+        return renewed.data.changes === 1
+          ? core.ok(undefined)
+          : lost()
+      })
+      if (!renewal.success)
+        return renewal
+      // 续租允许清理跨越运行期限；提交后用存储时钟重新判定是否能启动处理器或容器。
+      const row = await reldb.sql.get<{ state: 'running' | 'cancelling', parent_stopped: number }>(`
+        SELECT CASE WHEN q.run_until <= ${now} THEN 'cancelling' ELSE q.state END AS state,
+          CASE WHEN q.parent_id IS NOT NULL AND p.id IS NULL THEN 1 ELSE 0 END AS parent_stopped
+        FROM ${EXECUTIONS} q LEFT JOIN ${EXECUTIONS} p ON p.id = q.parent_id
+          AND p.owner_generation = q.owner_generation AND p.state = 'running' AND p.leased_until > ${now} AND p.run_until > ${now}
+        WHERE q.id = ? AND q.owner_generation = ? AND q.state IN ('running', 'cancelling') AND q.leased_until > ${now}`, [id, owner.generation])
       if (!row.success)
         return unavailable()
       if (!row.data)
         return lost()
-      if (row.data.parent_id) {
-        const parent = await reldb.sql.get<{ id: string }>(`SELECT id FROM ${EXECUTIONS} WHERE id = ?
-          AND owner_generation = ? AND state = 'running' AND leased_until > ${now} AND run_until > ${now}`, [row.data.parent_id, owner.generation])
-        if (!parent.success)
-          return unavailable()
-        if (!parent.data) {
-          const cancelled = await this.cancelOwned(id)
-          return cancelled.success
-            ? core.ok('cancelling')
-            : cancelled
-        }
+      if (row.data.parent_stopped) {
+        const cancelled = await this.cancelOwned(id)
+        return cancelled.success
+          ? core.ok('cancelling')
+          : cancelled
       }
       return core.ok(row.data.state)
     },
@@ -1016,6 +1128,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
       const encoded = JSON.stringify({ value })
       const bytes = Buffer.byteLength(encoded)
       const result = await reldb.tx.wrap(async (sql) => {
+        await lockExecutionRow(sql, id)
         const changed = data(await sql.execute(`UPDATE ${EXECUTIONS} SET event_sequence = event_sequence + 1, event_bytes = event_bytes + ?
           WHERE id = ? AND owner_generation = ? AND state = 'running' AND leased_until > ${now}
             AND run_until > ${now} AND event_sequence < ? AND event_bytes <= ?`, [
@@ -1079,6 +1192,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
 
     async finish(id: string, output: RunnerJson | undefined, stopped: boolean): Promise<HaiResult<void>> {
       return serialized(async (sql) => {
+        await lockExecutionRow(sql, id)
         if (!stopped) {
           data(await sql.execute(`UPDATE ${EXECUTIONS} SET state = 'unknown', reason = 'cleanup-unconfirmed', updated_at = ${now}
             WHERE id = ? AND owner_generation = ? AND state IN ('running', 'cancelling') AND leased_until > ${now}`, [id, owner.generation]))

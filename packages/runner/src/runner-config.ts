@@ -35,7 +35,9 @@ const environment = z.strictObject({
   backend: z.literal('container').default('container'),
   architecture: z.enum(['x64', 'arm64']).optional(),
   capabilities: z.array(id).max(64).default([]),
-  resources,
+  resources: resources.extend({
+    pids: resources.shape.pids.min(2),
+  }),
   networkPolicy: z.enum(['offline', 'internal']).default('offline'),
   network: id.optional(),
 }).refine(value => value.networkPolicy === 'offline'
@@ -149,7 +151,9 @@ export const submitSchema = z.strictObject({
   reuseKey: z.string().min(1).max(200).optional(),
   queueTimeoutMs: timeout.default(300_000),
   runTimeoutMs: timeout.default(300_000),
-}).refine(value => !value.parentId || (!value.nodeId && !value.environmentId && !value.resources && !value.reuseKey && value.capacityClass === 'default' && !value.concurrency)).refine(value => !value.warmPool || (value.capacityClass === 'tool' && value.environmentId && value.concurrency && !value.resources))
+}).refine(value => !value.parentId || (!value.nodeId && !value.environmentId && !value.resources && !value.reuseKey && value.capacityClass === 'default' && !value.concurrency)).refine(value => !value.warmPool || (value.capacityClass === 'tool' && value.environmentId && value.concurrency && !value.resources)).refine(value => !value.environmentId || value.resources?.pids === undefined || value.resources.pids >= 2, {
+  path: ['resources', 'pids'],
+})
 
 /**
  * 验证仅由部署方登记的预热池。
