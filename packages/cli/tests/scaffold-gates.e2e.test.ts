@@ -7,10 +7,11 @@
 
 import { spawn, spawnSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
-import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { core } from '@h-ai/core'
 import ts from 'typescript'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
@@ -456,10 +457,10 @@ test('static hosting artifacts: Pages deep links, assets and honest contact feed
       await replaceHaiPackageSpecifiers(projectPath)
       await addLocalHaiOverrides(projectPath)
       await removeReplacedHaiCatalogEntries(projectPath)
-      const closeService = scenario.title === 'mobile-app'
-        ? await startNativeApiService('http://127.0.0.1:3000')
-        : undefined
+      let closeService: (() => Promise<void>) | undefined
       try {
+        if (scenario.title === 'mobile-app')
+          closeService = await startNativeApiService(root, 'http://127.0.0.1:3000')
         await runQualityGates(projectPath, {}, scenario)
         await installScenarios(projectPath, scenario)
         if (scenario.title.startsWith('fullstack') || scenario.title === 'mobile-app') {
@@ -851,8 +852,13 @@ it('generated migration executes up and down with HaiResult', async () => {
       // 每个成功场景立即释放磁盘资源，清理计入该场景的整体超时预算。
       }
       finally {
-        await closeService?.()
-        await removeTempRoot(root)
+        try {
+          await closeService?.()
+        }
+        finally {
+          if (tempRoots.has(root))
+            await removeTempRoot(root)
+        }
       }
     }, 1_800_000)
   }
@@ -879,11 +885,33 @@ async function removeTempRoot(root: string): Promise<void> {
 }
 
 /** 独立移动模板通过真实 API 示例服务验证；进程和数据只属于本次样板门禁。 */
-async function startNativeApiService(baseUrl: string): Promise<() => Promise<void>> {
+async function startNativeApiService(root: string, baseUrl: string): Promise<() => Promise<void>> {
   await getFreePort(Number(new URL(baseUrl).port))
   const repo = path.resolve(process.cwd(), '../..')
-  const service = path.join(repo, 'apps/api-service')
-  await runPnpm(service, ['build'])
+  const source = path.join(repo, 'apps/api-service')
+  await runPnpm(source, ['build'])
+  const fixture = path.join(root, 'native-api')
+  const service = path.join(fixture, 'apps/api-service')
+  const launcher = 'packages/cli/templates/shared/run-node.mjs'
+  await mkdir(service, { recursive: true })
+  await mkdir(path.dirname(path.join(fixture, launcher)), { recursive: true })
+  await cp(path.join(repo, launcher), path.join(fixture, launcher))
+  for (const name of [
+    'package.json',
+    'config',
+    'dist',
+    '.env',
+    '.env.test',
+    '.env.local',
+    '.env.test.local',
+  ]) {
+    const entry = path.join(source, name)
+    if (name.endsWith('.local') && !existsSync(entry))
+      continue
+    await cp(entry, path.join(service, name), { recursive: true, dereference: true })
+  }
+  await symlink(path.join(source, 'node_modules'), path.join(service, 'node_modules'), 'junction')
+  await validateNativeApiDataPaths(service)
   const controller = new AbortController()
   let serviceFailure: unknown
   const completion = runPnpmTestCommand(['start:test'], {
@@ -897,6 +925,10 @@ async function startNativeApiService(baseUrl: string): Promise<() => Promise<voi
   const close = async () => {
     controller.abort()
     await completion
+    if (serviceFailure instanceof DeployTestCommandError && serviceFailure.localTermination === 'unknown') {
+      tempRoots.delete(root)
+      throw new Error(`Native API fixture termination unconfirmed; retained ${root}`, { cause: serviceFailure })
+    }
     if (!(serviceFailure instanceof DeployTestCommandError && serviceFailure.localTermination === 'confirmed'))
       throw serviceFailure
   }
@@ -914,6 +946,39 @@ async function startNativeApiService(baseUrl: string): Promise<() => Promise<voi
   catch (error) {
     await close()
     throw error
+  }
+}
+
+/** 使用启动器的真实环境优先级，防止私有配置或进程覆盖把测试写入其他数据源。 */
+async function validateNativeApiDataPaths(service: string): Promise<void> {
+  const environment = core.config.loadEnvFiles({ mode: 'test', envDir: service })
+  if (!environment.success)
+    throw new Error('Native API fixture could not load its test environment')
+  for (const [name, type, location] of [
+    ['db', 'sqlite', 'database'],
+    ['vecdb', 'lancedb', 'path'],
+    ['storage', 'local', 'root'],
+    ['cache', 'memory', undefined],
+  ] as const) {
+    const config = core.config.resolve({
+      name,
+      value: parse(await readFile(path.join(service, `config/_${name}.yml`), 'utf8')),
+      environment: environment.data,
+    })
+    if (!config.success || typeof config.data !== 'object' || config.data === null || !('type' in config.data) || config.data.type !== type) {
+      throw new Error(`Native API fixture requires the isolated ${type} ${name} provider`)
+    }
+    if (!location)
+      continue
+    const value: unknown = Reflect.get(config.data, location)
+    if (name === 'db' && value === ':memory:')
+      continue
+    if (typeof value !== 'string' || path.isAbsolute(value) || /^[a-z][\w+.-]*:/i.test(value))
+      throw new Error(`Native API fixture requires a relative ${name}.${location} path`)
+    const relative = path.relative(service, path.resolve(service, value))
+    const [parent] = relative.split(path.sep)
+    if (!relative || path.isAbsolute(relative) || value.split(/[\\/]/u).includes('..') || parent?.toLowerCase() === 'node_modules')
+      throw new Error(`Native API fixture requires ${name}.${location} to stay in its working directory`)
   }
 }
 
