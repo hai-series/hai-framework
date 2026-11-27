@@ -13,14 +13,18 @@ description: "使用 @h-ai/tools 定义、注册和授权执行可选工具，�
 | 适用场景 | 接入可选工具、自定义业务操作，或将同一实现提供给模型调用 |
 | 输入 | Zod 参数、处理函数、工具集合、可信身份和授权条件 |
 | 输出 | 定义和注册器实例；业务执行返回 `HaiResult` |
-| 限制 | 轻量定义/工厂无 `init/close`；服务端工厂借用 Runner，服务 `close` 只注销自己的处理器 |
+| 限制 | 轻量定义、注册和产物工厂独立使用；`@h-ai/tools-runner` 的持久服务借用 Runner，`close()` 只注销自己的处理器 |
 
-## 使用路径
+## 选择接入方式
 
-1. 短时函数从 `@h-ai/tools` 导入；可恢复任务和产物/容器作业从 `@h-ai/tools/server` 导入。通过 `tools.define` 描述参数；普通数据用 `handler`，已有 `HaiResult` 用 `resultHandler`，二者只选一个。`title/examples` 用于可读表单和预设，名称保持稳定。
-2. 用 `tools.createRegistry({ authorize })` 创建需要的集合，只注册当前启用的工具。执行前按可信身份及最终资源复核权限，身份不由模型输入决定。
-3. 注册和执行结果先检查 `success`。注册器直接接收工具名和业务输入；给 LLM 使用时，通过 `ai.tools.adapt(registry)` 转换为模型协议，不手写另一份工具实现。
-4. 长任务用 `tools.createService` 的 `submit/find/inspect/cancel/invoke`，复用 Runner 原有任务、租约和事件。界面和智能体共用同一个服务、启用集合与授权，不另建队列或状态表。文件由宿主授权后交给 Storage，工具只返回产物引用。
-5. 产物和确定性分析用 `tools.createArtifactTools`；独立文档、Office、OCR、网页和视频作业用 `tools.createJobTools`。未绑定环境的作业不出目录；`browser/web` 还需可信宿主配置 `browserProxy`。取消只代表请求，继续读取真实终态。
+| 要完成的任务 | 导入与操作 |
+| --- | --- |
+| 直接校验和执行短时业务函数 | 从 `@h-ai/tools` 导入 `tools`，使用 `define()` 或 `createRegistry()`。 [独立调用示例](reference.md) |
+| 读取、保存或分析应用文件 | 在 Node 从 `@h-ai/tools/server` 导入 `tools`，给 `tools.createArtifactTools()` 提供宿主的资源访问回调。 [产物接入](server-guide.md#接入现成作业) |
+| 保存任务和回执，之后查询、恢复或取消 | 在 Node 从 `@h-ai/tools-runner` 导入 `toolsRunner`，将初始化完成的 Runner 交给 `toolsRunner.createService()`。 [求和服务与回执示例](server-guide.md) |
+| 调用文档、Office、OCR、网页与视频容器 | 在 `toolsRunner.createService()` 的工具集合里加入 `toolsRunner.createJobTools()` 返回的工具和环境绑定。 [容器环境](server-guide.md#接入现成作业) |
+| 从终端独立运行现成容器 | 按已安装包 `node_modules/@h-ai/tools/jobs/README.md` 中的镜像和输入示例运行。 |
 
-轻量扩展示例见 [reference.md](reference.md)，长任务、多节点与产物接入见 [server-guide.md](server-guide.md)。安装包不自动启用全部工具或启动容器。
+为工具定义 Zod 参数。返回普通数据时用 `handler`，已有 `HaiResult` 时用 `resultHandler`。注册、执行和服务请求先检查 `success`。由可信宿主绑定身份，在访问资源时复核权限。
+
+业务调用可独立使用。接入模型时，`ai.tools.adapt(registry)` 将模型请求转成同一个注册器的调用。

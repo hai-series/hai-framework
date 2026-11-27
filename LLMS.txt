@@ -38,7 +38,8 @@
 | @h-ai/reach | [邮件、短信、API 通知、敏感投递与免打扰](packages/cli/templates/skills/hai-reach/SKILL.md) |
 | @h-ai/feedback | [首帖现场、双向回复、补充请求、限额与保留期限](packages/cli/templates/skills/hai-feedback/SKILL.md) |
 | @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A、ACP](packages/cli/templates/skills/hai-ai/SKILL.md)，[原生记忆命名空间与升级](docs/usage/configuration/ai.md#共用-qdrant-的应用)、[本地文件解析](docs/usage/function/ai.md#bounded-local-files)、[浏览器录音](docs/usage/function/ai.md#browser-recording) |
-| @h-ai/tools | [中立工具定义、注册与授权执行](packages/cli/templates/skills/hai-tools/SKILL.md)，[模块手册](docs/usage/function/tools.md)；轻量工厂无 init/close，/server 提供 tools.createService/tools.createArtifactTools/tools.createJobTools，复用 Runner 与授权产物；模型协议使用 ai.tools.adapt |
+| @h-ai/tools | [中立工具定义、注册与授权执行](packages/cli/templates/skills/hai-tools/SKILL.md) · [直接执行](docs/usage/function/tools.md#quick-start) · [宿主授权的文件操作](docs/usage/function/tools.md#artifact-example) · [命令行独立运行镜像作业](packages/tools/jobs/README.md#job-operations) |
+| @h-ai/tools-runner | [提交与恢复持久工具任务](docs/usage/function/tools-runner.md#quick-start) · [接入受管容器工具](docs/usage/function/tools-runner.md#managed-job-example) · [生成应用接入指南](packages/cli/templates/skills/hai-tools/server-guide.md) |
 | Agent 示例 | [多用户工作台](docs/usage/development/agent.md)、[应用接入及配置](apps/agent/README.md)；手动与智能体共用工具服务，UI 复用 ArtifactWorkspace/ToolWorkspace |
 | @h-ai/runner | [受管容器、容量、任务保留与失联核验](packages/runner/README.md) |
 | @h-ai/payment | [订单、渠道验签、通知回执、查单和退款](packages/cli/templates/skills/hai-payment/SKILL.md) |

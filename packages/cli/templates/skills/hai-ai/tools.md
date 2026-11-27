@@ -1,6 +1,6 @@
 # AI 工具包装与统一服务
 
-工具定义、Schema 校验、授权及执行使用 `@h-ai/tools`；长任务使用 `@h-ai/tools/server` 的同一个 `tools.createService`。AI 只增加模型协议、既有 AI 能力包装与 MCP 桥接，不拥有第二个注册器或任务队列。业务结果先检查 `success`，已有 `HaiResult` 的工具用 `resultHandler`，不能把失败对象作为普通成功数据返回。
+工具定义、Schema 校验、授权及执行使用 `@h-ai/tools`，持久工具任务由宿主通过 `@h-ai/tools-runner` 的 `toolsRunner.createService()` 装配。AI 复用工具注册器，负责模型协议、既有 AI 能力包装与 MCP 桥接。业务结果先检查 `success`，已有 `HaiResult` 的工具使用 `resultHandler` 保留原业务错误。
 
 ## 公开入口
 
@@ -9,13 +9,13 @@
 | `ai.tools.adapt(registry)` | 已登记的中立注册器 | `getDefinitions/execute/executeAll` 模型协议适配，不提供注册管理 |
 | `ai.tools.createBuiltinTools(options)` | 可信 context、资源 files、可选 executeJob | 直接返回 `ToolSet`，不立即请求模型 |
 | `ai.tools.createMcpTools(options)` | context、管理员登记的 definitions、实时 authorize | `HaiResult<ToolSet>`，复用 `ai.mcp.services.invoke` 连接成熟服务 |
-| `ai.tools.createBroker({ service, url })` | 已创建的工具服务及固定 HTTP 地址 | `HaiResult<BuiltinToolBroker>`，把同一目录开放给原生 Agent |
+| `ai.tools.createBroker({ service, url })` | 提供 `catalog` 和 `invoke` 的 `ToolInvoker` 及固定 HTTP 地址 | `HaiResult<BuiltinToolBroker>`，把同一目录开放给原生 Agent |
 
 这些工厂不需要单独初始化；实际图片、语音和 LLM 调用前仍须按 AI 的配置与生产存储约束初始化 `ai`。`/server` 和这些服务端包装不导入浏览器。浏览器工作台通过已授权的应用 HTTP 接口调用。
 
 ## 图片、语音与文档
 
-`BuiltinToolOptions.context` 使用服务传入的 `ToolServiceContext`，包括可信 scope、可选 sessionId/signal 和 Runner 补充的 execution。不得由模型提供身份。`files` 复用 `ToolArtifactAccess`：`read` 重新验证归属后返回字节，`publish` 保存字节并返回 `{id,title,kind,version,mediaType}`。宿主负责存储与版本事务，模型、Runner 结果和事件只传引用。
+`BuiltinToolOptions.context` 使用 `@h-ai/tools/server` 的 `ToolServiceContext`，由宿主从认证结果绑定 `scope`，按需传 `sessionId` 和 `signal`。执行器可提供 `execution.id` 和 `execution.emit(data)`，用于标识本次执行和记录 JSON 进度。`files` 复用同一入口的 `ToolArtifactAccess`，`read` 重新验证归属后返回字节，`publish` 保存字节并返回 `{ id, title, kind, version, mediaType }`。宿主负责存储与版本事务，模型、Runner 结果和事件只传引用。
 
 | 稳定工具名 | 主要参数 | 输出与行为 | 组 |
 | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ export function registerBuiltinTools(options: BuiltinToolOptions) {
 }
 ```
 
-可恢复任务把该 ToolSet 与 `tools.createArtifactTools/createJobTools` 的结果合并，交给同一个服务。创建工具不等于启用；`enabled` 仍需显式选择，submit 和真正执行时都重新检查启用状态与授权。服务端装配见 [Tools 服务指南](../hai-tools/server-guide.md)。
+可恢复任务将该 `ToolSet` 与 `@h-ai/tools/server` 的 `tools.createArtifactTools()` 结果合并。需要容器时，再加入 `@h-ai/tools-runner` 的 `toolsRunner.createJobTools()` 返回的工具、分组和 `environments` 绑定，交给同一个持久服务。`enabled` 显式选择开放的工具，服务在提交和执行时均重新检查启用状态与授权。 [服务端装配](../hai-tools/server-guide.md)
 
 ## 网址转介绍视频
 

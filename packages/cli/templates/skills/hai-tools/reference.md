@@ -20,7 +20,7 @@ export async function calculateForUser(objectId: string) {
   }))
   if (!registered.success)
     return registered
-  // 按可信 objectId 执行 sum(2, 3)，成功得到 { total: 5 }；输入校验或授权失败时处理器不运行。
+  // 按可信 objectId 执行 sum(2, 3)，成功结果的 data 为数字 5。输入校验或授权失败时处理器不运行。
   return registry.execute('sum', { a: 2, b: 3 }, { objectId })
 }
 ```
@@ -35,4 +35,4 @@ export async function calculateForUser(objectId: string) {
 
 已有业务接口返回 `HaiResult` 时使用 `resultHandler`，普通输出使用 `handler`，不可同时提供。`title` 和 `examples: { label, input }[]` 保留在中立定义中，用于可读名称及填表；预设不执行工具或授予权限。
 
-可恢复任务和内置产物/作业工厂见 [服务端指南](server-guide.md)，不要在页面另建执行状态机。
+Node 中可用 `@h-ai/tools/server` 的 `tools.createArtifactTools()` 读取和保存宿主授权的资源。持久任务和容器作业通过 `@h-ai/tools-runner` 接入，页面可按回执查询同一任务。 [服务端指南](server-guide.md)
