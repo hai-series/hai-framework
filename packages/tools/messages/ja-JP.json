@@ -9,7 +9,7 @@
   "tools_artifactCreate": "成果物を作成",
   "tools_artifactCreateDescription": "編集可能な Markdown、HTML、表、グラフをライブラリに保存します。",
   "tools_artifactRead": "成果物を読む",
-  "tools_artifactReadDescription": "既存のテキスト成果物の内容とバージョンを読みます。",
+  "tools_artifactReadDescription": "既存のテキスト成果物の内容とバージョンを読みます。nextCursor が返った場合は、同じ ID とその値を cursor に指定して続きを読みます。",
   "tools_artifactSave": "成果物を保存",
   "tools_artifactSaveDescription": "読み取ったバージョンに基づき保存します。同時編集は競合として扱います。",
   "tools_dataAnalyze": "データ分析",

@@ -178,7 +178,7 @@ Use `service.invoke()` when you can wait for the result. It submits the task and
 | `inspect` options | `after` | Optional integer 0–100000, default 0. Returns a page of up to 100 events with sequence greater than the cursor, plus current state and `next` |
 | `ToolServiceOptions.enabled` | `groups`, `tools`, `exclude` | Each is an optional array of names. Take the union of groups and tools and remove excluded names. An empty object disables all tools. Each execution still checks authorization |
 
-The neutral `ToolServiceContext.execution` exposes only an execution ID and a progress writer to artifact and similar tools. The container factory takes the full handle through `RunnerToolServiceContext`.
+`ToolServiceContext.execution` supplies the execution ID, a progress writer, and an optional `maxResultBytes` to artifact and similar tools. Runner supplies a JSON result byte budget so `artifact_read` can paginate. The container factory takes the full handle through `RunnerToolServiceContext`. [Paginated artifact reads](tools.en.md#artifact-byte-limit)
 
 For events 5, 6, and 7, `inspect(receipt, context, { after: 5 })` returns 6 and 7. Continue with the returned `next`. Selection `{ groups: ['docs'], exclude: ['docs_export'] }` exposes the other registered tools in the docs group and submissions still pass through the authorization callback.
 

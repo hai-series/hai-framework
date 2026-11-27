@@ -177,7 +177,7 @@ service.inspect() で状態と結果を取得
 | `inspect` の `options` | `after` | 任意の 0〜100000 の整数、既定は 0。カーソルより大きな番号のイベントを最大 100 件と、現在の状態および `next` を返す |
 | `ToolServiceOptions.enabled` | `groups`、`tools`、`exclude` | いずれも任意の名前配列。グループとツールの和集合から除外名を外す。空オブジェクトは全ツールを無効にする。実行ごとに認可を確認する |
 
-汎用の `ToolServiceContext.execution` は成果物ツールなどに実行 ID と進捗の記録だけを公開します。コンテナーファクトリーは `RunnerToolServiceContext` から実行ハンドル全体を取得します。
+`ToolServiceContext.execution` は成果物ツールなどに実行 ID、進捗の記録、任意の `maxResultBytes` を提供します。Runner から渡された JSON 結果のバイト上限に合わせ、`artifact_read` はページを分けて返します。コンテナーファクトリーは `RunnerToolServiceContext` から実行ハンドル全体を取得します。 [成果物のページ単位の読み取り](tools.ja.md#artifact-byte-limit)
 
 イベントが 5、6、7 の場合、`inspect(receipt, context, { after: 5 })` は 6、7 を返します。次は戻り値の `next` を使います。`{ groups: ['docs'], exclude: ['docs_export'] }` を選ぶと、docs の残りの登録済みツールが対象となり、投入時は引き続き認可コールバックを通ります。
 

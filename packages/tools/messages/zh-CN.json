@@ -9,7 +9,7 @@
   "tools_artifactCreate": "创建成果",
   "tools_artifactCreateDescription": "生成可编辑的 Markdown、网页、表格或图表，并保存到当前用户的资料库。",
   "tools_artifactRead": "读取成果",
-  "tools_artifactReadDescription": "读取已有文本成果的内容和版本。",
+  "tools_artifactReadDescription": "读取已有文本成果的内容和版本。返回 nextCursor 时，使用同一个 ID 并把该值作为 cursor 继续读取。",
   "tools_artifactSave": "保存成果",
   "tools_artifactSaveDescription": "按读取时的版本保存修改；版本冲突时保留当前内容。",
   "tools_dataAnalyze": "数据分析",

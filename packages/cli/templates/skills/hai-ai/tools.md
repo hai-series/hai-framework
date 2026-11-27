@@ -15,7 +15,7 @@
 
 ## 图片、语音与文档
 
-`BuiltinToolOptions.context` 使用 `@h-ai/tools/server` 的 `ToolServiceContext`，由宿主从认证结果绑定 `scope`，按需传 `sessionId` 和 `signal`。执行器可提供 `execution.id` 和 `execution.emit(data)`，用于标识本次执行和记录 JSON 进度。`files` 复用同一入口的 `ToolArtifactAccess`，`read` 重新验证归属后返回字节，`publish` 保存字节并返回 `{ id, title, kind, version, mediaType }`。宿主负责存储与版本事务，模型、Runner 结果和事件只传引用。
+`BuiltinToolOptions.context` 使用 `@h-ai/tools/server` 的 `ToolServiceContext`，由宿主从认证结果绑定 `scope`，按需传 `sessionId` 和 `signal`。执行器可提供 `execution.id` 和 `execution.emit(data)`，用于标识本次执行和记录 JSON 进度。`files` 复用同一入口的 `ToolArtifactAccess`，`read` 重新验证归属后返回字节，`publish` 保存字节并返回 `{ id, title, kind, version, mediaType }`。宿主负责存储与版本事务。模型和 Runner 可通过引用打开文件，产物正文工具按 Runner 的结果预算读取。
 
 | 稳定工具名 | 主要参数 | 输出与行为 | 组 |
 | --- | --- | --- | --- |

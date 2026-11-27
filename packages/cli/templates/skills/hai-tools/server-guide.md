@@ -66,11 +66,13 @@ export async function runSum(runner: RunnerFunctions, scope: ToolServiceContext[
 
 ## 接入现成作业
 
-- **需要文件操作**时，从 `@h-ai/tools/server` 导入 `tools` 并调用 `tools.createArtifactTools({ context, files })`。可直接注册这些工具，也可在 `createTools(context)` 中与持久任务一起装配。宿主实现 `files.read()` 和 `files.publish()`，有版本保存时再提供 `files.save()`。
+- **需要文件操作**时，从 `@h-ai/tools/server` 导入 `tools` 并调用 `tools.createArtifactTools({ context, files, maxArtifactBytes })`。正文上限可配置，默认 1 MiB，按 UTF-8 字节校验。宿主实现 `files.read()` 和 `files.publish()`，有版本保存时再提供 `files.save()`。启用 `data_analyze` 时提供 `files.publishBatch()`，将表格和图表一次提交，失败时两份新文件均不可读。
 - **需要容器作业**时，在 `createTools(context)` 中调用 `toolsRunner.createJobTools({ context, files, runner, environments })`。单独使用时返回整个 `RunnerToolSet`。合并其他工具时保留容器工具的 `environments` 映射。工厂参数接受 `documents/office/ocr/browser/web/preview/video` 到 Runner 环境 ID 的映射。需要联网的 `browser/web` 另外传入部署控制的 `browserProxy`。
 - **只想在终端运行镜像**时，按安装包 `node_modules/@h-ai/tools/jobs/README.md` 准备输入和输出目录，将 JSON 请求从标准输入传给容器内的 `hai-tool`。这条路径由调用方管理文件和容器。
 
 受管作业把输入文件 ID 交给宿主读取，成功清理容器后才调用 `files.publish()`。业务传参使用文件引用，Runner 的提交、事件和输出各有 512 KiB JSON 限制。文件字节还受作业和容器的资源限额约束。网页截图和采集只接受不超过 2048 个 Unicode 字符的 HTTPS DNS 地址及默认端口。
+
+`artifact_read` 若返回 `nextCursor`，传原 `id` 和 `cursor: nextCursor` 继续读取，按顺序拼接正文，直到 `nextCursor` 省略。每页重新授权并绑定当前文件内容和版本。
 
 `@h-ai/tools/server` 的 `ToolServiceContext` 包含可信 `scope`、可选 `sessionId` 和 `signal`。执行时可从 `execution.id` 取得稳定编号，并用 `execution.emit(data)` 写入 JSON 进度。适配包的 `RunnerToolServiceContext` 在执行节点绑定真实 Runner 上下文，固定容器工具由该上下文调用 `start()`。调用方提交前只传宿主认证后的主体、会话和取消信号。
 

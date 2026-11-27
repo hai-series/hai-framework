@@ -176,7 +176,7 @@ service.inspect() 读取状态和结果
 | `inspect` 的 `options` | `after` | 可选整数 0–100000，默认 0。读取序号大于游标的一页，最多 100 条事件，同时返回任务当前状态和 `next` |
 | `ToolServiceOptions.enabled` | `groups`、`tools`、`exclude` | 均为可选名称数组。组和工具取并集，再删除排除项。空对象停用全部工具；每次执行仍检查授权 |
 
-中立的 `ToolServiceContext.execution` 只暴露执行 ID 和进度写入给产物等工具。容器工厂通过 `RunnerToolServiceContext` 取得完整执行句柄。
+`ToolServiceContext.execution` 向产物等工具提供执行 ID、进度写入和可选的 `maxResultBytes`。Runner 提供 JSON 结果字节预算，`artifact_read` 据此分页。容器工厂通过 `RunnerToolServiceContext` 取得完整执行句柄。 [产物分页](tools.md#artifact-byte-limit)
 
 例如状态中包含事件 5、6、7，`inspect(receipt, context, { after: 5 })` 返回事件 6、7，下一次用结果中的 `next` 续读。以 `{ groups: ['docs'], exclude: ['docs_export'] }` 选择工具时，目录包含其余已登记的 docs 工具，提交仍需通过授权回调。
 

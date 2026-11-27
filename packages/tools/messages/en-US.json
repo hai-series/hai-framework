@@ -9,7 +9,7 @@
   "tools_artifactCreate": "Create artifact",
   "tools_artifactCreateDescription": "Create editable Markdown, HTML, table or chart content in your library.",
   "tools_artifactRead": "Read artifact",
-  "tools_artifactReadDescription": "Read the content and version of an existing text artifact.",
+  "tools_artifactReadDescription": "Read content and version from a text artifact. If the result has nextCursor, call again with the same ID and use that value as cursor to continue.",
   "tools_artifactSave": "Save artifact",
   "tools_artifactSaveDescription": "Save against the version you read; concurrent edits cause a conflict.",
   "tools_dataAnalyze": "Analyze data",
