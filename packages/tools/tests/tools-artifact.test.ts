@@ -1,4 +1,5 @@
 import type { ToolArtifactAccess, ToolArtifactPublishInput } from '../src/tools-node-main.js'
+import { Buffer } from 'node:buffer'
 import { core } from '@h-ai/core'
 import { expect, it, vi } from 'vitest'
 import { z } from 'zod'
@@ -133,6 +134,47 @@ it('reauthorizes each page and rejects a cursor after a change to the host bytes
     { id: 'report' },
     { id: 'report' },
   ])
+})
+
+it('keeps escaping and complete Unicode characters within a small JSON result budget', async () => {
+  const limit = 128
+  const text = '\uFEFF🙂中\u0001"\\\n'.repeat(12)
+  const read: ToolArtifactAccess['read'] = async () => core.ok({
+    id: 'sample',
+    name: 'sample.md',
+    version: 2,
+    mediaType: 'text/markdown',
+    data: Buffer.from(text),
+  })
+  const execution = {
+    id: 'task',
+    emit: async () => core.ok(undefined),
+    maxResultBytes: limit,
+  }
+  const set = tools.createArtifactTools({
+    context: { ...context, execution },
+    files: { ...files, read },
+  })
+  const reader = set.tools.find(tool => tool.name === 'artifact_read')!
+  const schema = z.object({
+    content: z.string(),
+    nextCursor: z.string().optional(),
+  })
+  const contents: string[] = []
+  let cursor: string | undefined
+  do {
+    const result = await reader.execute({ id: 'sample', cursor })
+    expect(result.success).toBe(true)
+    if (!result.success)
+      throw new Error(result.error.message)
+    expect(Buffer.byteLength(JSON.stringify(result.data))).toBeLessThanOrEqual(limit)
+    const page = schema.parse(result.data)
+    contents.push(page.content)
+    expect(contents.length).toBeLessThanOrEqual(text.length)
+    cursor = page.nextCursor
+  } while (cursor !== undefined)
+  expect(contents.length).toBeGreaterThan(1)
+  expect(contents.join('')).toBe(text)
 })
 
 it('rejects an already cancelled host before calling its file callbacks', async () => {

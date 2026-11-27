@@ -101,7 +101,7 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
       description: toolsM('tools_artifactReadDescription'),
       parameters: z.object({
         id: identifier,
-        cursor: z.string().regex(/^[a-f\d]{64}\.\d{1,16}$/u).optional(),
+        cursor: z.string().regex(/^[\w-]{43}\.\d{1,16}$/u).optional(),
       }),
       resultHandler: async (input, { signal }) => {
         const file = await files.read(binding(signal), { id: input.id })
@@ -273,7 +273,7 @@ function readPage(file: ToolArtifact, text: string, maxBytes?: number, cursor?: 
   if (cursor === undefined && fits(full))
     return full
 
-  const fingerprint = createHash('sha256').update(JSON.stringify(base)).update(file.data).digest('hex')
+  const fingerprint = createHash('sha256').update(JSON.stringify(base)).update(file.data).digest('base64url')
   const offset = cursor === undefined
     ? 0
     : Number(cursor.slice(fingerprint.length + 1))
