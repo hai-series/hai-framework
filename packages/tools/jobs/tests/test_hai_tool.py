@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -64,11 +65,26 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(self.run_tool('ocr', {**args, 'language': '-bad'})['error']['code'], 'INVALID_REQUEST')
         self.assertEqual(self.run_tool('ocr', {**args, 'language': 'eng'})['error']['code'], 'INVALID_INPUT')
 
-    def test_browser_rejects_invalid_url_and_missing_deployment_proxy(self):
-        args = {'operation': 'browser.navigate', 'output': 'screen.png'}
-        for url in ['file:///etc/passwd', 'http://example.test', 'https://person:token@example.test', 'https://127.0.0.1/']:
-            self.assertEqual(self.run_tool('browser', {**args, 'url': url})['error']['code'], 'INVALID_REQUEST')
-        self.assertEqual(self.run_tool('browser', {**args, 'url': 'https://example.test'})['error']['code'], 'NETWORK_POLICY_REQUIRED')
+    def test_browser_and_capture_validate_urls_before_checking_the_deployment_proxy(self):
+        base = 'https://example.com/'
+        at_limit = base + '🌐' * (2048 - len(base))
+        rejected = [
+            'http://example.com', 'https://127.0.0.1', 'https://user:pass@example.com',
+            'https://example.com:444', 'https://example.com:/', 'https://example.test/', 'https://example.INTERNAL/',
+            'https://-example.com/', 'https://例え.com/', base + 'with space',
+            base + 'tab\t', base + 'file\\name', at_limit + 'a',
+        ]
+        accepted = [base, 'HTTPS://Example.COM:443/path?q=one#part', 'https://example.com:0443/', at_limit]
+        jobs = {'browser': ('browser.navigate', 'screen.png'), 'web_capture': ('web.capture', 'capture.zip')}
+        with patch.dict('os.environ', {'HAI_TOOL_BROWSER_PROXY': ''}):
+            for kind, (operation, output) in jobs.items():
+                args = {'operation': operation, 'output': output}
+                for url in rejected:
+                    with self.subTest(kind=kind, url=url[:80], length=len(url)):
+                        self.assertEqual(self.run_tool(kind, {**args, 'url': url})['error']['code'], 'INVALID_REQUEST')
+                for url in accepted:
+                    with self.subTest(kind=kind, url=url[:80], length=len(url)):
+                        self.assertEqual(self.run_tool(kind, {**args, 'url': url})['error']['code'], 'NETWORK_POLICY_REQUIRED')
 
     def test_tool_cannot_overwrite_existing_outputs(self):
         artifact = self.outputs / 'screen.png'

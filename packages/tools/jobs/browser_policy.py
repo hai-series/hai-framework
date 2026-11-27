@@ -5,20 +5,21 @@ import re
 from urllib.parse import urlsplit
 from tool import ToolError
 
-HOST = re.compile(r'(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z][A-Za-z0-9-]{1,62}\Z', re.ASCII)
+URL_LIMIT = 2048
+HOST = re.compile(r'(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z][A-Za-z0-9-]{0,61}[A-Za-z0-9]\Z', re.ASCII)
+LOCAL_SUFFIX = re.compile(r'\.(?:localhost|local|internal|test|invalid)\Z', re.ASCII | re.IGNORECASE)
 
 
 def parse_url(url):
-    if not isinstance(url, str) or len(url) > 2048 or any(ord(c) <= 32 or c == '\\' for c in url):
+    # 与 TypeScript isBrowserUrl 同步按原始地址和 Unicode 字符数校验。
+    if (not isinstance(url, str) or len(url) > URL_LIMIT or url[:8].lower() != 'https://'
+            or any(ord(c) <= 32 or c == '\\' or 0xD800 <= ord(c) <= 0xDFFF for c in url)):
         raise ToolError('INVALID_REQUEST', 'Expected an HTTPS URL')
-    try:
-        parsed = urlsplit(url)
-        if (parsed.scheme == 'https' and parsed.username is None and parsed.password is None
-                and parsed.hostname and HOST.fullmatch(parsed.hostname) and parsed.port in (None, 443)):
-            return url
-    except ValueError:
-        pass
-    raise ToolError('INVALID_REQUEST', 'Expected HTTPS with a DNS hostname and default port')
+    authority = re.split(r'[/?#]', url[8:], maxsplit=1)[0]
+    host = re.sub(r':0*443\Z', '', authority)
+    if len(host) > 253 or not HOST.fullmatch(host) or LOCAL_SUFFIX.search(host):
+        raise ToolError('INVALID_REQUEST', 'Expected HTTPS with a DNS hostname and default port')
+    return url
 
 
 def deployment_proxy():
