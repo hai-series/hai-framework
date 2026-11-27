@@ -2,18 +2,35 @@
 
 <a id="h-aitools-機能説明"></a>
 
-`tools` で業務ツールを定義・登録・実行します。業務コード、画面操作、AI から同じ実装を利用できます。
+Tools は入力検証と業務関数を一つのツールにまとめます。Node.js またはブラウザーでツールを定義、登録、直接実行できます。Node.js ではホストのファイル操作を使って成果物を作成できます。
 
-[モジュール README](../../../packages/tools/README.ja.md) · [設定](../configuration/tools.ja.md) · [データの帰属](../data/tools.ja.md)
+[モジュール README](../../../packages/tools/README.ja.md) · [設定](../configuration/tools.ja.md) · [データの保存先](../data/tools.ja.md)
 
-## エントリーポイントの選択
+## 入口を選ぶ
 
-| インポート先 | 用途 | 実行とライフサイクル |
-| --- | --- | --- |
-| `@h-ai/tools` | 短時間の業務関数、ブラウザー内ツール、モデル連携用の中立な定義 | `tools.define/createRegistry` は純粋な定義・ファクトリー。`init/close` は不要で、Runner やモデル SDK を読み込まない |
-| `@h-ai/tools/server` | 再開可能なタスク、進捗・キャンセル、文書とコンテナジョブ | 軽量メソッドに `tools.createService/createArtifactTools/createJobTools` を追加 |
+- **アプリ固有の業務機能を公開する。** `tools.define()` で、注文や在庫の照会など既存の機能を画面やエージェントから使えるようにします。[注文を照会する例](#custom-tool-order) · [最小例](#quick-start)
+- **成果物を作成して読み取る。** `@h-ai/tools/server` の `tools.createArtifactTools()` にホストのファイル操作を渡します。 [成果物の利用例](#artifact-example)
+- **用意済みのジョブイメージを実行する。** アプリのツールサービスからコンテナーツールを呼び出すか、ターミナルや独自スクリプトから直接実行できます。[ジョブイメージの用途と呼び出し方](#job-images)
 
-軽量エントリーはブラウザーでも利用できますが、サーバーの権限は信頼できるサーバー側で検証します。`/server` をフロントエンドにインポートしないでください。
+ブラウザーでは `@h-ai/tools` のルート入口を使用します。Node.js では `@h-ai/tools/server` の成果物ファクトリーも使えます。
+
+<a id="services"></a>
+<a id="service-example"></a>
+
+### ジョブをキューに入れて受領情報を保存する
+
+ジョブをキューに入れ、切断後に検索したりイベントの取得を再開したりするには、`@h-ai/tools-runner` の `toolsRunner.createService()` を使います。自分で定義したツールも、成果物ファクトリーが返したツールも、このサービスに渡せます。 [ツールジョブの投入と再取得](tools-runner.ja.md#quick-start)
+
+<a id="job-tools"></a>
+<a id="managed-job-example"></a>
+<a id="从项目构建网页预览"></a>
+<a id="web-preview"></a>
+<a id="プロジェクトから-web-プレビューを構築"></a>
+<a id="从网址生成可编辑介绍视频"></a>
+<a id="website-video"></a>
+<a id="web-サイトから編集可能な紹介動画を作成"></a>
+
+実行ノードで固定イメージを起動する場合は、`toolsRunner.createJobTools()` が返したツールを同じサービスに加え、登録済みの Runner 環境に対応付けます。 [管理対象のコンテナージョブと利用例](tools-runner.ja.md#job-tools)
 
 <a id="module-dependencies"></a>
 
@@ -21,81 +38,63 @@
 
 | 依存先 | 用途 | 利用条件 | 初期化順序 |
 | --- | --- | --- | --- |
-| `@h-ai/core`、`zod` | 共通の結果型、ツール引数の検証、JSON Schema 変換を提供 | Tools とともにインストール。引数定義で `zod` を直接インポートする場合はアプリの依存に追加 | 必要に応じてツールやレジストリを作成。モジュールの初期化は不要 |
-| `@h-ai/runner` | 再開可能なツール実行やバックグラウンドジョブの実行・再開を担当 | サーバーの `createService()` または `createJobTools()` を使う場合 | ホストが Runner を初期化してファクトリーに渡す。ジョブを登録する前にハンドラーを登録 |
-| Runner コンテナー環境 | 文書、OCR、ブラウザーなどの独立ジョブにエンジンとイメージを提供 | 対応する `createJobTools()` のジョブを使う場合 | 実行ノードを準備してから設定済みの環境 ID をファクトリーに渡す |
-| ホストのファイルアクセスインターフェース | 成果物の読み取りやバックグラウンドジョブのファイルアクセスを提供 | `createArtifactTools()` または `createJobTools()` を使う場合 | ツール作成時に認証済みの利用者とスコープに限定した `files` を渡す |
+| `@h-ai/core`、`zod` | 共通の結果型と入力検証 | Tools と一緒に入ります。アプリから直接 import する依存関係は個別に追加してください。 | ルート入口ではツールを定義するか、レジストリを作ります。 |
+| ホストのファイル操作 | 許可されたファイルの読み書き | 成果物ファクトリーを使う場合 | ホストの操作を渡して成果物ツールを作成 |
+| Podman または Docker | 固定イメージを直接実行 | 独立ジョブを使う場合に必要です。 | イメージと入力を準備し、JSON リクエストを送ります。 |
 
 <a id="quick-start"></a>
 
 ## 最小構成
 
-### 利用例
+2 つの数を足すには軽量入口を使います。Node プロジェクトに依存関係を追加し、次のコードを `sum-light.mts` として保存します。フレームワークがサポートする Node 26 では TypeScript を直接実行できます。
 
 ```sh
-pnpm add @h-ai/tools @h-ai/core zod
+pnpm add @h-ai/tools zod@^4
+node sum-light.mts
 ```
 
-通常の業務呼び出しの例です。登録したツールだけを使用し、信頼できるサーバーから本人情報を渡します。
+<!-- example: tools-light -->
 
 ```ts
 import { tools } from '@h-ai/tools'
 import { z } from 'zod'
+import process from 'node:process'
 
-export async function calculate(objectId: string) {
-  // ホストが渡す objectId と同じ主体だけを許可する空の登録器を作る。
-  const registry = tools.createRegistry({
-    authorize: ({ context }) => context.objectId === objectId,
-  })
-  // 下の Zod 入力と加算処理から sum を定義し、この登録器に登録する。定義不正は例外、登録成功時データなし、同名登録は失敗。
-  const registered = registry.register(tools.define({
-    name: 'sum',
-    title: '合計',
-    description: 'Add two numbers',
-    examples: [{ label: '2 + 3', input: { a: 2, b: 3 } }],
-    parameters: z.object({ a: z.number(), b: z.number() }),
-    handler: ({ a, b }) => ({ total: a + b }),
-  }))
-  if (!registered.success)
-    return registered
-  // 確認済みの objectId で sum(2, 3) を実行する。成功時は { total: 5 }、入力や権限が不正なら処理を実行しない。
-  return registry.execute('sum', { a: 2, b: 3 }, { objectId })
-}
+const sum = tools.define({
+  name: 'sum',
+  description: 'Add two numbers',
+  parameters: z.object({ a: z.number(), b: z.number() }),
+  handler: ({ a, b }) => a + b,
+})
+const input = { a: 2, b: 3 }
+
+// sum の入力を検証し、直接呼び出す。成功時の data は 5。
+const direct = await sum.execute(input)
+if (!direct.success)
+  throw new Error(direct.error.message)
+
+// 同じツールを登録し、信頼できる呼び出し元を指定して名前で実行する。
+const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'alice' })
+const registered = registry.register(sum)
+if (!registered.success)
+  throw new Error(registered.error.message)
+const named = await registry.execute('sum', input, { objectId: 'alice' })
+if (!named.success)
+  throw new Error(named.error.message)
+process.stdout.write(`${direct.data}, ${named.data}\n`)
 ```
 
-成功時の `data` は `{ total: 5 }` です。`title` は画面の表示名で、安定した `name` はプロトコルと有効化ルールの識別子です。`examples` はフォームのプリセットで、自動実行や権限付与は行いません。`tool.toDefinition()` と登録器の定義にも含まれます。
-
-既存サービスが `HaiResult` を返す場合は `resultHandler`、通常データを返す場合は `handler` を使います。必ず片方だけを指定します。失敗の `HaiResult` を `handler` で返すと、成功データとして包まれてしまいます。
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-import { tools } from '@h-ai/tools'
-import { z } from 'zod'
-
-export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
-  // 空でない ID を照会するツールを作り、受け取った read の HaiResult をそのまま使う。定義不正は例外。
-  return tools.define({
-    name: 'document_lookup',
-    description: 'Read an authorized document',
-    parameters: z.object({ id: z.string().min(1) }),
-    resultHandler: ({ id }) => read(id),
-  })
-}
-```
+標準出力は `5, 5` です。最初の値は直接実行の結果です。2 番目は、レジストリが `alice` を認可して同じツールを名前で呼び出した結果です。サーバーアプリでは認証結果から実際の `objectId` を取得してください。
 
 <a id="api-reference"></a>
 
 ## 機能
 
-各節では個別のインターフェースを列挙し、その後に作業の流れを説明します。入力欄は呼び出し例、出力欄は成功時のデータです。`HaiResult` は `success` を確認してから `data` を読みます。引数の詳細な既定値と高度な制約は中国語の対応節を参照してください。
-
-Tools にモジュール単位の init/close はありません。軽量機能はルート、サーバー機能は `/server` から読み込みます。各呼び出しで HaiResult.success を確認し、失敗時は元の結果を返して、成功時だけ data を読みます。関数宣言のない例はアプリの非同期業務関数内の断片です。独立したテストデータと明示した後片付けを使います。
-
 <a id="definitions"></a>
 
 ### 単一ツールの定義と実行：`tools.define`
 
-入力検証と業務関数を結び付けます。定義だけでは動かず、execute で実行します。
+エージェントがアプリの注文や在庫の最新情報を照会するには、既存の業務関数を `tools.define()` でツールにします。ツール名、モデルが渡せる引数、実際に実行する関数を定義します。画面の操作が固定されている場合は、既存の業務関数を直接呼び出せます。
 
 #### インターフェース一覧
 
@@ -121,7 +120,7 @@ Tools にモジュール単位の init/close はありません。軽量機能�
 | 定義 | `handler` または `resultHandler` | 片方だけ必須。通常データ、または既存の `HaiResult` を返す |
 | 定義 | `title/examples` | 任意の表示名と `{ label, input }[]` プリセット。権限は変わらない |
 | 定義 | `timeoutMs` | 整数 0～2147483647 ミリ秒。省略時 30 秒、0 は即時期限切れ |
-| 登録器 | `authorize` | 任意。設定時は毎回の呼び出しで許可が必要 |
+| 登録器 | `authorize` | 任意。`registry.execute()` と `executeAll()` に適用します。`registry.get()` は信頼できるホストでの組み立てに使う元のツールインスタンスを返します。 |
 | 実行 | `signal` | 処理関数へ渡すキャンセルシグナル |
 | 実行 | `objectId/sessionId` | 信頼済みの本人・セッション。未認証のモデル入力から取得しない |
 | 実行 | `deadline/timeoutMs` | 絶対期限、呼び出し別、ツール、30 秒の順。検証・認可・処理を含む |
@@ -130,59 +129,54 @@ Tools にモジュール単位の init/close はありません。軽量機能�
 
 不正な名前・既定タイムアウト・処理関数の組み合わせは定義時に `TypeError` を送出します。業務実行は `HaiResult` を返します。登録器は `tools.define` が作成したツールだけを受け付けます。モデル用パラメーターは JSON Schema に変換可能なものを使い、通常はオブジェクトにします。
 
-#### 利用例：単一ツールの定義と実行
-
-定義時は handler を実行しません。execute は入力検証、認可、実行に共通の中止・時間制限を適用します。
+Zod が入力を検証してから認可と実行に進みます。認可が二段階の場合は順に両方を通す必要があります。中止や期限切れの後は次の認可を呼び出しません。開始済みの関数は `signal` に従います。フォームやカタログには `toDefinition()` が返す `name/description/inputSchema` と任意の `title/examples` を使えます。
 
 ![ツール実行：検証・認可・共通の期限](../images/function-tools-execution.ja.svg)
 
-検証・認可に失敗したら handler に入りません。登録側と呼出側の認可は両方必要です。中止・期限切れは待機を止めますが、handler は signal に従う必要があり、外部処理は巻き戻しません。handler の値は data、resultHandler は既存の HaiResult を維持します。
+<a id="custom-tool-order"></a>
+
+#### 利用例：問い合わせ対応アシスタントが配送状況を照会する
+
+利用者が「注文 SO-1001 は発送されましたか」と尋ねると、アシスタントは注文番号を取り出して `lookup_order_delivery` を呼び出します。サーバーは認証済みセッションからユーザー ID を渡し、注文番号とユーザー ID の両方で照会します。アシスタントは結果に含まれる発送状況、配送会社、追跡番号を使って回答できます。
+
+デモではメモリー上の注文 1 件とログイン済みユーザー `alice` を使います。アプリに組み込むときは、既存の注文サービスを呼び出し、認証結果から `objectId` を渡します。`@h-ai/core`、`@h-ai/tools`、`zod@^4` をインストールし、コードを `order-delivery.mts` に保存して Node 26 で `node order-delivery.mts` を実行します。
+
+<!-- example: tools-order-delivery -->
 
 ```ts
-// import はモジュールの先頭へ置き、残りはアプリの非同期業務関数内で実行します。失敗結果は呼び出し元へ返します。
+import process from 'node:process'
+import { core } from '@h-ai/core'
+import { HaiToolsError, tools } from '@h-ai/tools'
 import { z } from 'zod'
-// 下記の数値 Zod ルールと加算処理で sum を定義する。実行可能なツールが返り、不正な定義は TypeError。
-const tool = tools.define({
-  name: 'sum', description: 'Add two numbers',
-  parameters: z.object({ a: z.number(), b: z.number() }),
-  handler: ({ a, b }) => ({ total: a + b }),
+
+const order = { orderNo: 'SO-1001', customerId: 'alice', status: 'shipped', carrier: 'Example Parcel', trackingNumber: 'EX-2048' }
+
+// ツール名と注文番号の形式を定義する。処理関数はサーバー側の認証情報で注文の所有者を確認する。
+const lookupDelivery = tools.define({
+  name: 'lookup_order_delivery',
+  description: 'Look up the shipment and tracking number for an order',
+  parameters: z.object({ orderNo: z.string().regex(/^SO-\d{4}$/u) }),
+  resultHandler: ({ orderNo }, { objectId }) => {
+    if (order.orderNo !== orderNo || order.customerId !== objectId)
+      return core.err(HaiToolsError.NOT_FOUND, 'Order not found')
+    return core.ok({ status: order.status, carrier: order.carrier, trackingNumber: order.trackingNumber })
+  },
 })
-// 引数なしでメタデータと入力規則を定義に変換し、名前 sum を読む。変換できなければ例外。
-tool.toDefinition().name // 'sum'; parameters are JSON Schema
-// sum に数値 2 と 3 を渡す。成功時は { total: 5 }、実行失敗は 元の失敗結果を返す。
-const executeResult = await tool.execute({ a: 2, b: 3 })
-if (!executeResult.success)
-  return executeResult
-executeResult.data // { total: 5 }
-// a に文字列 wrong を渡す。VALIDATION_FAILED が返り、加算処理は呼ばれない。
-const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALIDATION_FAILED
+
+const registry = tools.createRegistry()
+// 名前で呼び出せるように登録する。同名のツールがある場合はエラーが返る。
+const registered = registry.register(lookupDelivery)
+if (!registered.success)
+  throw new Error(registered.error.message)
+
+// モデルが渡す注文番号とサーバーが認証したユーザーを再現する。成功時は配送情報が返る。
+const delivery = await registry.execute('lookup_order_delivery', { orderNo: 'SO-1001' }, { objectId: 'alice' })
+if (!delivery.success)
+  throw new Error(delivery.error.message)
+process.stdout.write(`${JSON.stringify(delivery.data)}\n`)
 ```
 
-二つの数から total=5 を得て、不正な a は処理に渡しません。既存 HaiResult には resultHandler を使います。定義誤りは TypeError、実行失敗は HaiResult です。
-
-`tool` と `registry` はファクトリーの戻り値であり、パッケージ直下の関数ではありません。登録器は他のツールを自動発見せず、`tools.define` が作成したインスタンスだけを受け付けます。手書き・コピーしたオブジェクトは拒否します。
-
-名前は ASCII 1～64 文字で、先頭は英字、以降は英数字・アンダースコア・ハイフンです。名前、既定タイムアウト、処理関数の組み合わせが不正な場合、定義エラーとして `TypeError` を送出します。モデル用のパラメーターは JSON Schema に変換可能である必要があり、通常はオブジェクト Schema を使います。`z.date()` など表現できない型は直接使用できません。
-
-`HaiToolsError` は `hai:tools` 名前空間の NOT_FOUND、ALREADY_REGISTERED、VALIDATION_FAILED、EXECUTION_FAILED、FORBIDDEN、TIMEOUT、CANCELLED を含みます。入力・認可・期限・キャンセルの失敗は失敗の `HaiResult` を返します。`resultHandler` は既存の業務エラーを保持し、モデル JSON の解析エラーは AI アダプターが処理します。
-
-固定ジョブの `TIMEOUT` は `HaiToolsError.TIMEOUT`、安全でない Office 文書・プロジェクトや既知の入力拒否は `VALIDATION_FAILED` に対応します。サンドボックスや依存関係の不足、不正なジョブ出力、未知のワーカ障害は `EXECUTION_FAILED` のままとし、ユーザー入力の誤りとして扱いません。公開メッセージは翻訳済みの文言を使い、ワーカの原文を表示しません。処理とコンテナの解放が両方失敗した場合は解放エラーを主エラーとし、最初の処理エラーを安全に整形して `error.ext.operationError` に保持します。単独の失敗ではこの拡張を追加しません。
-
-#### 開発テスト
-
-`pnpm --filter @h-ai/tools test` はカーネルとサービス、`pnpm --filter @h-ai/tools test:jobs` はジョブプロトコルを検証します。実イメージとブラウザーの受け入れは別途環境が必要です。ユニットテストだけで実イメージを検証済みとはしません。
-
-#### ライフサイクルと複数ノード
-
-Tools に全体の有効化スイッチはありません。各アプリケーションが設定からファクトリーと `enabled` を組み立てます。Hai Agent の `workbench.selection` は groups/tools/exclude を使い、省略時は既定の内蔵グループ、明示的な `{}` はすべて無効です。`workbench` スイッチ、グループ、環境割り当ては [Agent 使用説明](../../../apps/agent/README.ja.md#設定)、画像・音声モデルは [AI 設定](../configuration/ai.md) を参照してください。
-
-同じサービスのノードは既存 Runner データベースと Storage を共有し、サービス ID・ツール定義・環境を揃えます。新しいキューや状態テーブルは作りません。API ノードは Runner `executor: false`、実行ノードは再起動後も安定した一意の `nodeId` を設定できます。実行ノードで有効化と認可を再確認するため、フロントエンドだけで無効化しないでください。
-
-`close()` は自サービスのハンドラーだけを解除し、借りた Runner は終了しません。キャンセル後は終端まで状態を読み取り、待機の中断をプロセス終了と扱わないでください。
-
-パラメーター・各イベント・出力は Runner の各 512 KiB JSON 上限も適用します。50 MiB ファイルと scratchMiB は別制約です。[データ境界](../data/tools.ja.md#サイズと保持期間) を参照してください。
-
-[引数と手順の詳細](tools.md#definitions)
+`{"status":"shipped","carrier":"Example Parcel","trackingNumber":"EX-2048"}` が出力されます。`objectId: 'bob'` に変更すると注文が見つからないというエラーが返ります。モデルに接続するには、レジストリを `ai.tools.adapt(registry)` に渡してツール定義をモデルに提供し、モデルから返った呼び出しを認証済みユーザーの情報で実行します。[モデルからの呼び出し例](ai.ja.md#model-tools)
 
 <a id="registry"></a>
 
@@ -206,236 +200,286 @@ Tools に全体の有効化スイッチはありません。各アプリケー�
 | `registry.execute(name, input, options?)` | 登録済みツールを実行する。登録先と呼び出しの両方に認可条件があれば、両方を満たす必要がある | `name: string, input: unknown, options?: ToolExecutionOptions`。`input` は登録済みツールのスキーマに従います。オプションを省略すると既定の実行設定を使います。 | `Promise<HaiResult<unknown>>` | `await registry.execute('sum', { a: 2, b: 3 })` |
 | `registry.executeAll(calls, options?)` | 既定では順に実行して最初の失敗で停止する。`parallel: true` では、失敗しても実行を開始した処理は取り消されない | `calls: ToolInvocation[], options?: ToolExecutionOptions & { parallel?: boolean }`。既定では順番に実行し、`parallel: true` で並行実行します。 | `Promise<HaiResult<unknown[]>>` | `await registry.executeAll([{ name: 'sum', input: { a: 2, b: 3 } }])` |
 | `registry.clear()` | 登録内容を消去する。進行中の呼び出しはキャンセルしない | 引数なし | `void` | `registry.clear()` |
-| `registry.size` | 登録済みの件数を取得する（プロパティ） | 无 | `number` | `registry.size` |
+| `registry.size` | 登録済みの件数を取得する（プロパティ） | なし | `number` | `registry.size` |
 
 #### 利用例：登録・検索・一括実行
 
-```ts
-// アプリの非同期業務関数内の断片です。失敗結果は呼び出し元へ返します。
-// Continue with the sum tool from the preceding scenario.
-// 信頼済みの主体 demo-user だけが実行できる空の登録器を作る。
-const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'demo-user' })
-// 上で定義した sum を登録する。成功時にデータはなく、同名ツールは失敗。
-const registerResult = registry.register(tool)
-if (!registerResult.success)
-  return registerResult
-// 空配列を渡して一括登録する。成功時にデータはなく、登録済みの sum は残る。
-const registerManyResult = registry.registerMany([])
-if (!registerManyResult.success)
-  return registerManyResult
-// no tools added
-registry.size // 1
-// 登録済みの sum の有無を確認する。結果は true。
-registry.has('sum') // true
-// 名前 sum のインスタンスを探して、引数なしで定義に変換し名前 sum を読む。登録がなければ undefined。
-registry.get('sum')?.toDefinition().name // 'sum'
-// 引数なしで登録名を列挙する。結果は ['sum']。
-registry.getNames() // ['sum']
-// 引数なしで登録済み定義を取得し、名前だけを取り出すと ['sum']。入力規則の変換不可は例外。
-registry.getDefinitions().map(definition => definition.name) // ['sum']
-// 信頼済み demo-user で sum に 2 と 3 を渡す。成功時は { total: 5 }、権限や入力が不正なら実行されない。
-const executeResult = await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })
-if (!executeResult.success)
-  return executeResult
-executeResult.data // { total: 5 }
-// demo-user で一件の sum(4, 1) をまとめて実行する。入力順の [{ total: 5 }] が返り、失敗は 元の失敗結果を返す。
-const executeAllResult = await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })
-if (!executeAllResult.success)
-  return executeAllResult
-executeAllResult.data // [{ total: 5 }]
-// 登録済みの sum を置き換える。成功時にデータはなく、検証に失敗すれば元の登録が残る。
-const replaceResult = registry.replace(tool)
-if (!replaceResult.success)
-  return replaceResult
-// same registered name
-// sum を登録解除する。今回は true、もともと登録がなければ false。
-registry.unregister('sum') // true
-// 解除済みの sum を一件のバッチとして再登録する。成功時データはなく、名前の衝突は失敗。
-const registerManyResult2 = registry.registerMany([tool])
-if (!registerManyResult2.success)
-  return registerManyResult2
-// 引数なしで登録器を空にする。sum は見つからなくなり、戻り値はない。
-registry.clear() // undefined
-registry.size // 0
-```
-
-例では信頼する demo-user だけを許可し、実際の主体はサーバーで取得します。登録は void、照会はインスタンス・定義・名前・件数です。clear は実行中処理を止めません。
-
-[引数と手順の詳細](tools.md#registry)
-
-<a id="services"></a>
-
-### 復元可能な業務タスク：`tools.createService`
-
-サーバー工場は Runner を借り、一覧・投入・受付・照会・取消を復元可能な流れにします。
-
-#### インターフェース一覧
-
-| API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
-| --- | --- | --- | --- | --- |
-| `tools.createService(options)` | Runner を借用するツールサービスを作成 | `options: ToolServiceOptions`。`id`、`runner`、`createTools`、`enabled`、`authorize` は必須です。 | `HaiResult<ToolService>` | `tools.createService(options)` |
-| `service.catalog(context)` | 利用可能なツールを列挙 | `context: ToolServiceContext`。アプリが信頼できるコンテキストを渡します。 | `Promise<HaiResult<ToolCatalog>>` | `await service.catalog(context)` |
-| `service.submit(request, context)` | 永続ジョブを送信 | `request: ToolSubmitRequest, context: ToolServiceContext`。リクエストにツール名、入力、任意の冪等キーを含めます。コンテキストはアプリが提供します。 | `Promise<HaiResult<ToolRun>>` | `await service.submit(request, context)` |
-| `service.find(idempotencyKey, context)` | 冪等キーでジョブを検索 | `idempotencyKey: string, context: ToolServiceContext` | `Promise<HaiResult<ToolRun \| undefined>>` | `await service.find(key, context)` |
-| `service.inspect(receipt, context, options?)` | ジョブの状態と結果を取得 | `receipt: ToolReceipt, context: ToolServiceContext, options?: { after?: number }`。完全な受領情報を渡し、`after` で指定したイベント番号の次から取得できます。 | `Promise<HaiResult<ToolRun>>` | `await service.inspect(receipt, context)` |
-| `service.cancel(receipt, context)` | ジョブの中止を要求 | `receipt: ToolReceipt, context: ToolServiceContext`。完全なタスク受領情報と、信頼できるコンテキストを渡します。 | `Promise<HaiResult<ToolRun>>` | `await service.cancel(receipt, context)` |
-| `service.invoke(request, context)` | ツールを呼び出して結果を待つ | `request: ToolSubmitRequest, context: ToolServiceContext`。`submit` と同じリクエスト形式です。 | `Promise<HaiResult<RunnerJson>>` | `await service.invoke(request, context)` |
-| `service.close()` | サービスと所有リソースを終了 | 引数なし | `void` | `service.close()` |
-
-#### サービス要求・コンテキスト・イベントカーソル
-
-| オブジェクト | 項目 | 条件と結果 |
-| --- | --- | --- |
-| `ToolServiceContext` | `scope`、`sessionId`、`signal`、`execution` | 信頼済みの `scope: { tenantId, userId }` は必須で、各 ID は 1〜200 文字。セッション ID（1〜200 文字）と取消信号は任意。実行の帰属には実行ノードが設定した `RunnerContext` を使用する |
-| `ToolSubmitRequest` | `name`、`input`、`idempotencyKey` | 名前と入力は必須。有効な一覧から選んだツール名と、スキーマに合う JSON を渡す。任意の冪等キーは 1〜200 文字、既定は UUID。切断後に同じ操作を復元するには安定したキーを渡す |
-| `ToolReceipt` | `id`、`key` | 両方必須。ID は 64 桁の十六進数で、キーは 1〜200 文字。`inspect/cancel` は両方を主体とサービスに照合する。`find` は送信時の業務冪等キーを受け付ける |
-| `inspect` の `options` | `after` | 任意の 0〜100000 の整数、既定は 0。カーソルより大きな番号のイベントを最大 100 件と、現在の状態および `next` を返す |
-| `ToolServiceOptions.enabled` | `groups`、`tools`、`exclude` | いずれも任意の名前配列。グループとツールの和集合から除外名を外す。空オブジェクトは全ツールを無効にする。実行ごとに認可を確認する |
-
-イベントが 5、6、7 の場合、`inspect(receipt, context, { after: 5 })` は 6、7 を返します。次は戻り値の `next` を使います。`{ groups: ['docs'], exclude: ['docs_export'] }` を選ぶと、docs の残りの登録済みツールが対象となり、投入時は引き続き認可コールバックを通ります。
-
-##### サービスファクトリーの引数
-
-| フィールド | 必須・既定値 | 用途 |
-| --- | --- | --- |
-| `id` | 必須、英数字・アンダースコア・点・ハイフンの 1～60 文字 | Runner 型 `hai.tools.<id>.v1`。同じサービスのノード間で統一 |
-| `runner` | 必須 | 初期化済み Runner。サービスはライフサイクルを所有しない |
-| `createTools` | 必須 | 信頼済み `ToolServiceContext` から `ToolSet` または Promise を返す。実行ノードで再構築 |
-| `enabled` | 必須 | `ToolSelection` またはコンテキスト関数。グループとツールの和集合から `exclude` を除く。`{}` はすべて無効 |
-| `authorize` | 必須 | `{ context, name, input, phase }`。`phase` は `submit` または `execute` で両方の許可が必要 |
-| `runTimeoutMs` | 300000 ミリ秒 | 実行期限。整数 1～86400000 |
-| `queueTimeoutMs` | 300000 ミリ秒 | 待機期限。整数 1～86400000 |
-
-`ToolServiceContext` は `scope: { tenantId, userId }` と任意の `sessionId/signal` を含みます。実際の `execution` は Runner 実行ノードが設定します。クライアントが申告した本人情報や実行コンテキストを受け入れないでください。
-
-`ToolSet` は `tools`、任意の `groups: { id, title, tools }[]` と `environments: Record<toolName, environmentId>` を含みます。環境割り当ては Runner 環境を指定し、実行ノードでも再確認します。`ToolSelection` の `groups/tools/exclude` は名前の配列です。
-
-カタログは各ツールの `authorize` を呼びません。利用者別の表示制限は `createTools/enabled` で行います。サーバーの認可と最終リソース検証は別途必要で、ボタンを隠すだけでは無効化できません。
-
-`service.submit/invoke` は同一ユーザー操作の idempotencyKey を維持します。受付不明時は新しいキーで重複提出せず `service.find(key, context)` で取得します。カタログ無効化後も本人の旧タスクは照会でき、本人・サービスの検証は維持します。
-
-[引数と手順の詳細](tools.md#services)
-
-#### 利用例：復元可能な業務タスク
-
-service を作り、catalog から選択して同じキーで submit/find、完全な receipt で inspect/cancel します。invoke は終端を待ち、close は借用 Runner を閉じません。
-
-#### 利用例：サーバータスクサービスを作る
-
-[Runner](runner.ja.md) をインストール・初期化して `/server` からインポートします。ホストが本人情報、有効化、認可、成果物アクセスを提供します。サービスは借りた Runner を初期化・終了しません。
+次の関数を最小構成の `sum-light.mts` に追加します。`await manageSum()` の成功結果には `totals: [5, 5]`、`removed: true`、`remaining: 0` が含まれます。関数は独自のローカルレジストリを作り、同じ `sum` ツールを使います。
 
 ```ts
-import type { RunnerFunctions } from '@h-ai/runner'
+async function manageSum() {
+  // 最小構成の tools と sum を使い、一括登録する。
+  const registry = tools.createRegistry()
+  const registered = registry.registerMany([sum])
+  if (!registered.success)
+    return registered
 
-import { type ToolArtifactAccess, tools } from '@h-ai/tools/server'
+  // 登録された一件を取得し、二つの足し算を順番に実行する。
+  const before = {
+    hasSum: registry.has('sum'),
+    size: registry.size,
+    names: registry.getNames(),
+    sameInstance: registry.get('sum') === sum,
+    definitions: registry.getDefinitions().map(definition => definition.name),
+  }
+  const results = await registry.executeAll([
+    { name: 'sum', input: { a: 2, b: 3 } },
+    { name: 'sum', input: { a: 1, b: 4 } },
+  ])
+  if (!results.success)
+    return results
 
-export function createDocumentService(runner: RunnerFunctions, files: ToolArtifactAccess) {
-  // 初期化済み Runner を借りて documents サービスを作り、documents と analysis を有効にする。成功時はサービス、設定や登録の失敗はエラー。
-  return tools.createService({
-    id: 'documents',
-    runner,
-    // 現在のコンテキストとホストのファイル権限で成果物ツール群を作る。保存フックがなければ artifact_save は含まれない。
-    createTools: context => tools.createArtifactTools({ context, files }),
-    enabled: { groups: ['documents', 'analysis'] },
-    authorize: ({ context }) => context.scope.userId.length > 0,
-  })
+  // 登録を明示的に置き換えて解除し、レジストリを空にする。
+  const replaced = registry.replace(sum)
+  if (!replaced.success)
+    return replaced
+  const removed = registry.unregister('sum')
+  registry.clear()
+  return { before, totals: results.data, removed, remaining: registry.size }
 }
 ```
 
-例は信頼済みユーザーの存在だけを確認します。`files.read/publish/save` は本人、リソース、最終確定条件も検証してください。本人情報はモデル引数ではなく `ToolServiceContext.scope` に渡します。
-
-業務結果は先に `success` を確認します。最終出力が必要な業務処理では `invoke`、長い画面操作では `submit/inspect` を使い、完全な受領情報と `queued/running/cancelling` などの実際の状態を保持します。キャンセルの応答だけではプロセス終了を証明できません。
-
-`enabled` は必須です。指定グループと個別ツールの和集合から `exclude` を除きます。空オブジェクトはすべて無効です。`catalog` はファクトリーと有効化ルールで作成し、個々の `authorize` は呼びません。利用者別の非表示はコンテキストに応じた `createTools/enabled` で実施します。提出時と実行ノードで集合を作り直して認可するため、古いカタログから無効化を回避できません。
-
-#### 利用例：送信後の復旧・状態確認・中止
-
-createDocumentService の成功データ、認証済みコンテキスト、カタログから選び検証した要求を使います。同じ冪等キーで送信・検索します。中止後も実際の状態を確認し、invoke で同じ要求の結果を待ちます。
-
-```ts
-import type { ToolService, ToolServiceContext, ToolSubmitRequest } from '@h-ai/tools/server'
-
-async function followJob(service: ToolService, context: ToolServiceContext, request: ToolSubmitRequest) {
-  // 信頼済みの主体で有効な定義とグループを取得する。提出と実行時には改めて権限を確認する。
-  const catalogResult = await service.catalog(context)
-  if (!catalogResult.success)
-    return catalogResult
-  const catalog = catalogResult.data
-  // catalog.tools describes what this context can submit.
-  const keyed = { ...request, idempotencyKey: 'demo-operation-42' }
-  // 冪等キー付きの要求をこの主体で提出する。成功時は実行状態と完全な受付、権限や提出の失敗は 元の失敗結果を返す。
-  const submittedResult = await service.submit(keyed, context)
-  if (!submittedResult.success)
-    return submittedResult
-  const submitted = submittedResult.data
-  // 同じ永続キーと主体で以前の実行を探す。見つからなければ undefined で、新規タスクは作らない。
-  const recoveredResult = await service.find(keyed.idempotencyKey, context)
-  if (!recoveredResult.success)
-    return recoveredResult
-  const recovered = recoveredResult.data
-  // recovered is the same logical run, or undefined if none was accepted.
-  // 完全な受付と現在の主体で状態・取得可能な出力・イベントを読む。主体が合わなければ失敗。
-  const currentResult = await service.inspect(submitted.receipt, context)
-  if (!currentResult.success)
-    return currentResult
-  const current = currentResult.data
-  // 同じ受付でキャンセルを要求し、実際の状態を受け取る。cancelling なら停止確認はまだ終わっていない。
-  const cancellingResult = await service.cancel(submitted.receipt, context)
-  if (!cancellingResult.success)
-    return cancellingResult
-  const cancelling = cancellingResult.data
-  // current/cancelling are ToolRun values; cancellation may still be in progress.
-  // 同じキーと主体で終端状態を待つ。成功時は JSON 出力、キャンセルや実行失敗はエラー。
-  return service.invoke(keyed, context)
-}
-// At application shutdown, after all users of the service finish:
-// service.close() returns void and leaves Runner open.
-```
+ツールをモデルから呼び出すには、同じレジストリを `ai.tools.adapt(registry)` に渡します。サービスはブローカー経由でネイティブエージェントにも接続できます。[AI ツールアダプターと MCP](ai.ja.md) を参照してください。
 
 <a id="artifact-jobs"></a>
 
-### 成果物・Web・文書ジョブの再利用：ツール工場
+### 成果物の作成、読み取り、分析
 
-ホストが許可済みファイル操作と環境対応を渡します。工場が一覧を返してもコンテナーは起動しません。
+Agent ワークスペースでは、プロジェクトのメモをファイル一覧に保存したり、月別の売上データから表とグラフを作って後で開いたりできます。ここでいう「成果物」は、このように保存されたコンテンツです。アプリはサーバー側で `tools.createArtifactTools({ context, files })` を呼び出して、ツールをファイルライブラリに接続します。`files` コールバックで権限を確認し、内容を保存・読み取りします。アプリの画面とエージェントはアプリのサービスを通じてツールを呼び出します。[Agent ワークスペースの連携](../development/agent.md)
+
+ファイルの保存先は、ホストが実装する `files` コールバックで決まります。このページの利用例は、プロセスが終了するまでファイルをメモリーに保持します。Agent ワークスペースは `@h-ai/storage` を利用し、既定ではサービスの作業ディレクトリにある `./data/uploads` にファイル本体を書き込みます。本番設定で `s3` を選ぶと、構成済みの S3 互換バケットに書き込みます。[保存先とファイル ID](../data/tools.ja.md#artifact-storage)
+
+`artifact_create` は既存のコンテンツを 1 件保存します。Markdown と HTML は本文を、表とグラフは JSON 文字列を渡します。`artifact_read` はファイル ID で本文を 1 件読み取ります。`data_analyze` は解析済みのデータ行 `rows` を受け取り、ファイルはその**出力**です。売上が Excel にある場合は、アプリがシートを先にデータ行へ変換します。ツールは集計値を返し、`files.publish` で表データとグラフ設定を 2 つの JSON ファイルとして保存します。利用者はファイル一覧から個別に開けます。
+
+ファクトリーは組み込みツールを `set.tools` に返します。`registry.registerMany(set.tools)` が `tool.name` で登録するため、`registry.execute('artifact_create', input)` で名前を指定して実行できます。作成に成功すると、タイトルと `artifact-1` のようなファイル ID を含む参照が返ります。画面はこの ID でファイルを開けます。エージェントが保存済みのメモを引き続き使うなど、コードから本文を再取得する場合に `artifact_read` を呼びます。
 
 #### インターフェース一覧
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `tools.createArtifactTools(options)` | 成果物・分析ツールを作成 | `options: ArtifactToolOptions`。`context` と `files` は必須です。 | `ToolSet` | `tools.createArtifactTools({ context, files })` |
-| `tools.createJobTools(options)` | 環境を割り当てた作業ツールを作成 | `options: JobToolOptions`。`context`、`files`、`runner`、`environments` は必須で、`browserProxy` は省略できます。 | `ToolSet` | `tools.createJobTools({ context, files, runner, environments })` |
+| `tools.createArtifactTools(options)` | 成果物と分析のツールを用意 | `options: ArtifactToolOptions`。`context` と `files` が必須 | `ToolSet` | `tools.createArtifactTools({ context, files })` |
+| `registry.execute('artifact_create', input)` | ファイル本文を保存 | `{ title, kind, content }`。すべて必須 | `HaiResult` の成功値は `ToolArtifactReference`。検証や公開に失敗するとエラー | `await registry.execute('artifact_create', { title: 'Project notes', kind: 'markdown', content: '# Project notes' })` |
+| `registry.execute('artifact_read', input)` | 保存したテキストを ID で取得 | `{ id }`。作成時の参照の ID | `HaiResult` の成功値は `{ id, content, version? }`。権限、ファイル形式、デコードのエラーを返す | `await registry.execute('artifact_read', { id })` |
+| `registry.execute('artifact_save', input)` | 指定した版を更新 | `{ id, baseVersion, content }`。すべて必須。ホストが `files.save` を提供する場合に有効 | `HaiResult` の成功値は新しい `ToolArtifactReference`。版の競合や権限エラーはホストが返す | `await registry.execute('artifact_save', { id, baseVersion: 1, content })` |
+| `registry.execute('data_analyze', input)` | データ行の集計と表・グラフの保存 | `{ title, rows, x, y, chartType? }`。`chartType` の既定値は `bar` | `HaiResult` の成功値は `{ statistics, artifacts }`。列が不足する場合や公開に失敗した場合はエラー | `await registry.execute('data_analyze', { title, rows, x: 'month', y: 'sales' })` |
 
-#### 成果物へのアクセスとジョブ環境の項目
+##### ホストのファイル操作
 
-| オブジェクトまたはコールバック | 項目 | 条件と結果 |
+| 項目 | 引数 | 成功値とホストの責任 |
 | --- | --- | --- |
-| `ArtifactToolOptions`、`JobToolOptions` | `context`、`files` | 信頼済みのサービスコンテキストとホストが認可する `ToolArtifactAccess` は必須 |
-| `files.read` | `context`、`{ id }` | 必須。現在の主体による成果物 ID の読み取りを認可し、`data: Uint8Array` を持つファイルを返す |
-| `files.publish` | `context`、`{ name, kind, mediaType, data, id? }` | 必須。公開を認可してバイト列を保存し、参照を返す。対象 ID は任意 |
-| `files.save` | `context`、`{ id, baseVersion, content }` | 任意。帰属と元の版を確認してテキストを保存し、新しい参照を返す。省略時は `artifact_save` を含めない |
-| `JobToolOptions` | `runner`、`environments`、`browserProxy` | 初期化済み Runner を借用する。`documents/office/ocr/browser/web/preview/video` に登録済み環境 ID を対応付ける。ネットワークを使うツールには、デプロイで管理する明示ポート付き HTTP IPv4 プロキシも必要。有効なプロキシがなければ対象ツールを一覧に含めない |
+| `context: ToolServiceContext` | 認証済みの `scope: { tenantId, userId }`。セッション ID や中止シグナルは任意 | 認証済みの主体をホストから渡す。実行用コンテキストは Runner の実行ノードが設定する |
+| `files.read` | `context`、`{ id }` | 必須。主体の読み取り権限を確認し、`data: Uint8Array` を含む `ToolArtifact` を返す |
+| `files.publish` | `context`、`{ name, kind, mediaType, data, id? }` | 必須。書き込みを認可してバイト列を保存し、`{ id, title, kind, mediaType, version }` を返す |
+| `files.save` | `context`、`{ id, baseVersion, content }` | 任意。主体、版、最終書き込み条件を確認し、更新した参照を返す |
 
-`environments: { documents: 'docs-offline' }` だけを指定すると文書グループのみ生成されます。成果物ファクトリーに `save` を追加すると `baseVersion` で本文を更新し、新しい参照を取得できます。版が競合した場合はホストのコールバックがエラーを返します。
+`artifact_create` の `kind` は `markdown`、`html`、`table`、`chart` です。表とグラフの本文は JSON オブジェクトを表す文字列です。`artifact_read` で読み取れるのは最大 1 MiB の UTF-8 Markdown、HTML、プレーンテキスト、JSON です。`data_analyze` には 1～2000 行を渡します。各行に `x` 列と有限の数値をもつ `y` 列が必要です。使えるグラフは `bar`、`line`、`area`、`pie`、`scatter` です。
 
-#### 利用例：成果物・Web・文書ジョブの再利用
+`createArtifactTools()` はツールを用意します。`artifact_create`、`artifact_read`、`artifact_save` を実行すると、1 回の呼び出しでファイル 1 件を処理します。レジストリを直接使う場合は、ファイルごとの呼び出しを `registry.executeAll()` で順番に実行できます。途中で失敗すると一括処理はエラーを返し、それまでに保存したファイルは残ります。Tools Runner では、新しいファイルごとにジョブを送信すると実行 ID と成果物 ID が別々になります。`data_analyze` は 1 回の呼び出しで同じデータから 2 種類の出力を作ります。
 
-認証済み context、認可付き files、初期化済み Runner、信頼済み環境対応表を渡します。返った ToolSet を createService.createTools で返します。工場自体はジョブを送らず、終了処理も持ちません。
+<a id="artifact-setup"></a>
+
+##### 成果物の利用例に共通するレジストリを用意する
+
+Node 26 のプロジェクトに依存関係を追加し、次のコードを `artifact-setup.mts` として保存します。以下の利用例はこのレジストリを読み込み、それぞれ独立して実行できます。デモでは認証済みユーザーを `demo/alice` とし、ファイルをメモリー内の `Map` に保存します。アプリに組み込むときは、2 つのファイルコールバックをファイルライブラリと権限チェックに接続します。
+
+```sh
+pnpm add @h-ai/core @h-ai/tools
+```
+
+<!-- example: tools-artifact-setup -->
 
 ```ts
+import type { ToolArtifact, ToolArtifactAccess, ToolServiceContext } from '@h-ai/tools/server'
+import { core } from '@h-ai/core'
+import { HaiToolsError } from '@h-ai/tools'
+import { tools } from '@h-ai/tools/server'
 
-import { type JobToolOptions, type ToolSet, tools } from '@h-ai/tools/server'
-
-function createWorkTools(options: JobToolOptions): ToolSet {
-  // ホストの主体とファイル権限で成果物ツールとグループを作る。保存ツールは save がある場合だけ追加される。
-  const artifacts = tools.createArtifactTools({ context: options.context, files: options.files })
-  // ホストの Runner、環境割り当て、ファイル権限からジョブツール群を作る。環境がなければ該当ツールは追加されない。
-  const jobs = tools.createJobTools(options)
-  return {
-    tools: [...artifacts.tools, ...jobs.tools],
-    groups: [...(artifacts.groups ?? []), ...(jobs.groups ?? [])],
-    environments: { ...artifacts.environments, ...jobs.environments },
-  }
+// demo/alice を認証済みの主体として扱う。ファイルはこの実行中だけメモリーに保存する。
+const owner = { tenantId: 'demo', userId: 'alice' }
+const stored = new Map<string, ToolArtifact>()
+function owns({ scope }: ToolServiceContext) {
+  return scope.tenantId === owner.tenantId && scope.userId === owner.userId
 }
-// The result includes artifact_create/read/save and data_analyze.
-// Job tools appear only for the environments present in options.environments.
+
+const files: ToolArtifactAccess = {
+  async read(context, { id }) {
+    if (!owns(context))
+      return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
+    const file = stored.get(id)
+    return file ? core.ok(file) : core.err(HaiToolsError.NOT_FOUND, 'Artifact not found')
+  },
+  async publish(context, { id = `artifact-${stored.size + 1}`, name, kind, mediaType, data }) {
+    if (!owns(context))
+      return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
+    const version = 1
+    stored.set(id, { id, name, kind, mediaType, data, version })
+    return core.ok({ id, title: name, kind, mediaType, version })
+  },
+}
+
+// 認証済みの主体とファイル操作を組み込みツールに結び付ける。save がないため artifact_save は含まれない。
+const set = tools.createArtifactTools({ context: { scope: owner }, files })
+// set.tools の定義と処理を一括登録する。登録の失敗はエラーとして扱う。
+export const registry = tools.createRegistry()
+const registered = registry.registerMany(set.tools)
+if (!registered.success)
+  throw new Error(registered.error.message)
 ```
+
+<a id="artifact-example"></a>
+
+#### 利用例：プロジェクトのメモを保存して後から開く
+
+Agent のツールワークスペースで「成果物を作成」を選び、「Markdown ノート」のプリセットでタイトルと本文を入力します。実行後、結果に出たメモのタイトルをクリックすると開けます。コードで本文が必要な場合は、作成結果のファイル ID を `artifact_read` に渡します。
+
+共通のレジストリを用意し、コードを同じディレクトリに `artifact-example.mts` として保存して `node artifact-example.mts` を実行します。[共通のレジストリの準備](#artifact-setup)
+
+<!-- example: tools-artifact -->
+
+```ts
+import process from 'node:process'
+import { registry } from './artifact-setup.mts'
+
+// レジストリから呼び出し名を取り出し、その中の artifact_create を名前で実行する。
+process.stdout.write(`tools: ${registry.getDefinitions().map(tool => tool.name).join(', ')}\n`)
+
+// 用意した Markdown を files.publish に渡す。成功すると ID、タイトル、バージョンが返る。
+const created = await registry.execute('artifact_create', {
+  title: 'Project notes',
+  kind: 'markdown',
+  content: '# Project notes\n',
+})
+if (!created.success)
+  throw new Error(created.error.message)
+if (!created.data || typeof created.data !== 'object' || !('id' in created.data) || typeof created.data.id !== 'string')
+  throw new TypeError('Expected an artifact reference')
+
+// 同じ id を使い、files.read から保存済みのメモを読み直す。
+// ファイルが見つからない場合や読み取り権限がない場合はエラーが返る。
+const loaded = await registry.execute('artifact_read', { id: created.data.id })
+if (!loaded.success)
+  throw new Error(loaded.error.message)
+if (!loaded.data || typeof loaded.data !== 'object' || !('content' in loaded.data) || typeof loaded.data.content !== 'string')
+  throw new TypeError('Expected artifact text')
+
+// 参照と、読み取った Markdown 本文を標準出力に表示する。
+process.stdout.write(`${JSON.stringify({ reference: created.data, content: loaded.data.content })}\n`)
+```
+
+最初の行には、登録後に呼び出せる 3 つの名前が表示されます。次の JSON には、ホストが発行した参照と初期バージョン、その ID で取得した本文が含まれます。
+
+```text
+tools: artifact_create, artifact_read, data_analyze
+```
+
+```json
+{"reference":{"id":"artifact-1","title":"Project notes","kind":"markdown","mediaType":"text/markdown","version":1},"content":"# Project notes\n"}
+```
+
+<a id="artifact-batch-example"></a>
+
+#### 利用例：会議の議題とアクション項目を保存して読み直す
+
+レジストリを直接使う会議アシスタントが、作成済みの議題とアクション項目を別々のファイルに保存し、それぞれの ID で読み直します。共通のレジストリを用意し、コードを `artifact-batch.mts` として保存して Node 26 で `node artifact-batch.mts` を実行します。[共通のレジストリの準備](#artifact-setup)
+
+<!-- example: tools-artifact-batch -->
+
+```ts
+import process from 'node:process'
+import { registry } from './artifact-setup.mts'
+
+// 2 つの本文を別々に保存する。各呼び出しが成功するとファイル参照が 1 件返る。
+const created = await registry.executeAll([
+  { name: 'artifact_create', input: { title: 'Meeting agenda', kind: 'markdown', content: '# Meeting agenda' } },
+  { name: 'artifact_create', input: { title: 'Action items', kind: 'markdown', content: '# Action items' } },
+])
+if (!created.success)
+  throw new Error(created.error.message)
+const reads = created.data.map((file) => {
+  if (!file || typeof file !== 'object' || !('id' in file) || typeof file.id !== 'string')
+    throw new TypeError('Expected an artifact reference')
+  return { name: 'artifact_read', input: { id: file.id } }
+})
+
+// 2 つのファイルを ID で読み取る。両方が成功すると呼び出し順に結果が返る。
+const loaded = await registry.executeAll(reads)
+if (!loaded.success)
+  throw new Error(loaded.error.message)
+process.stdout.write(`${JSON.stringify(loaded.data)}\n`)
+```
+
+`artifact-1` の `# Meeting agenda`、`artifact-2` の `# Action items` の順に出力されます。
+
+<a id="analysis-example"></a>
+
+#### 利用例：月別売上データから表とグラフを作る
+
+Agent のツールワークスペースで「データ分析」を選び、「月別売上」のプリセットで 2 行のデータを入力します。実行結果には集計値が表示されます。2 つのファイル ID は保存した表データとグラフ設定を指すため、実行後も個別に開けます。`rows` の `month` は横軸、`sales` は値です。
+
+共通のレジストリを用意し、コードを同じディレクトリに `analysis-example.mts` として保存して `node analysis-example.mts` を実行します。[共通のレジストリの準備](#artifact-setup)
+
+<!-- example: tools-analysis -->
+
+```ts
+import process from 'node:process'
+import { registry } from './artifact-setup.mts'
+
+// 1 月と 2 月の売上を集計する。成功すると集計値と表・グラフへの参照が返る。
+// 入力の検証やファイルの保存に失敗した場合はエラーが返る。
+const analysis = await registry.execute('data_analyze', {
+  title: 'Monthly sales',
+  rows: [{ month: 'Jan', sales: 10 }, { month: 'Feb', sales: 20 }],
+  x: 'month',
+  y: 'sales',
+  chartType: 'bar',
+})
+if (!analysis.success)
+  throw new Error(analysis.error.message)
+process.stdout.write(`${JSON.stringify(analysis.data)}\n`)
+```
+
+売上は 10 と 20 なので、`statistics` に合計 30 と平均 15 が表示されます。`artifacts` には `Monthly sales.table.json` と `Monthly sales.chart.json` の参照が入ります。前者には表の列と元の行が、後者には棒グラフのデータと軸の設定が入ります。ユーザーがグラフを開くと、アプリがその設定を使って描画します。
+
+<a id="standalone-jobs"></a>
+<a id="イメージジョブを直接実行する"></a>
+<a id="job-images"></a>
+
+### ジョブイメージの用途と呼び出し方
+
+`packages/tools/jobs` には 7 種類のイメージがあります。アプリは `@h-ai/tools-runner` から以下のツールを呼び出せます。シェルスクリプトからは、イメージ内の `hai-tool` に JSON リクエストを直接送れます。[ジョブの入力、出力、実行コマンド（中国語）](../../../packages/tools/jobs/README.md#job-operations)
+
+| イメージ | 用途と結果 | ツールサービスでの名前 |
+| --- | --- | --- |
+| [`documents`](../../../packages/tools/jobs/documents/README.md) | Word やテキスト層のある PDF から検索用の本文を抽出します。構造化されたレポートから DOCX、XLSX、PPTX を作成できます | `documents_extract`、`documents_generate` |
+| [`office`](../../../packages/tools/jobs/office/README.md) | Office ファイルをオンライン表示用の PDF に変換します。XLSX または ODS の数式を再計算し、同じ形式で保存できます | `office_convert`、`office_recalculate` |
+| [`ocr`](../../../packages/tools/jobs/ocr/README.md) | スキャン画像や写真の文字を検索可能なテキストに変換します | `ocr_recognize` |
+| [`browser`](../../../packages/tools/jobs/browser/README.md) | 管理プロキシがアクセスを許可した HTTPS ページのスクリーンショットを PNG で保存します | `browser_navigate` |
+| [`preview_build`](../../../packages/tools/jobs/preview_build/README.md) | 対応する Web プロジェクトの ZIP を、アプリでプレビューできる自己完結型の HTML に変換します | `preview_build` |
+| [`web_capture`](../../../packages/tools/jobs/web_capture/README.md) | 管理プロキシがアクセスを許可した HTTPS ページから、本文と、スクリーンショットや素材を含む ZIP を取得します | `web_capture` |
+| [`video_render`](../../../packages/tools/jobs/video_render/README.md) | 自己完結型の HTML アニメーションプロジェクト ZIP を、ダウンロードや埋め込みに使える MP4 に変換します | `video_render` |
+
+URL から編集可能な紹介動画を作る場合は、AI ツールの `website_video` が `web_capture` と `video_render` を組み合わせ、途中で原稿、絵コンテ、ナレーションを作成します。[Web サイトから動画を作る設定](tools-runner.ja.md#website-video)
+
+#### ツールサービスからジョブを呼び出す
+
+デプロイ時に各イメージを Runner 環境に割り当てます。`toolsRunner.createService()` の `createTools` コールバックで `toolsRunner.createJobTools()` が返すツールと環境の割り当てを渡し、`enabled` で公開するツールを選びます。実行ノードは、コンテナーの起動に必要な Runner 実行コンテキストを提供します。[環境の割り当てと接続例](tools-runner.ja.md#job-tools)
+
+例として、承認アプリで `office_convert` を有効にすると、ファイルのアップロード後にサーバー側の TypeScript API を呼び出せます。`service` は構成済みのツールサービス、`fileId` は保存したアップロードファイルの ID です。`context` はサーバーが認証結果から組み立てます。
+
+```ts
+// PDF 変換を投入して結果を待つ。認可、入力検証、変換に失敗するとエラーを返す。
+const converted = await service.invoke({
+  name: 'office_convert',
+  input: { fileId },
+}, context)
+if (!converted.success)
+  throw new Error(converted.error.message)
+```
+
+成功すると、`converted.data` の `artifacts` に PDF の参照が入ります。アプリは自身のファイルアクセス API で ID を指定して PDF を取得します。受領情報を先に返す場合は `service.submit()` を使い、その後 `service.inspect()` でジョブの状態と結果を確認します。[投入と結果待ちの API](tools-runner.ja.md#services)
+
+<a id="ジョブイメージで-office-文書を処理する"></a>
+
+#### 利用例：Word 契約書から本文を抽出する
+
+購買システムで納期を検索したり、エージェントに支払条件を要約させたりするには契約書の本文が必要です。`documents.extract` で Word 本文を抽出し、検索登録や要約に使います。過去の契約書を取り込む前に、ターミナルやスクリプトからイメージを起動し、1 件分の `.txt` を保存して抽出結果を確認できます。アプリでは、アップロード後にファイル ID をツールサービスの `documents_extract` に渡し、返された `text` を使って後続処理を行います。[ターミナルで抽出するコマンド（中国語）](../../../packages/tools/jobs/README.md#extract-contract-text) · [管理対象の文書抽出例](tools-runner.ja.md#managed-job-example)

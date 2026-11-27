@@ -2,18 +2,35 @@
 
 <a id="h-aitools-features"></a>
 
-Use `tools` to define, register and execute business tools. Ordinary business code, UI actions and AI can call the same implementation.
+Tools pairs input validation with a business function. Define, register, and run tools directly in Node or in the browser. Node applications can also create artifacts using host file callbacks.
 
 [Module README](../../../packages/tools/README.en.md) · [Configuration](../configuration/tools.en.md) · [Data ownership](../data/tools.en.md)
 
 ## Choose an entry point
 
-| Entry point | Use cases | Execution and lifecycle |
-| --- | --- | --- |
-| `@h-ai/tools` | Short business functions, browser-local tools and neutral definitions for model adapters | `tools.define/createRegistry` are pure definitions and factories. No `init/close`; no Runner or model SDK import |
-| `@h-ai/tools/server` | Recoverable tasks, progress, cancellation, documents and container jobs | Includes the lightweight methods plus `tools.createService/createArtifactTools/createJobTools` |
+- **Expose your own business operations.** Use `tools.define()` to give application pages or agents access to existing operations such as order and inventory lookups. [Order lookup example](#custom-tool-order) · [Quick start](#quick-start)
+- **Create and read artifacts.** Import `tools` from `@h-ai/tools/server` and give `tools.createArtifactTools()` the host file callbacks. [Artifact example](#artifact-example)
+- **Run ready-made job images.** Call container tools through the tool service, or run an image from a terminal or your own script. [Job images and how to call them](#job-images)
 
-The lightweight entry works in browsers, but a trusted server must still verify server-side access. Keep `/server` out of frontend imports.
+Browser code uses the `@h-ai/tools` root entry. Node applications can also use the artifact factory from `@h-ai/tools/server`.
+
+<a id="services"></a>
+<a id="service-example"></a>
+
+### Queue jobs and keep receipts
+
+Use `toolsRunner.createService()` from `@h-ai/tools-runner` to queue work, recover a job after disconnecting, or resume reading events. The service accepts tools you define and tools returned by the artifact factory. [Submit and recover tool jobs](tools-runner.en.md#quick-start)
+
+<a id="job-tools"></a>
+<a id="managed-job-example"></a>
+<a id="从项目构建网页预览"></a>
+<a id="web-preview"></a>
+<a id="build-a-website-preview-from-a-project"></a>
+<a id="从网址生成可编辑介绍视频"></a>
+<a id="website-video"></a>
+<a id="editable-introduction-videos-from-websites"></a>
+
+To run fixed images on worker nodes, add tools from `toolsRunner.createJobTools()` to the same service and bind them to registered Runner environments. [Managed container jobs and examples](tools-runner.en.md#job-tools)
 
 <a id="module-dependencies"></a>
 
@@ -21,81 +38,63 @@ The lightweight entry works in browsers, but a trusted server must still verify 
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
-| `@h-ai/core`, `zod` | Provide result handling, tool argument validation, and JSON Schema conversion | Installed with Tools. Declare `zod` as an app dependency when importing it to define arguments | Define tools and create registries as needed. No module initialization |
-| `@h-ai/runner` | Execute and resume recoverable tool runs and background jobs | When using server-side `createService()` or `createJobTools()` | The host initializes Runner and passes it to the factory. Register handlers before submitting jobs |
-| Runner container environments | Provide the engine and images for document, OCR, browser, and other standalone jobs | When using the corresponding `createJobTools()` jobs | Prepare execution nodes, then pass configured environment IDs to the factory |
-| Host file access interface | Read tool artifacts or provide file access to background jobs | When using `createArtifactTools()` or `createJobTools()` | Pass `files` restricted to the authenticated identity and scope when creating the tools |
+| `@h-ai/core`, `zod` | Shared results and input validation | Installed with Tools. Add any packages that your application imports directly. | For the root entry, define a tool or create a registry. |
+| Host file access | Read and write authorized files | Required by the artifact factory | Supply the host callbacks, then create artifact tools |
+| Podman or Docker | Run a fixed image directly | Required for standalone jobs. | Prepare the image and input files, then pass one JSON request. |
 
 <a id="quick-start"></a>
 
 ## Minimal integration
 
-### Example
+Use the lightweight entry to add two numbers. Install the dependencies in a Node project and save the code as `sum-light.mts`. The example runs TypeScript directly on Node 26 within the framework's supported versions.
 
 ```sh
-pnpm add @h-ai/tools @h-ai/core zod
+pnpm add @h-ai/tools zod@^4
+node sum-light.mts
 ```
 
-This is an ordinary business call. The registry includes only explicitly registered tools, and a trusted server supplies the identity.
+<!-- example: tools-light -->
 
 ```ts
 import { tools } from '@h-ai/tools'
 import { z } from 'zod'
+import process from 'node:process'
 
-export async function calculate(objectId: string) {
-  // Create an empty registry whose authorizer binds execution to the host's objectId.
-  const registry = tools.createRegistry({
-    authorize: ({ context }) => context.objectId === objectId,
-  })
-  // Define sum from the Zod inputs and addition handler below, then register it. Invalid definitions throw; registration has no success data and rejects duplicates.
-  const registered = registry.register(tools.define({
-    name: 'sum',
-    title: 'Sum',
-    description: 'Add two numbers',
-    examples: [{ label: '2 + 3', input: { a: 2, b: 3 } }],
-    parameters: z.object({ a: z.number(), b: z.number() }),
-    handler: ({ a, b }) => ({ total: a + b }),
-  }))
-  if (!registered.success)
-    return registered
-  // Execute sum(2, 3) as the host-verified objectId. Success yields { total: 5 }; validation or authorization failure skips the handler.
-  return registry.execute('sum', { a: 2, b: 3 }, { objectId })
-}
+const sum = tools.define({
+  name: 'sum',
+  description: 'Add two numbers',
+  parameters: z.object({ a: z.number(), b: z.number() }),
+  handler: ({ a, b }) => a + b,
+})
+const input = { a: 2, b: 3 }
+
+// Validate and run sum directly. On success, data is the number 5.
+const direct = await sum.execute(input)
+if (!direct.success)
+  throw new Error(direct.error.message)
+
+// Register the same tool, then run it by name with a trusted identity.
+const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'alice' })
+const registered = registry.register(sum)
+if (!registered.success)
+  throw new Error(registered.error.message)
+const named = await registry.execute('sum', input, { objectId: 'alice' })
+if (!named.success)
+  throw new Error(named.error.message)
+process.stdout.write(`${direct.data}, ${named.data}\n`)
 ```
 
-On success, `data` is `{ total: 5 }`. `title` is a UI label; the stable `name` identifies the tool in protocols and enablement rules. `examples` supplies form presets without executing or granting access. `tool.toDefinition()` and registry definitions preserve this metadata.
-
-Use `resultHandler` when an existing service returns `HaiResult`; use `handler` for plain data. Supply exactly one. Returning a failed `HaiResult` through `handler` would wrap it as successful data.
-
-```ts
-import type { HaiResult } from '@h-ai/core'
-import { tools } from '@h-ai/tools'
-import { z } from 'zod'
-
-export function createLookup(read: (id: string) => Promise<HaiResult<string>>) {
-  // Define an ID lookup tool using the supplied read function's HaiResult. The ID is nonempty; invalid definitions throw.
-  return tools.define({
-    name: 'document_lookup',
-    description: 'Read an authorized document',
-    parameters: z.object({ id: z.string().min(1) }),
-    resultHandler: ({ id }) => read(id),
-  })
-}
-```
+Standard output is `5, 5`. The first result comes from the direct call. The second goes through the registry, which authorizes `alice` and looks up the same tool by name. A server application should get the real `objectId` from authentication.
 
 <a id="api-reference"></a>
 
 ## Features
 
-Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
-
-Tools has no module-level init/close. Lightweight examples use the root export; server examples use the `/server` export. Each call checks HaiResult.success before reading data and returns the original failed result to its caller. Scenarios without a function declaration are fragments inside an async application function. Use isolated test data and explicit cleanup.
-
 <a id="definitions"></a>
 
 ### Define and execute a tool: `tools.define`
 
-Bind validation and a business function as a neutral tool. Definition does not execute it; execute produces the result.
+Use `tools.define()` when an agent needs to look up live orders, inventory, or other data from your application. The definition specifies the tool name, the arguments the model can supply, and the business function to run. Pages with a fixed action can call the existing application function directly.
 
 #### Interface list
 
@@ -113,8 +112,6 @@ Tool names contain 1–64 ASCII characters: start with a letter, followed by let
 
 `HaiToolsError` includes NOT_FOUND, ALREADY_REGISTERED, VALIDATION_FAILED, EXECUTION_FAILED, FORBIDDEN, TIMEOUT and CANCELLED under `hai:tools`. Input, authorization, timeout and cancellation failures return failed `HaiResult` values. `resultHandler` preserves existing business errors; model JSON parsing errors remain in the AI adapter.
 
-Fixed jobs map `TIMEOUT` to `HaiToolsError.TIMEOUT`, and unsafe Office documents/projects or other known input rejections to `VALIDATION_FAILED`. Missing sandbox support/dependencies, invalid worker output and unknown worker faults remain `EXECUTION_FAILED`; they are not classified as user input errors. Public messages are localized and do not expose raw worker messages. If both the operation and container cleanup fail, the cleanup error remains primary and `error.ext.operationError` retains the sanitized original operation error. A single failure does not add this extension.
-
 <a id="call-options"></a>
 
 ##### Call arguments
@@ -129,50 +126,61 @@ Fixed jobs map `TIMEOUT` to `HaiToolsError.TIMEOUT`, and unsafe Office documents
 | Definition | `handler` or `resultHandler` | Exactly one is required: plain data or an existing `HaiResult`, respectively |
 | Definition | `title/examples` | Optional UI label and `{ label, input }[]` presets; no authorization effect |
 | Definition | `timeoutMs` | Integer 0–2147483647 ms; default 30 seconds; 0 times out immediately |
-| Registry | `authorize` | Optional; every registry invocation must pass when configured |
+| Registry | `authorize` | Optional. Applies to `registry.execute()` and `executeAll()`. `registry.get()` returns the original tool instance for trusted host composition. |
 | Execution | `signal` | Cancellation signal forwarded to the handler |
 | Execution | `objectId/sessionId` | Trusted identity/session, not unauthenticated model input |
 | Execution | `deadline/timeoutMs` | Absolute deadline first, then call timeout, tool timeout, 30 seconds; includes validation, authorization and handler |
 | Execution | `authorize` | Additional per-call check; must pass alongside registry authorization |
 | Batch | `parallel` | Default false; enable only for operations that can run concurrently |
 
-Invalid names, default timeouts and handler combinations throw `TypeError` when defined. Business execution returns `HaiResult`. Registries only accept tools created by `tools.define`. Model parameters must convert to JSON Schema, usually object parameters.
-
-[Detailed parameters and workflows](tools.md#definitions)
-
-#### Scenario: Define and execute a tool
-
-Defining a tool does not run its handler. execute applies one cancellation/deadline boundary to input validation, authorization and execution.
+Zod validates input before authorization and execution. When two authorizers apply, both must pass in order. Cancellation or deadline expiry prevents the next authorizer from starting. Functions that have started should honor `signal`. For forms and catalogs, `toDefinition()` returns `name/description/inputSchema` and optional `title/examples`.
 
 ![Tool execution: validation, authorization and one deadline](../images/function-tools-execution.en.svg)
 
-Invalid input or rejected authorization never enters the handler. Registry and per-call authorizers must both allow execution. Timeout/cancellation stops waiting, but handlers must obey signal and external effects are not rolled back. handler values become data; resultHandler preserves HaiResult.
+<a id="custom-tool-order"></a>
+
+#### Scenario: Let a support assistant look up a shipment
+
+A customer asks whether order SO-1001 has shipped. The assistant extracts the order number and calls `lookup_order_delivery`. The server supplies the user ID from the authenticated session, and the order lookup uses both IDs. The tool returns the shipment status, carrier, and tracking number so the assistant can answer with current data.
+
+The demo uses one in-memory order and `alice` as the signed-in user. In your application, call your existing order service and pass `objectId` from authentication. Install `@h-ai/core`, `@h-ai/tools`, and `zod@^4`, save the code as `order-delivery.mts`, and run `node order-delivery.mts` with Node 26.
+
+<!-- example: tools-order-delivery -->
 
 ```ts
-// Keep imports at module scope; run the remaining fragment inside an async application function and return failures to its caller.
+import process from 'node:process'
+import { core } from '@h-ai/core'
+import { HaiToolsError, tools } from '@h-ai/tools'
 import { z } from 'zod'
-// Define sum using the numeric Zod rules and addition handler below. Success returns an executable tool; invalid definitions throw TypeError.
-const tool = tools.define({
-  name: 'sum', description: 'Add two numbers',
-  parameters: z.object({ a: z.number(), b: z.number() }),
-  handler: ({ a, b }) => ({ total: a + b }),
+
+const order = { orderNo: 'SO-1001', customerId: 'alice', status: 'shipped', carrier: 'Example Parcel', trackingNumber: 'EX-2048' }
+
+// Define the callable name and order number format. The handler checks ownership using the trusted identity.
+const lookupDelivery = tools.define({
+  name: 'lookup_order_delivery',
+  description: 'Look up the shipment and tracking number for an order',
+  parameters: z.object({ orderNo: z.string().regex(/^SO-\d{4}$/u) }),
+  resultHandler: ({ orderNo }, { objectId }) => {
+    if (order.orderNo !== orderNo || order.customerId !== objectId)
+      return core.err(HaiToolsError.NOT_FOUND, 'Order not found')
+    return core.ok({ status: order.status, carrier: order.carrier, trackingNumber: order.trackingNumber })
+  },
 })
-// Convert the tool metadata and parameter rules without arguments. The example reads name sum; unsupported conversion throws.
-tool.toDefinition().name // 'sum'; parameters are JSON Schema
-// Pass numbers 2 and 3 to sum. Success yields { total: 5 }; return the failed result if execution fails.
-const executeResult = await tool.execute({ a: 2, b: 3 })
-if (!executeResult.success)
-  return executeResult
-executeResult.data // { total: 5 }
-// Pass wrong as a string for a. The result is VALIDATION_FAILED and the addition handler is skipped.
-const invalid = await tool.execute({ a: 'wrong', b: 3 }) // success false: VALIDATION_FAILED
+
+const registry = tools.createRegistry()
+// Register the tool to call it by name. A duplicate name returns an error.
+const registered = registry.register(lookupDelivery)
+if (!registered.success)
+  throw new Error(registered.error.message)
+
+// Simulate the model's order number and the server's authenticated user. Success contains shipment details.
+const delivery = await registry.execute('lookup_order_delivery', { orderNo: 'SO-1001' }, { objectId: 'alice' })
+if (!delivery.success)
+  throw new Error(delivery.error.message)
+process.stdout.write(`${JSON.stringify(delivery.data)}\n`)
 ```
 
-Two numbers produce total=5; invalid a never reaches the handler. Use resultHandler for existing HaiResult services. Definition errors throw TypeError, execution failures return HaiResult.
-
-#### Development tests
-
-`pnpm --filter @h-ai/tools test` checks the kernel and service; `pnpm --filter @h-ai/tools test:jobs` checks job protocols. Real images and browser acceptance require the job environments separately. Unit results do not certify an image.
+The output is `{"status":"shipped","carrier":"Example Parcel","trackingNumber":"EX-2048"}`. Trying `objectId: 'bob'` returns an order-not-found error. To connect a model, pass the registry to `ai.tools.adapt(registry)`, give the definitions to the model, and execute the returned calls with the trusted identity. [Model call example](ai.en.md#model-tools)
 
 <a id="registry"></a>
 
@@ -200,252 +208,294 @@ The registry contains explicitly registered tools. Host authorization controls e
 
 #### Scenario: Register, find and execute tools
 
-```ts
-// Fragment inside an async application function; return failed results to its caller.
-// Continue with the sum tool from the preceding scenario.
-// Create an empty registry allowing execution only as demo-user in the trusted context.
-const registry = tools.createRegistry({ authorize: ({ context }) => context.objectId === 'demo-user' })
-// Register the sum instance defined above. Success has no data; a duplicate tool name fails.
-const registerResult = registry.register(tool)
-if (!registerResult.success)
-  return registerResult
-// Register an empty batch. Success has no data and the existing sum remains registered.
-const registerManyResult = registry.registerMany([])
-if (!registerManyResult.success)
-  return registerManyResult
-// no tools added
-registry.size // 1
-// Check the newly registered sum name; it returns true.
-registry.has('sum') // true
-// Look up the sum instance and convert its definition to read name sum. The optional lookup returns undefined if missing.
-registry.get('sum')?.toDefinition().name // 'sum'
-// List registered names without arguments; this yields ['sum'].
-registry.getNames() // ['sum']
-// Read the registered tool definitions and project their names to ['sum']. Unsupported input-rule conversion throws.
-registry.getDefinitions().map(definition => definition.name) // ['sum']
-// Run sum with 2 and 3 as trusted demo-user. Success yields { total: 5 }; denied or invalid calls are not run.
-const executeResult = await registry.execute('sum', { a: 2, b: 3 }, { objectId: 'demo-user' })
-if (!executeResult.success)
-  return executeResult
-executeResult.data // { total: 5 }
-// Execute one batched sum(4, 1) as demo-user, yielding [{ total: 5 }] in input order. Return the failed result on batch failure.
-const executeAllResult = await registry.executeAll([{ name: 'sum', input: { a: 4, b: 1 } }], { objectId: 'demo-user' })
-if (!executeAllResult.success)
-  return executeAllResult
-executeAllResult.data // [{ total: 5 }]
-// Replace the currently registered sum. Success has no data; invalid replacement keeps the existing tool.
-const replaceResult = registry.replace(tool)
-if (!replaceResult.success)
-  return replaceResult
-// same registered name
-// Remove the sum registration. This call returns true; a missing registration returns false.
-registry.unregister('sum') // true
-// Register the removed sum again in a one-item batch. Success has no data; a name conflict fails.
-const registerManyResult2 = registry.registerMany([tool])
-if (!registerManyResult2.success)
-  return registerManyResult2
-// Clear the registry with no arguments. sum is no longer present and nothing is returned.
-registry.clear() // undefined
-registry.size // 0
-```
-
-Only trusted demo-user is allowed here; derive real identities server-side. Registration returns void; queries return instances, definitions, names or counts. clear does not cancel in-flight work.
-
-#### Lifecycle and multiple nodes
-
-Tools has no global enable switch. Applications translate their own configuration into factories and `enabled`. Agent uses `workbench.selection` with groups/tools/exclude: omitting it selects default built-in groups; explicit `{}` disables all. See [Agent usage](../../../apps/agent/README.en.md#configuration) for its `workbench` switches, groups and environment mappings. Image/audio models remain in [AI configuration](../configuration/ai.md).
-
-Nodes of one service share the original Runner database and Storage, with consistent service IDs, definitions and environments. No new queue or state tables are created. API nodes may set Runner `executor: false`; executors use unique, restart-stable `nodeId` values. Execution nodes check current enablement and authorization again; frontend changes alone do not disable tools.
-
-Service `close()` unregisters its own handler without closing Runner. After cancellation, continue reading until a terminal state; stopping local waiting does not prove process termination.
-
-Parameters, each event and output also respect Runner's separate 512 KiB JSON bounds. The 50 MiB file and scratchMiB budgets are distinct; see [data boundaries](../data/tools.en.md#size-and-retention).
-
-[Detailed parameters and workflows](tools.md#registry)
-
-<a id="services"></a>
-
-### Submit recoverable tasks: `tools.createService`
-
-The server factory borrows Runner and connects catalogs, submission, receipts, inspection and cancellation into a recoverable workflow.
-
-#### Interface list
-
-| API | Purpose | Parameters and defaults | Return value or failure | Call example |
-| --- | --- | --- | --- | --- |
-| `tools.createService(options)` | Create a tool service borrowing Runner | `options: ToolServiceOptions`. `id`, `runner`, `createTools`, `enabled`, and `authorize` are required. | `HaiResult<ToolService>` | `tools.createService(options)` |
-| `service.catalog(context)` | List available tools | `context: ToolServiceContext`. Supply trusted context from the application. | `Promise<HaiResult<ToolCatalog>>` | `await service.catalog(context)` |
-| `service.submit(request, context)` | Submit a durable job | `request: ToolSubmitRequest, context: ToolServiceContext`. The request includes the tool name, input, and optional idempotency key. The application supplies the context. | `Promise<HaiResult<ToolRun>>` | `await service.submit(request, context)` |
-| `service.find(idempotencyKey, context)` | Find a job by its idempotency key | `idempotencyKey: string, context: ToolServiceContext` | `Promise<HaiResult<ToolRun \| undefined>>` | `await service.find(key, context)` |
-| `service.inspect(receipt, context, options?)` | Inspect job status and output | `receipt: ToolReceipt, context: ToolServiceContext, options?: { after?: number }`. Pass the complete receipt. Use `after` to resume after an event sequence number. | `Promise<HaiResult<ToolRun>>` | `await service.inspect(receipt, context)` |
-| `service.cancel(receipt, context)` | Request job cancellation | `receipt: ToolReceipt, context: ToolServiceContext`. Pass the complete job receipt and trusted context. | `Promise<HaiResult<ToolRun>>` | `await service.cancel(receipt, context)` |
-| `service.invoke(request, context)` | Invoke a tool and await its result | `request: ToolSubmitRequest, context: ToolServiceContext`. Uses the same request structure as `submit`. | `Promise<HaiResult<RunnerJson>>` | `await service.invoke(request, context)` |
-| `service.close()` | Close the service and owned resources | No arguments | `void` | `service.close()` |
-
-#### Service requests, trusted context, and event cursors
-
-| Object | Fields | Conditions and effect |
-| --- | --- | --- |
-| `ToolServiceContext` | `scope`, `sessionId`, `signal`, `execution` | The trusted `scope: { tenantId, userId }` is required with 1–200 characters per ID. Session ID (1–200 characters) and cancellation are optional. The execution node supplies its own `RunnerContext` as execution identity |
-| `ToolSubmitRequest` | `name`, `input`, `idempotencyKey` | Name and input are required. Use a tool from the enabled catalog and JSON matching its schema. An optional idempotency key has 1–200 characters, or omission generates a UUID. Supply a stable key to recover the same action after disconnection |
-| `ToolReceipt` | `id`, `key` | Both required. ID is a 64-digit hexadecimal execution ID and key has 1–200 characters. `inspect/cancel` verify both against the current principal and service. `find` takes the business idempotency key from submission |
-| `inspect` options | `after` | Optional integer 0–100000, default 0. Returns a page of up to 100 events with sequence greater than the cursor, plus current state and `next` |
-| `ToolServiceOptions.enabled` | `groups`, `tools`, `exclude` | Each is an optional array of names. Take the union of groups and tools and remove excluded names. An empty object disables all tools. Each execution still checks authorization |
-
-For events 5, 6, and 7, `inspect(receipt, context, { after: 5 })` returns 6 and 7. Continue with the returned `next`. Selection `{ groups: ['docs'], exclude: ['docs_export'] }` exposes the other registered tools in the docs group and submissions still pass through the authorization callback.
-
-##### Service factory parameters
-
-| Field | Requirement/default | Purpose |
-| --- | --- | --- |
-| `id` | Required, 1–60 letters, digits, underscores, dots or hyphens | Runner kind `hai.tools.<id>.v1`; identical across nodes of one service |
-| `runner` | Required | Initialized Runner; the service does not own its lifecycle |
-| `createTools` | Required | Trusted `ToolServiceContext` → `ToolSet` or Promise; rebuilt on the execution node |
-| `enabled` | Required | `ToolSelection` or context function; union groups/tools, then apply `exclude`; `{}` disables all |
-| `authorize` | Required | Receives `{ context, name, input, phase }`, with `phase: 'submit'` or `'execute'`; both must allow |
-| `runTimeoutMs` | 300000 ms | Execution timeout; integer 1–86400000 |
-| `queueTimeoutMs` | 300000 ms | Queue timeout; integer 1–86400000 |
-
-`ToolServiceContext` contains `scope: { tenantId, userId }` and optional `sessionId/signal`. The Runner executor supplies the real `execution` context. Do not accept identities or execution contexts claimed by clients.
-
-`ToolSet` contains `tools`, optional `groups: { id, title, tools }[]` and `environments: Record<toolName, environmentId>`. Environment bindings select Runner environments and are checked again at execution. `ToolSelection` has `groups/tools/exclude`, each an array of names.
-
-The catalog does not call `authorize` for every tool. Filter `createTools/enabled` by context to restrict visibility. Server authorization and final resource access still apply; hiding buttons does not disable execution.
-
-Keep one idempotencyKey per user intent for `service.submit/invoke`. If acceptance is unknown, recover with `service.find(key, context)` rather than resubmitting a new key. Catalog disabling does not prevent owned-task lookup; principal/service checks still apply.
-
-[Detailed parameters and workflows](tools.md#services)
-
-#### Scenario: Submit recoverable tasks
-
-Construct service, select from catalog, submit/find with one idempotency key and preserve the full receipt for inspect/cancel. invoke waits for a terminal result. close removes handlers without closing borrowed Runner.
-
-#### Scenario: Create a server task service
-
-Install and initialize [Runner](runner.en.md), then import from `/server`. The host supplies trusted identity, enablement, authorization and artifact access. The service neither initializes nor closes the borrowed Runner.
+Add the function below to the quick start's `sum-light.mts`. If you call `await manageSum()`, a successful result has `totals: [5, 5]`, `removed: true`, and `remaining: 0`. The function creates its own local registry and uses the same `sum` tool.
 
 ```ts
-import type { RunnerFunctions } from '@h-ai/runner'
+async function manageSum() {
+  // Use tools and sum from the quick start to register a batch atomically.
+  const registry = tools.createRegistry()
+  const registered = registry.registerMany([sum])
+  if (!registered.success)
+    return registered
 
-import { type ToolArtifactAccess, tools } from '@h-ai/tools/server'
+  // Read the one registration, then run two sums in order.
+  const before = {
+    hasSum: registry.has('sum'),
+    size: registry.size,
+    names: registry.getNames(),
+    sameInstance: registry.get('sum') === sum,
+    definitions: registry.getDefinitions().map(definition => definition.name),
+  }
+  const results = await registry.executeAll([
+    { name: 'sum', input: { a: 2, b: 3 } },
+    { name: 'sum', input: { a: 1, b: 4 } },
+  ])
+  if (!results.success)
+    return results
 
-export function createDocumentService(runner: RunnerFunctions, files: ToolArtifactAccess) {
-  // Create documents using the initialized Runner and enable documents and analysis. Success returns the service; invalid options or handler registration fail.
-  return tools.createService({
-    id: 'documents',
-    runner,
-    // Build artifact tools from the current context and host file access. Without a save hook, artifact_save is omitted.
-    createTools: context => tools.createArtifactTools({ context, files }),
-    enabled: { groups: ['documents', 'analysis'] },
-    authorize: ({ context }) => context.scope.userId.length > 0,
-  })
+  // Replace the entry explicitly, remove it, and clear this registry.
+  const replaced = registry.replace(sum)
+  if (!replaced.success)
+    return replaced
+  const removed = registry.unregister('sum')
+  registry.clear()
+  return { before, totals: results.data, removed, remaining: registry.size }
 }
 ```
 
-This example only checks that a trusted user exists. `files.read/publish/save` must also check the principal, resource and final commit conditions. Supply identity through `ToolServiceContext.scope`, never model parameters.
-
-Check `success` before reading business results. Use `invoke` when business code needs the final output. Long-running UI actions usually use `submit/inspect`, retain the entire receipt and display actual states including `queued/running/cancelling`. A cancellation receipt does not prove process exit.
-
-`enabled` is required: union the selected groups and individual tools, then apply `exclude`. An empty object disables everything. `catalog` uses the current factory and selection without calling per-tool `authorize`; use context-dependent `createTools/enabled` to hide tools by principal. Submission and execution rebuild the enabled set and authorize again, so an old catalog does not bypass disabling.
-
-#### Model adapters, cancellation and shared state
-
-Adapt a lightweight registry with `ai.tools.adapt(registry)`: `getDefinitions()` supplies model requests, while `execute(toolCall)` invokes the same registry. Server UIs and agents should likewise share one tool service and its authorization.
-
-Lightweight execution uses absolute `deadline`, then per-call `timeoutMs`, tool timeout, then 30 seconds. The deadline covers async validation, authorization and handler execution. Cancellation/timeouts stop waiting and forward the signal; uncooperative functions may continue. Runner confirms process termination and cleanup.
-
-The service registers Runner kind `hai.tools.<id>.v1` and reuses Runner tasks, leases and events. It creates no new queue or Tools state tables. Nodes use consistent service IDs, tool configuration, the shared Runner database and Storage. API nodes may use `executor: false`; execution nodes provide images and unique, restart-stable node IDs. Validate the full receipt against task, service and principal ownership rather than accepting only a task ID.
-
-Return authorized references for large artifacts. The host still checks file reads and publication. Keep secrets and image/audio/video bodies out of logs and events.
-
-#### Scenario: Submit, recover, inspect and cancel
-
-Use successful data from createDocumentService, a server-authenticated context and a validated request chosen from the catalog. Retain one idempotency key for submit and find. Inspect actual state after cancellation; invoke waits for the same request rather than creating a new intent.
-
-```ts
-import type { ToolService, ToolServiceContext, ToolSubmitRequest } from '@h-ai/tools/server'
-
-async function followJob(service: ToolService, context: ToolServiceContext, request: ToolSubmitRequest) {
-  // Read enabled definitions and groups for the trusted context. Submission and execution still authorize independently.
-  const catalogResult = await service.catalog(context)
-  if (!catalogResult.success)
-    return catalogResult
-  const catalog = catalogResult.data
-  // catalog.tools describes what this context can submit.
-  const keyed = { ...request, idempotencyKey: 'demo-operation-42' }
-  // Submit the keyed request for this principal. Success returns the run state and complete receipt; return the failed result on denial or submission failure.
-  const submittedResult = await service.submit(keyed, context)
-  if (!submittedResult.success)
-    return submittedResult
-  const submitted = submittedResult.data
-  // Find the prior run using the same durable key and principal. A miss returns undefined without submitting a task.
-  const recoveredResult = await service.find(keyed.idempotencyKey, context)
-  if (!recoveredResult.success)
-    return recoveredResult
-  const recovered = recoveredResult.data
-  // recovered is the same logical run, or undefined if none was accepted.
-  // Read status, available output, and events using the full receipt and current principal. A scope mismatch fails.
-  const currentResult = await service.inspect(submitted.receipt, context)
-  if (!currentResult.success)
-    return currentResult
-  const current = currentResult.data
-  // Request cancellation with the same receipt and receive the actual run state. cancelling means termination is still pending.
-  const cancellingResult = await service.cancel(submitted.receipt, context)
-  if (!cancellingResult.success)
-    return cancellingResult
-  const cancelling = cancellingResult.data
-  // current/cancelling are ToolRun values; cancellation may still be in progress.
-  // Wait for the terminal outcome using the same key and principal. Success yields JSON output; a cancelled or failed run returns an error.
-  return service.invoke(keyed, context)
-}
-// At application shutdown, after all users of the service finish:
-// service.close() returns void and leaves Runner open.
-```
+To expose a tool to a model, pass the same registry to `ai.tools.adapt(registry)`. A service can also connect to a native agent through the broker. See the [AI tool adapter and MCP reference](ai.en.md).
 
 <a id="artifact-jobs"></a>
 
-### Reuse artifacts, web and document jobs: tool factories
+### Create and read artifacts
 
-Provide authorized artifact access and environment bindings. Factories return tools; catalog construction does not launch jobs.
+In the Agent workspace, users can save a project note in their file library or turn monthly sales figures into a table and chart they can reopen. An artifact is a saved item like these. The application calls `tools.createArtifactTools({ context, files })` on the server to connect the tools to its file library. The `files` callbacks check access, save content, and read it back. Application pages and agents call these tools through the application service. [Agent workspace integration](../development/agent.md)
+
+The host's `files` callbacks determine where files are stored. The examples on this page keep files in memory until the process exits. The Agent workspace uses `@h-ai/storage` and defaults to writing bytes to `./data/uploads` relative to the service's working directory. With a production configuration that selects `s3`, it writes bytes to the configured S3-compatible bucket. [Storage locations and file IDs](../data/tools.en.md#artifact-storage)
+
+`artifact_create` saves one piece of existing content. Pass the body for Markdown or HTML, or a JSON string for a table or chart. `artifact_read` retrieves one body by file ID. `data_analyze` takes already parsed `rows`, and the files are its **outputs**. If sales data comes from Excel, the application first parses the worksheet into rows. The tool returns statistics and calls `files.publish` to create two JSON files, one for the table data and one for the chart configuration. Users can open each file separately from their library.
+
+The factory returns the built-in tools in `set.tools`. `registry.registerMany(set.tools)` registers them by `tool.name`, so `registry.execute('artifact_create', input)` can look up and call the tool. A successful creation returns a file reference with an ID such as `artifact-1` and the title. A page can use that ID to open the file. Call `artifact_read` when your code needs the content again, for example when an agent wants to continue working on the saved note.
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `tools.createArtifactTools(options)` | Create artifact and analysis tools | `options: ArtifactToolOptions`. `context` and `files` are required. | `ToolSet` | `tools.createArtifactTools({ context, files })` |
-| `tools.createJobTools(options)` | Create tools for bound job environments | `options: JobToolOptions`. `context`, `files`, `runner`, and `environments` are required. `browserProxy` is optional. | `ToolSet` | `tools.createJobTools({ context, files, runner, environments })` |
+| `tools.createArtifactTools(options)` | Obtain artifact and analysis tools for the current principal | `options: ArtifactToolOptions`. Supply the authenticated `context` and the host's `files` callbacks | `ToolSet` containing tools and groups. Validation and file access errors occur when a tool runs | `tools.createArtifactTools({ context, files })` |
 
-#### Artifact access and job environment fields
+##### Host options and file callbacks
 
-| Object or callback | Fields | Conditions and effect |
+| Field or callback | Input and behavior |
+| --- | --- |
+| `context` | Required `ToolServiceContext`. Bind `scope` from authentication and pass the request signal if available |
+| `files.read(context, { id })` | Required. Check access to `id` and return the file as `HaiResult<ToolArtifact>` with its bytes in `data: Uint8Array` |
+| `files.publish(context, { name, kind, mediaType, data, id? })` | Required. Check publication permission and return `HaiResult<ToolArtifactReference>` after storing the bytes. Honor the supplied ID when present and verify matching content on retries |
+| `files.save(context, { id, baseVersion, content })` | Optional. Check ownership and the base version before writing. Return the new reference, or a failure if the version changed. Provide this callback to include `artifact_save` |
+
+| Tool | Input | Successful data |
 | --- | --- | --- |
-| `ArtifactToolOptions`, `JobToolOptions` | `context`, `files` | Require the trusted service context and host-authorized `ToolArtifactAccess` |
-| `files.read` | `context`, `{ id }` | Required callback. Verify the current principal can read the artifact ID and return a file with `data: Uint8Array` |
-| `files.publish` | `context`, `{ name, kind, mediaType, data, id? }` | Required callback. Authorize publication, save the bytes, and return a reference. A target ID is optional |
-| `files.save` | `context`, `{ id, baseVersion, content }` | Optional callback. Verify ownership and the base version, save the text, and return a new reference. Omission excludes `artifact_save` |
-| `JobToolOptions` | `runner`, `environments`, `browserProxy` | Borrow an initialized Runner. Map `documents/office/ocr/browser/web/preview/video` to registered environment IDs. Networked tools also require a deployment-controlled HTTP IPv4 proxy with an explicit port. Tools needing a proxy are omitted without a valid one |
+| `artifact_create` | A trimmed `title` of 1–160 characters, `kind`, and string `content` of up to 1,048,576 characters. Kinds are `markdown`, `html`, `table` and `chart`. Table and chart text must represent JSON objects | An artifact reference with `id`, `title`, `kind`, numeric `version`, and `mediaType` |
+| `artifact_read` | The artifact `id` of 1–200 characters. Supports UTF-8 Markdown, HTML, plain text and JSON files up to 1 MiB | `{ id, version?, content }` with decoded text |
+| `artifact_save` | `id`, positive integer `baseVersion`, and replacement `content` | The saved artifact reference |
+| `data_analyze` | `title`, 1–2,000 `rows` with up to 50 distinct columns, and the `x` and `y` column names. The `y` column holds numbers. Choose `bar`, `line`, `area`, `pie`, or `scatter` for `chartType`, which defaults to `bar` | `{ statistics, artifacts }` containing count, sum, mean, minimum and maximum and the table and chart references |
 
-For `environments: { documents: 'docs-offline' }`, the job factory produces only the document group. Adding `save` to the artifact factory allows editing by `baseVersion` and returns a new reference. A version conflict is a host callback failure.
+See the [artifact data contract](../data/tools.en.md#artifact-access) for storage ownership and reference fields.
 
-#### Scenario: Reuse artifacts, web and document jobs
+`createArtifactTools()` constructs the tools. `artifact_create`, `artifact_read`, and `artifact_save` each handle one file per call. With a direct registry, use `registry.executeAll()` to run one call per file in sequence. A failed call returns an error for the batch. Files saved earlier remain available. With Tools Runner, submit a separate task for each new file so it has its own execution ID and artifact ID. A single `data_analyze` call produces two fixed outputs from the same data.
 
-The host supplies authenticated context, authorized file access, an initialized Runner and trusted environment mappings. Return the resulting ToolSet from createService.createTools. These factories neither submit jobs nor own resources to close.
+<a id="artifact-setup"></a>
+
+##### Set up the registry for the artifact examples
+
+In a Node 26 project, install the dependencies and save the code as `artifact-setup.mts`. Each of the following scenarios imports this registry and runs independently. The demo uses `demo/alice` as the authenticated user and stores files in an in-memory `Map`. In an application, connect these two file callbacks to your file library and permission checks.
+
+```sh
+pnpm add @h-ai/core @h-ai/tools
+```
+
+<!-- example: tools-artifact-setup -->
 
 ```ts
+import type { ToolArtifact, ToolArtifactAccess, ToolServiceContext } from '@h-ai/tools/server'
+import { core } from '@h-ai/core'
+import { HaiToolsError } from '@h-ai/tools'
+import { tools } from '@h-ai/tools/server'
 
-import { type JobToolOptions, type ToolSet, tools } from '@h-ai/tools/server'
-
-function createWorkTools(options: JobToolOptions): ToolSet {
-  // Create artifact tools and groups using the host context and file access. Saving is present only with a save capability.
-  const artifacts = tools.createArtifactTools({ context: options.context, files: options.files })
-  // Build the job tool set from the host's Runner, environment mappings, and file access. Unbound environments add no tools.
-  const jobs = tools.createJobTools(options)
-  return {
-    tools: [...artifacts.tools, ...jobs.tools],
-    groups: [...(artifacts.groups ?? []), ...(jobs.groups ?? [])],
-    environments: { ...artifacts.environments, ...jobs.environments },
-  }
+// Simulate an authenticated demo/alice principal. Keep file bytes in memory for this run.
+const owner = { tenantId: 'demo', userId: 'alice' }
+const stored = new Map<string, ToolArtifact>()
+function owns({ scope }: ToolServiceContext) {
+  return scope.tenantId === owner.tenantId && scope.userId === owner.userId
 }
-// The result includes artifact_create/read/save and data_analyze.
-// Job tools appear only for the environments present in options.environments.
+
+const files: ToolArtifactAccess = {
+  async read(context, { id }) {
+    if (!owns(context))
+      return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
+    const file = stored.get(id)
+    return file ? core.ok(file) : core.err(HaiToolsError.NOT_FOUND, 'Artifact not found')
+  },
+  async publish(context, { id = `artifact-${stored.size + 1}`, name, kind, mediaType, data }) {
+    if (!owns(context))
+      return core.err(HaiToolsError.FORBIDDEN, 'Artifact access denied')
+    const version = 1
+    stored.set(id, { id, name, kind, mediaType, data, version })
+    return core.ok({ id, title: name, kind, mediaType, version })
+  },
+}
+
+// Bind the authenticated principal and file callbacks to the built-in tools. Without save, the set omits artifact_save.
+const set = tools.createArtifactTools({ context: { scope: owner }, files })
+// Register the definitions and handlers in set.tools as a batch. Report any registration error.
+export const registry = tools.createRegistry()
+const registered = registry.registerMany(set.tools)
+if (!registered.success)
+  throw new Error(registered.error.message)
 ```
+
+<a id="artifact-example"></a>
+
+#### Scenario: Save a project note and open it later
+
+In the Agent tool workspace, choose **Create artifact** and use the **Markdown note** preset to fill in the title and body. Run the tool and click the note's title in the result to open it. When a caller needs the note text in code, it passes the file ID from the creation result to `artifact_read`.
+
+After setting up the registry, save the code as `artifact-example.mts` in the same directory and run `node artifact-example.mts`. [Shared registry setup](#artifact-setup)
+
+<!-- example: tools-artifact -->
+
+```ts
+import process from 'node:process'
+import { registry } from './artifact-setup.mts'
+
+// Read the actual call names from the registry, then call artifact_create by name.
+process.stdout.write(`tools: ${registry.getDefinitions().map(tool => tool.name).join(', ')}\n`)
+
+// Pass the existing Markdown to files.publish. Success returns the file ID, title, and version.
+const created = await registry.execute('artifact_create', {
+  title: 'Project notes',
+  kind: 'markdown',
+  content: '# Project notes\n',
+})
+if (!created.success)
+  throw new Error(created.error.message)
+if (!created.data || typeof created.data !== 'object' || !('id' in created.data) || typeof created.data.id !== 'string')
+  throw new TypeError('Expected an artifact reference')
+
+// Reopen the saved note by passing its ID through to files.read.
+// A missing file or denied access returns an error.
+const loaded = await registry.execute('artifact_read', { id: created.data.id })
+if (!loaded.success)
+  throw new Error(loaded.error.message)
+if (!loaded.data || typeof loaded.data !== 'object' || !('content' in loaded.data) || typeof loaded.data.content !== 'string')
+  throw new TypeError('Expected artifact text')
+
+// Print the host-generated reference and the text retrieved by ID.
+process.stdout.write(`${JSON.stringify({ reference: created.data, content: loaded.data.content })}\n`)
+```
+
+The first line lists the three names available after registration. The JSON on the second line contains the host's reference, the initial version, and the original Markdown retrieved by ID.
+
+```text
+tools: artifact_create, artifact_read, data_analyze
+```
+
+```json
+{
+  "reference": {
+    "id": "artifact-1",
+    "title": "Project notes",
+    "kind": "markdown",
+    "mediaType": "text/markdown",
+    "version": 1
+  },
+  "content": "# Project notes\n"
+}
+```
+
+<a id="artifact-batch-example"></a>
+
+#### Scenario: Save and reopen a meeting agenda and action items
+
+A meeting assistant using a registry directly has drafted an agenda and action items. It saves them as two files and reads each back by its own ID. Set up the shared registry, save this code as `artifact-batch.mts`, and run `node artifact-batch.mts` with Node 26. [Shared registry setup](#artifact-setup)
+
+<!-- example: tools-artifact-batch -->
+
+```ts
+import process from 'node:process'
+import { registry } from './artifact-setup.mts'
+
+// Save the two bodies separately. Each successful call returns one file reference.
+const created = await registry.executeAll([
+  { name: 'artifact_create', input: { title: 'Meeting agenda', kind: 'markdown', content: '# Meeting agenda' } },
+  { name: 'artifact_create', input: { title: 'Action items', kind: 'markdown', content: '# Action items' } },
+])
+if (!created.success)
+  throw new Error(created.error.message)
+const reads = created.data.map((file) => {
+  if (!file || typeof file !== 'object' || !('id' in file) || typeof file.id !== 'string')
+    throw new TypeError('Expected an artifact reference')
+  return { name: 'artifact_read', input: { id: file.id } }
+})
+
+// Read both files by ID. If both calls succeed, the results follow the order of the requests.
+const loaded = await registry.executeAll(reads)
+if (!loaded.success)
+  throw new Error(loaded.error.message)
+process.stdout.write(`${JSON.stringify(loaded.data)}\n`)
+```
+
+The output contains `# Meeting agenda` from `artifact-1` followed by `# Action items` from `artifact-2`.
+
+<a id="analysis-example"></a>
+
+#### Scenario: Produce a table and chart from sales rows
+
+In the Agent tool workspace, choose **Analyze data** and use the **Monthly sales** preset to enter two rows. After the run, the statistics appear in the result. The two file IDs point to the saved table data and chart configuration so users can reopen them later. In `rows`, `month` is the horizontal axis and `sales` supplies the values.
+
+After setting up the registry, save the code as `analysis-example.mts` in the same directory and run `node analysis-example.mts`. [Shared registry setup](#artifact-setup)
+
+<!-- example: tools-analysis -->
+
+```ts
+import process from 'node:process'
+import { registry } from './artifact-setup.mts'
+
+// Chart the January and February sales. Success returns statistics and two references.
+// Invalid input or a publication failure returns an error.
+const analyzed = await registry.execute('data_analyze', {
+  title: 'Monthly sales',
+  rows: [{ month: 'Jan', sales: 10 }, { month: 'Feb', sales: 20 }],
+  x: 'month',
+  y: 'sales',
+  chartType: 'bar',
+})
+if (!analyzed.success)
+  throw new Error(analyzed.error.message)
+process.stdout.write(JSON.stringify(analyzed.data) + '\n')
+```
+
+The two sales values are 10 and 20, so `statistics` reports a sum of 30 and a mean of 15. The `artifacts` array contains references to `Monthly sales.table.json` and `Monthly sales.chart.json`. The first file holds the table columns and source rows. The second holds the data and axes for a bar chart. The application reads that configuration to render the chart when the user opens it.
+
+<a id="standalone-jobs"></a>
+<a id="run-a-standalone-image-job"></a>
+<a id="job-images"></a>
+
+### Job images and how to call them
+
+`packages/tools/jobs` provides seven images. Applications can call the tools below through `@h-ai/tools-runner`. Shell scripts can send a JSON request directly to `hai-tool` inside each image. [Job inputs, outputs, and terminal commands in Chinese](../../../packages/tools/jobs/README.md#job-operations)
+
+| Image | Use and result | Tool service name |
+| --- | --- | --- |
+| [`documents`](../../../packages/tools/jobs/documents/README.md) | Extract searchable text from Word files or PDFs with a text layer. Generate a DOCX, XLSX, or PPTX from structured report content | `documents_extract`, `documents_generate` |
+| [`office`](../../../packages/tools/jobs/office/README.md) | Convert an Office file to PDF for online preview. Recalculate formulas in an XLSX or ODS file and save the result in the same format | `office_convert`, `office_recalculate` |
+| [`ocr`](../../../packages/tools/jobs/ocr/README.md) | Turn text in a scan or photograph into searchable text | `ocr_recognize` |
+| [`browser`](../../../packages/tools/jobs/browser/README.md) | Save a PNG screenshot of an HTTPS page allowed by the controlled proxy | `browser_navigate` |
+| [`preview_build`](../../../packages/tools/jobs/preview_build/README.md) | Build a supported web project ZIP into self-contained HTML for an in-app preview | `preview_build` |
+| [`web_capture`](../../../packages/tools/jobs/web_capture/README.md) | Capture an HTTPS page allowed by the controlled proxy and return its text and a ZIP containing screenshots and assets | `web_capture` |
+| [`video_render`](../../../packages/tools/jobs/video_render/README.md) | Render a self-contained HTML animation project ZIP as an MP4 for download or embedding | `video_render` |
+
+To create an editable intro video from a URL, the AI tool `website_video` combines `web_capture` and `video_render`, generating the script, storyboard, and narration between the two jobs. [Website-to-video setup](tools-runner.en.md#website-video)
+
+#### Call a job through the tool service
+
+The deployment binds the images to Runner environments. In `toolsRunner.createService()`, the `createTools` callback returns the tools and environment bindings from `toolsRunner.createJobTools()`. The `enabled` option selects the tools to expose. The worker supplies the Runner execution context needed to start the container. [Environment bindings and complete setup](tools-runner.en.md#job-tools)
+
+For example, an approval application with `office_convert` enabled can call the server-side TypeScript API after an upload. `service` is the configured tool service, `fileId` identifies the saved upload, and the server builds `context` from the authenticated identity.
+
+```ts
+// Submit the PDF conversion and wait for its result. Authorization, validation, and conversion failures return errors.
+const converted = await service.invoke({
+  name: 'office_convert',
+  input: { fileId },
+}, context)
+if (!converted.success)
+  throw new Error(converted.error.message)
+```
+
+On success, `converted.data` includes the PDF reference in `artifacts`. The application uses its own file access API to retrieve the PDF by ID. To return a receipt first, use `service.submit()`, then call `service.inspect()` for the job status and result. [Submit and wait APIs](tools-runner.en.md#services)
+
+<a id="process-office-documents-with-job-images"></a>
+
+#### Scenario: Extract text from a Word contract
+
+A purchasing system needs contract text so staff can search by delivery date or an agent can summarize the payment terms. `documents.extract` extracts Word text for indexing or summarization. Before importing older contracts, run the image in a terminal or script and save the results from one contract as a `.txt` file for inspection. After an upload, the application can pass the file ID to `documents_extract` through the tool service and use the returned `text`. [Terminal extraction command in Chinese](../../../packages/tools/jobs/README.md#extract-contract-text) · [Managed document job example](tools-runner.en.md#managed-job-example)

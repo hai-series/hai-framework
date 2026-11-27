@@ -2,35 +2,34 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
-モデルに依存しないツール定義、検証、登録、認可付き実行。軽量エントリーは初期化なしで Node とブラウザーに対応します。`@h-ai/tools/server` は再開可能なサービスと成果物・ジョブファクトリーを提供し、Runner とホストの認可を再利用します。
+Tools は Node.js とブラウザーで業務ツールを定義、検証、認可して呼び出します。Node.js ではホストのファイル操作で成果物を扱えます。ツールを永続キューに投入する場合は [Tools Runner](../tools-runner/README.ja.md) を使用します。
 
 ## クイックスタート
 
-`pnpm add @h-ai/tools zod` でインストールします。
+```sh
+pnpm add @h-ai/tools zod
+```
 
-[最小構成とカスタムツール](../../docs/usage/function/tools.ja.md#quick-start)
-
-[依存関係と初期化順序](../../docs/usage/function/tools.ja.md#module-dependencies)を参照してください。
+`@h-ai/tools` の `tools` で `sum` を定義して直接実行すると `5` が返ります。 [クイックスタート](../../docs/usage/function/tools.ja.md#quick-start) · [依存関係](../../docs/usage/function/tools.ja.md#module-dependencies)
 
 ## 設定一覧
 
-独立した実行時設定ファイルはありません。[ファイルの所有者](../../docs/usage/configuration/tools.ja.md)と[引数・応答のリファレンス](../../docs/usage/function/tools.ja.md#call-options)。
+ツールを定義するときやレジストリを作るときに設定を渡します。成果物ツールには認可済みのファイル操作を渡します。 [設定入口](../../docs/usage/configuration/tools.ja.md)
 
 ## 機能
 
-[公開 API とモデルアダプター](../../docs/usage/function/tools.ja.md)
+ルート入口は `tools.define()` と `tools.createRegistry()` を提供します。Node.js では `@h-ai/tools/server` の `tools.createArtifactTools()` を使えます。 [API リファレンス](../../docs/usage/function/tools.ja.md#api-reference)
+
+`packages/tools/jobs` には `hai-tool` の実装とジョブ用 Dockerfile が含まれます。イメージをビルドしてターミナルで 1 件の要求を処理するか、Tools Runner で同じイメージをアプリに接続できます。 [ジョブイメージ一覧と利用手順（中国語）](jobs/README.md#job-images)
 
 ## データ構造
 
-[登録情報と実行データの所有者](../../docs/usage/data/tools.ja.md)
+現在のプロセスが定義と登録情報を保持します。成果物の内容、バージョン、所有者はホストが管理します。 [プロセス内データと成果物](../../docs/usage/data/tools.ja.md)
 
 ## 開発とテスト
 
 ```sh
-pnpm --filter @h-ai/tools typecheck
-pnpm --filter @h-ai/tools lint
-pnpm --filter @h-ai/tools build
-pnpm --filter @h-ai/tools test
+pnpm exec turbo run typecheck lint build test --filter=@h-ai/tools
 pnpm --filter @h-ai/tools test:jobs
 ```
 

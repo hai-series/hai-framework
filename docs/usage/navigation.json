@@ -90,6 +90,7 @@
         { "id": "configuration-module-serv", "title": "@h-ai/serv", "path": "configuration/serv.md" },
         { "id": "configuration-module-storage", "title": "@h-ai/storage", "path": "configuration/storage.md" },
         { "id": "configuration-module-tools", "title": "@h-ai/tools", "path": "configuration/tools.md" },
+        { "id": "configuration-module-tools-runner", "title": "@h-ai/tools-runner", "path": "configuration/tools-runner.md" },
         { "id": "configuration-module-ui", "title": "@h-ai/ui", "path": "configuration/ui.md" },
         { "id": "configuration-module-vecdb", "title": "@h-ai/vecdb", "path": "configuration/vecdb.md" }
       ]
@@ -143,6 +144,7 @@
         { "id": "data-module-serv", "title": "@h-ai/serv", "path": "data/serv.md" },
         { "id": "data-module-storage", "title": "@h-ai/storage", "path": "data/storage.md" },
         { "id": "data-module-tools", "title": "@h-ai/tools", "path": "data/tools.md" },
+        { "id": "data-module-tools-runner", "title": "@h-ai/tools-runner", "path": "data/tools-runner.md" },
         { "id": "data-module-ui", "title": "@h-ai/ui", "path": "data/ui.md" },
         { "id": "data-module-vecdb", "title": "@h-ai/vecdb", "path": "data/vecdb.md" }
       ]
@@ -175,6 +177,7 @@
         { "id": "function-module-serv", "title": "@h-ai/serv", "path": "function/serv.md" },
         { "id": "function-module-storage", "title": "@h-ai/storage", "path": "function/storage.md" },
         { "id": "function-module-tools", "title": "@h-ai/tools", "path": "function/tools.md" },
+        { "id": "function-module-tools-runner", "title": "@h-ai/tools-runner", "path": "function/tools-runner.md" },
         { "id": "function-module-ui", "title": "@h-ai/ui", "path": "function/ui.md" },
         { "id": "function-module-vecdb", "title": "@h-ai/vecdb", "path": "function/vecdb.md" }
       ]

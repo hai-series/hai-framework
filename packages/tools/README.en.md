@@ -2,35 +2,34 @@
 
 [简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
-Model-independent tool definitions, validation, registration and authorized execution. The lightweight entry works in Node and browsers without initialization. `@h-ai/tools/server` provides recoverable services and artifact/job factories using Runner and host authorization.
+Tools defines, validates, authorizes, and calls business tools in Node and the browser. Node applications can create and read artifacts using host file callbacks. To queue tool calls durably, install [Tools Runner](../tools-runner/README.en.md).
 
 ## Quick Start
 
-Install with pnpm: `pnpm add @h-ai/tools zod`.
+```sh
+pnpm add @h-ai/tools zod
+```
 
-[Minimal integration and custom tools](../../docs/usage/function/tools.en.md#quick-start)
-
-[Dependencies and setup order](../../docs/usage/function/tools.en.md#module-dependencies).
+Import `tools` from `@h-ai/tools`, define `sum`, and call it directly to get `5`. [Quick start](../../docs/usage/function/tools.en.md#quick-start) · [Dependencies](../../docs/usage/function/tools.en.md#module-dependencies)
 
 ## Configuration Reference
 
-This module has no standalone runtime configuration file. See [file ownership](../../docs/usage/configuration/tools.en.md); arguments or response structures are in the [reference](../../docs/usage/function/tools.en.md#call-options).
+Pass options when defining tools or creating a registry. Supply authorized file callbacks when creating artifact tools. [Configuration](../../docs/usage/configuration/tools.en.md)
 
 ## Features
 
-[Public operations and model adapters](../../docs/usage/function/tools.en.md)
+The root entry provides `tools.define()` and `tools.createRegistry()`. Use `tools.createArtifactTools()` from `@h-ai/tools/server` in Node. [API reference](../../docs/usage/function/tools.en.md#api-reference)
+
+`packages/tools/jobs` contains the `hai-tool` implementation and the job Dockerfiles. Build an image and run it from the terminal for a single request, or connect the same image to an application through Tools Runner. [Job image list and guides in Chinese](jobs/README.md#job-images)
 
 ## Data Structures
 
-[Registry and execution data ownership](../../docs/usage/data/tools.en.md)
+The current process holds tool definitions and registrations. The host stores artifact bytes, versions, and ownership. [In-process data and artifacts](../../docs/usage/data/tools.en.md)
 
 ## Development and Testing
 
 ```sh
-pnpm --filter @h-ai/tools typecheck
-pnpm --filter @h-ai/tools lint
-pnpm --filter @h-ai/tools build
-pnpm --filter @h-ai/tools test
+pnpm exec turbo run typecheck lint build test --filter=@h-ai/tools
 pnpm --filter @h-ai/tools test:jobs
 ```
 

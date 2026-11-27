@@ -35261,12 +35261,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "JobToolOptions",
-              "kind": "type",
-              "declaration": "JobToolOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ToolArtifact",
               "kind": "type",
               "declaration": "ToolArtifact",
@@ -35297,16 +35291,16 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "ToolReceipt",
+              "name": "ToolInvoker",
               "kind": "type",
-              "declaration": "ToolReceipt",
+              "declaration": "ToolInvoker",
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "ToolRun",
+              "name": "ToolJson",
               "kind": "type",
-              "declaration": "ToolRun",
-              "declarationKind": "InterfaceDeclaration"
+              "declaration": "ToolJson",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "tools",
@@ -35321,27 +35315,9 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "ToolService",
-              "kind": "type",
-              "declaration": "ToolService",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolServiceAuthorization",
-              "kind": "type",
-              "declaration": "ToolServiceAuthorization",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ToolServiceContext",
               "kind": "type",
               "declaration": "ToolServiceContext",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolServiceOptions",
-              "kind": "type",
-              "declaration": "ToolServiceOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -35379,12 +35355,6 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "JobToolOptions",
-              "kind": "type",
-              "declaration": "JobToolOptions",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ToolArtifact",
               "kind": "type",
               "declaration": "ToolArtifact",
@@ -35415,16 +35385,16 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "ToolReceipt",
+              "name": "ToolInvoker",
               "kind": "type",
-              "declaration": "ToolReceipt",
+              "declaration": "ToolInvoker",
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "ToolRun",
+              "name": "ToolJson",
               "kind": "type",
-              "declaration": "ToolRun",
-              "declarationKind": "InterfaceDeclaration"
+              "declaration": "ToolJson",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "tools",
@@ -35439,27 +35409,9 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
-              "name": "ToolService",
-              "kind": "type",
-              "declaration": "ToolService",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolServiceAuthorization",
-              "kind": "type",
-              "declaration": "ToolServiceAuthorization",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ToolServiceContext",
               "kind": "type",
               "declaration": "ToolServiceContext",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
-              "name": "ToolServiceOptions",
-              "kind": "type",
-              "declaration": "ToolServiceOptions",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -35479,6 +35431,203 @@
               "kind": "type",
               "declaration": "ToolSubmitRequest",
               "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "package": "@h-ai/tools-runner",
+      "entries": [
+        {
+          "subpath": ".",
+          "conditions": [
+            "default"
+          ],
+          "target": "./dist/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "JobToolOptions",
+              "kind": "type",
+              "declaration": "JobToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerToolServiceContext",
+              "kind": "type",
+              "declaration": "RunnerToolServiceContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerToolSet",
+              "kind": "type",
+              "declaration": "RunnerToolSet",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolReceipt",
+              "kind": "type",
+              "declaration": "ToolReceipt",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolService",
+              "kind": "type",
+              "declaration": "ToolService",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceAuthorization",
+              "kind": "type",
+              "declaration": "ToolServiceAuthorization",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceOptions",
+              "kind": "type",
+              "declaration": "ToolServiceOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "toolsRunner",
+              "kind": "value",
+              "declaration": "toolsRunner",
+              "declarationKind": "VariableDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/index.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "JobToolOptions",
+              "kind": "type",
+              "declaration": "JobToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerToolServiceContext",
+              "kind": "type",
+              "declaration": "RunnerToolServiceContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerToolSet",
+              "kind": "type",
+              "declaration": "RunnerToolSet",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolReceipt",
+              "kind": "type",
+              "declaration": "ToolReceipt",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolService",
+              "kind": "type",
+              "declaration": "ToolService",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceAuthorization",
+              "kind": "type",
+              "declaration": "ToolServiceAuthorization",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceOptions",
+              "kind": "type",
+              "declaration": "ToolServiceOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "toolsRunner",
+              "kind": "value",
+              "declaration": "toolsRunner",
+              "declarationKind": "VariableDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/index.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "JobToolOptions",
+              "kind": "type",
+              "declaration": "JobToolOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerToolServiceContext",
+              "kind": "type",
+              "declaration": "RunnerToolServiceContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RunnerToolSet",
+              "kind": "type",
+              "declaration": "RunnerToolSet",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolReceipt",
+              "kind": "type",
+              "declaration": "ToolReceipt",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolRun",
+              "kind": "type",
+              "declaration": "ToolRun",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolService",
+              "kind": "type",
+              "declaration": "ToolService",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceAuthorization",
+              "kind": "type",
+              "declaration": "ToolServiceAuthorization",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ToolServiceOptions",
+              "kind": "type",
+              "declaration": "ToolServiceOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "toolsRunner",
+              "kind": "value",
+              "declaration": "toolsRunner",
+              "declarationKind": "VariableDeclaration"
             }
           ]
         }

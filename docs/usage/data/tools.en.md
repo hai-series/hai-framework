@@ -4,95 +4,57 @@
 
 [Data reference index](README.en.md) · [Configuration](../configuration/tools.en.md) · [API reference](../function/tools.en.md)
 
-After submitting a server-side tool, a client uses its receipt to check progress and an artifact reference to read the file or page produced. Runner persists executions, and the host checks artifact access.
+The registry keeps tool definitions in the current process. When a tool needs files, the host manages their bytes, permissions, and versions.
 
 <a id="runtime-data"></a>
 
 ## In-process data
 
-Tools owns no database tables, cache keys or persistent leases. Lightweight definitions and registries live in the current process and disappear on `clear()` or exit. Server tasks reuse Runner storage without new queues or execution-state tables.
+Registered tools live in the current process. Call `registry.getNames()` to see the available names. Process exit or `registry.clear()` clears those registrations.
 
-| Data | Owner and lifecycle |
-| --- | --- |
-| Implementations, Schemas, titles, examples and groups | Assembled by the host on each node; not shared task state |
-| Enablement and authorization | Trusted host configuration; rechecked at submission and execution |
-| Tasks, idempotency keys, leases, status and events | [Runner](runner.en.md); kind `hai.tools.<id>.v1` |
-| File and artifact bytes | [Storage](storage.en.md); host callbacks read and publish |
-| Document versions, ownership and conflicts | Business service; `baseVersion` guards the final write |
-| MCP service list and Broker | [AI](ai.en.md) and host; not duplicated in Tools |
-
-<a id="runtime-tasks"></a>
-
-## Tasks and receipts
-
-`ToolRun` includes `receipt: { id, key }`, Runner `status`, optional `output/failure`, `events` and incremental cursor `next`. Use `inspect(receipt, context, { after })` to continue reading. Retain the entire receipt: each node checks service and principal ownership rather than accepting a task ID alone.
-
-`queued/running/cancelling` are nonterminal. Cancellation requests a stop; Runner records actual completion, failure and cleanup. `service.close()` neither deletes tasks nor proves they stopped.
-
-<a id="example-data"></a>
-
-### Progress and result of a tool run
-
-Keep the receipt to query progress or more events without resubmitting the task.
-
-```json
-{
-  "receipt": {
-    "id": "execution-42",
-    "key": "order-42-preview"
-  },
-  "status": "succeeded",
-  "output": {
-    "artifactId": "artifact-42"
-  },
-  "events": [],
-  "next": 0
-}
-```
-
-execution-42 succeeded and references artifact-42. No events are shown, so next is 0. A receipt does not grant public access.
+| Data | Who stores it | When it is used |
+| --- | --- | --- |
+| Tool implementations, parameter schemas, titles, presets, and groups | The application assembles these on each process | Tools builds the catalog, validates inputs, and calls handlers |
+| Enabled tools and permissions | The application's server configuration and authorization system | The host supplies a policy that checks the caller and validated input during direct execution |
+| File bytes, ownership, versions, and retention | The host's file store and business service | The host reads and writes files for the current principal and checks permissions and versions at publication or save time |
 
 <a id="artifact-access"></a>
 
 ## Artifact access contract
 
-The host implements `ToolArtifactAccess` and checks the current principal and final commit conditions for every operation.
+When tools need files, the host implements `ToolArtifactAccess`. The host can use [Storage](storage.en.md) or an existing application file store. If multiple nodes share tasks, each node needs access to the same stored files.
 
-| Callback/data | Structure and purpose |
+| Host callback | Data and permissions |
 | --- | --- |
-| `read(context, { id })` | `HaiResult<ToolArtifact>` with `id/name/mediaType/data` and optional `kind/version` |
-| `publish(context, { name, kind, mediaType, data, id? })` | Store bytes and return an authorized reference; host handles idempotency, ownership and retention |
-| `save(context, { id, baseVersion, content })` | Optional version-conditional write returning a reference; host reports conflicts |
-| `ToolArtifactReference` | `{ id, title, kind, version, mediaType }`, used in tool results and subsequent UI reads |
+| `read(context, { id })` | Check that the current principal can read the file. Return `id/name/mediaType/data` and optionally `kind/version` |
+| `publish(context, { name, kind, mediaType, data, id? })` | Check permission to publish, save bytes, and return an artifact reference. Tools can supply a stable ID. For example, `artifact_create` derives one from a trusted execution ID. The host handles deduplication and retention |
+| `save(context, { id, baseVersion, content })` | Optional. Check ownership and the base version before saving new content. The host returns any version conflict |
 
-Job output uses stable execution/output identities to support retry deduplication; the host must still validate publishing access and idempotency. Shared deployments use the same Storage and Runner database. One node's memory or local temporary path is not a shared artifact store.
+<a id="artifact-storage"></a>
 
-Browser egress proxy settings belong to the host deployment and reach jobs through `HAI_TOOL_BROWSER_PROXY`. They are neither user input nor shared business state. Keep proxy credentials out of model arguments and output.
+### Where files are stored
 
-Model messages, events and logs contain only necessary structured data, sanitized errors and authorized references. Do not put secrets, images, audio/video or large byte bodies into definitions or LLM context. Downloads, Range requests and version reads remain subject to host authorization.
+The example registry uses `files.publish` to put bytes into an in-memory `Map` and `files.read` to retrieve them by ID. The files disappear when the process exits. In an application, the host connects both callbacks to its storage and authorization checks. [Example registry](../function/tools.en.md#artifact-setup)
 
-website_video capture, script, editable storyboard, per-shot audio, subtitles, cover, project and video are host-authorized artifacts. captureId/storyboardId/audioIds support recovery but do not grant public download access. Reuse audio only when narration still matches; final publication rechecks ownership.
-
-`service.find(key, context)` reads the existing Runner idempotency record and returns success: true with data: undefined when absent (projected to null by the application HTTP API), without a new pending-submission table. Cancellation, disabling and lookup are distinct; the principal can still inspect owned receipts after disabling.
-
-`preview_build` reads only an authorized ZIP and publishes a new self-contained HTML reference. The ZIP, sources and HTML use the same ownership checks. Build directories are temporary task data cleaned by Runner, without a persistent build service. Expanded input is limited to 8 MiB, each source and final HTML to 1 MiB, and the fixed build command to 60 seconds; these tighter limits take precedence over generic file budgets. A failed build creates no new preview artifact.
+The Agent workspace loads Storage settings from `config/_storage.yml`. The default `type: local` writes bytes to `./data/uploads` relative to the service's working directory. `HAI_STORAGE_ROOT` can set a different root directory. Agent's `.env.prod` selects `s3`, which writes bytes to the S3-compatible bucket configured by `HAI_STORAGE_BUCKET`. Agent keeps file records in `hai_agent_resources` and version records with object keys and checksums in `hai_agent_resource_versions`. A read checks ownership, then uses the version's object key to retrieve the content. [Local and S3 storage configuration](../configuration/storage.en.md)
 
 ### Reference a generated file or page
 
-Return an artifact ID and display metadata while the host stores bytes and checks read permissions.
+A successful `artifact_create` call returns a reference, as shown in the Markdown example below. The `id` identifies the file in the host's library. If the host provides `files.save`, pass the `version` you read as `baseVersion` to `artifact_save`. On a successful save, Agent keeps the file's ID and increments its version. If a newer version exists, Agent returns a version conflict. [Markdown example](../function/tools.en.md#artifact-example)
 
 ```json
 {
-  "id": "artifact-42",
-  "title": "Order preview",
-  "kind": "html",
-  "version": "version-1",
-  "mediaType": "text/html"
+  "id": "artifact-1",
+  "title": "Project notes",
+  "kind": "markdown",
+  "version": 1,
+  "mediaType": "text/markdown"
 }
 ```
 
-artifact-42 is an HTML preview at version-1, used to check later edits. HTML bytes are not included.
+<a id="runtime-tasks"></a>
+<a id="example-data"></a>
+<a id="tool-events"></a>
+<a id="size-and-retention"></a>
 
-## Size and retention
-
-ToolService inherits Runner's 512 KiB JSON limit independently for submission, each event and final output. Job file/artifact bytes are limited to 50 MiB; container input totals also respect scratchMiB, using the smaller bound. These limits are not interchangeable; pass authorized references for file bodies. [Runner](runner.en.md) owns total event bytes/count and task/idempotency retention. Settled tasks default to seven days. After cleanup, find succeeds with data: undefined, which does not prove a request was never accepted or was cancelled. The host owns any longer-lived business deduplication.
+For a durable tool service, see [job receipts, events, and retention](tools-runner.en.md#runtime-tasks).
