@@ -117,7 +117,14 @@ describe('website_video 固定工作流', () => {
     }))
     const stages: string[] = []
     let renderedHtml = ''
-    const executeJob: NonNullable<BuiltinToolOptions['executeJob']> = async (request) => {
+    const scope = { tenantId: 'team', userId: 'alice' }
+    const emit = vi.fn(async () => core.ok(undefined))
+    const execution = { id: 'video-run', emit }
+    const executeJob: NonNullable<BuiltinToolOptions['executeJob']> = async (request, context) => {
+      expect(context).toMatchObject({ scope, sessionId: 'task-1', execution })
+      expect(request.idempotencyKey).toBe(request.name === 'web_capture'
+        ? 'video-run:capture'
+        : 'video-run:render')
       stages.push(request.name)
       if (request.name === 'web_capture') {
         return core.ok({
@@ -157,7 +164,9 @@ describe('website_video 固定工作流', () => {
     const registry = tools.createRegistry()
     expect(registry.registerMany(ai.tools.createBuiltinTools({
       context: {
-        scope: { tenantId: 'team', userId: 'alice' },
+        scope,
+        sessionId: 'task-1',
+        execution,
       },
       files,
       executeJob,
@@ -172,6 +181,8 @@ describe('website_video 固定工作流', () => {
     if (result.success)
       expect(result.data).toMatchObject({ durationSeconds: 10, sourceUrl: capture.sourceUrl })
     expect(stages).toEqual(['web_capture', 'video_render'])
+    expect(emit).toHaveBeenCalledWith({ type: 'phase', phase: 'capture', progress: 0.05 })
+    expect(emit).toHaveBeenCalledWith({ type: 'phase', phase: 'complete', progress: 1 })
     expect(synthesize).toHaveBeenCalledTimes(2)
     expect(synthesize.mock.calls.every(([request]) => request.targetDurationMs === undefined)).toBe(true)
     const names = [
