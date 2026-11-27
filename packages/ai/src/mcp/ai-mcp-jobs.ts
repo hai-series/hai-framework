@@ -66,6 +66,28 @@ const fixedCommand = [
 
 const serviceDigest = (service: MCPExternalServer) => createHash('sha256').update(JSON.stringify(service)).digest('hex')
 
+function matchesServiceDigest(service: MCPExternalServer, digest: string) {
+  if (serviceDigest(service) === digest)
+    return true
+  const pool = service.pool
+  if (pool?.maxTotal === undefined)
+    return false
+
+  // 保留配置 Schema 的池字段顺序，只替换旧任务中的预热目标。
+  const { maxRunning, minReady, ...limits } = pool
+  const previousPool = { maxRunning, minReady, ...limits }
+  const previous = { ...service, pool: previousPool }
+  previousPool.minReady = undefined
+  if (serviceDigest(previous) === digest)
+    return true
+  for (let target = 0; target <= pool.maxTotal; target += 1) {
+    previousPool.minReady = target
+    if (serviceDigest(previous) === digest)
+      return true
+  }
+  return false
+}
+
 /**
  * 将已授权的固定文档操作提交给 Runner。执行节点复核目录与文件权限。
  * @example
@@ -94,7 +116,7 @@ export function createMCPJobs(
       || service.transport !== 'job'
       || service.environmentId !== input.environmentId
       || !service.allowedTools?.includes(input.tool)
-      || serviceDigest(service) !== input.serviceDigest
+      || !matchesServiceDigest(service, input.serviceDigest)
       || !validateEnvironment(input.environmentId, input.tool)
       || (input.language && input.tool !== 'ocr.recognize')) {
       throw new Error('MCP tool job policy changed')

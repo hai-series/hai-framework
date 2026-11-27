@@ -64,3 +64,7 @@ acp:
 たとえば、`config/_ai.yml` で `knowledge.cleanOptions.removeEmails` を `true` にすると、メールアドレスを除去します。`normalizeWhitespace` と `trim` の既定値は引き続き `false` です。Markdown のコード行の先頭にある四つの空白が保持されるため、その行の `#` はコードの一部として扱われます。プレーンテキストの空白を整形する場合は、両方の設定を有効にできます。Datapipe を直接呼び出す場合、両方の既定値は `true` です。整形または分割に失敗すると、埋め込みを生成する前に取り込みを中止します。[Datapipe の引数](../function/datapipe.ja.md#call-options) · [ナレッジの取り込み例](../function/ai.ja.md#knowledge)
 
 未翻訳：モデルプロファイル、MCP、ACP の全設定一覧。[中国語の該当節](ai.md#configuration-fields)を参照してください。
+
+### MCP コンテナージョブのウォームプール
+
+ローリング更新では、実行ノードを更新してから `mcp.servers[].pool.minReady` を調整します。準備済みの目標数だけを変更した場合、待機中のジョブは引き続き実行されます。サービスの実行環境、ポリシー、容量上限は各ノードで揃えます。[Runner のウォームプール](../function/runner.ja.md#containers)

@@ -1,7 +1,7 @@
 import type { StreamableHTTPServerTransport } from '../src/index.js'
 import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -485,7 +485,7 @@ describe('ai.mcp.services', () => {
     })
   })
 
-  it('registers a deployment warm pool and submits jobs with its ceiling and tool capacity class', async () => {
+  it('submits jobs with the deployment pool limits and accepts older warm targets', async () => {
     const runner = frameworkRunner.create()
     const started = await runner.init({
       nodeId: 'tool-capacity-api',
@@ -508,6 +508,7 @@ describe('ai.mcp.services', () => {
     try {
       const unregister = vi.fn()
       const register = vi.spyOn(runner, 'registerWarmPool').mockReturnValue({ success: true, data: unregister })
+      const registerJob = vi.spyOn(runner, 'register')
       const submit = vi.spyOn(runner, 'submit').mockResolvedValue({
         success: true,
         data: {
@@ -521,24 +522,22 @@ describe('ai.mcp.services', () => {
       const service = {
         id: 'docs',
         name: 'Docs',
-        transport: 'job',
+        transport: 'job' as const,
         environmentId: 'documents-job',
         allowedTools: ['documents.extract'],
-      } as const
+        pool: { minReady: 1, maxRunning: 2, maxTotal: 3 },
+      }
+      const read = vi.fn(async () => {
+        throw new Error('Fixture file denied')
+      })
       expect((await ai.init({
         mcp: {
-          servers: [
-            {
-              ...service,
-              allowedTools: [...service.allowedTools],
-              pool: { minReady: 1, maxRunning: 2, maxTotal: 3 },
-            },
-          ],
+          servers: [service],
         },
       }, {
         runner,
         mcpJobFiles: {
-          read: vi.fn(),
+          read,
           publish: vi.fn(),
         },
       })).success).toBe(true)
@@ -569,6 +568,49 @@ describe('ai.mcp.services', () => {
         concurrency: { key: 'docs', limit: 2 },
         warmPool: true,
       }))
+      const handler = registerJob.mock.calls.find(([kind]) => kind === 'ai-mcp-job')?.[1]
+      if (!handler)
+        throw new Error('Missing MCP job handler')
+      const context = {
+        id: 'fixture',
+        scope: principal,
+        owner: { nodeId: 'fixture', generation: 'current' },
+        signal: new AbortController().signal,
+        start: vi.fn(),
+        emit: vi.fn(),
+      }
+      const payload = (registered: unknown) => ({
+        serviceId: service.id,
+        tool: 'documents.extract',
+        environmentId: service.environmentId,
+        fileId: 'file-1',
+        serviceDigest: createHash('sha256').update(JSON.stringify(MCPExternalServerSchema.parse(registered))).digest('hex'),
+      })
+      expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+        input: payload(service),
+      }))
+      for (const minReady of [undefined, 2]) {
+        const prior = {
+          ...service,
+          pool: { ...service.pool, minReady },
+        }
+        await expect(handler(payload(prior), context)).rejects.toThrow('Fixture file denied')
+      }
+      for (const changed of [
+        {
+          ...service,
+          pool: { ...service.pool, minReady: 2, maxTotal: 4 },
+        },
+        {
+          ...service,
+          allowedTools: ['documents.extract', 'ocr.recognize'],
+        },
+      ]) {
+        await expect(handler(payload(changed), context)).rejects.toThrow('MCP tool job policy changed')
+      }
+      expect(read).toHaveBeenCalledTimes(2)
+      expect(context.start).not.toHaveBeenCalled()
+
       await ai.close()
       expect(unregister).toHaveBeenCalledTimes(1)
     }

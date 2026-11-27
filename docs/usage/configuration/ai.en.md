@@ -64,3 +64,7 @@ Choose `knowledge.collection` (default `hai_ai_knowledge`) and a dimension match
 For example, set `knowledge.cleanOptions.removeEmails: true` in `config/_ai.yml` to remove email addresses. The `normalizeWhitespace` and `trim` options still default to `false`. The four spaces at the start of an indented Markdown code line are preserved, so a `#` inside that line stays part of the code. You can enable both options for plain text that needs whitespace cleanup. Direct Datapipe calls default both options to `true`. If cleaning or chunking fails, ingestion stops before generating embeddings. [Datapipe options](../function/datapipe.en.md#call-options) · [Knowledge ingestion example](../function/ai.en.md#knowledge)
 
 Still untranslated: the full model-profile, MCP and ACP option tables. Read the [Chinese source section](ai.md#configuration-fields).
+
+### Warm pools for MCP container jobs
+
+During a rolling deployment, upgrade the execution nodes before adjusting `mcp.servers[].pool.minReady`. When only the ready target changes, queued jobs continue to run. Keep the service environment, policy, and capacity limits aligned across nodes. [Runner warm pools](../function/runner.en.md#containers)
