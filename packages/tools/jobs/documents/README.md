@@ -72,6 +72,8 @@ JSON
 
 打开 `extract-release/release-checklist.txt`，示例文档应能读到 `Release checklist` 和 `Review security updates before publishing.`。核对需要的内容后，可把这个文本接到检索或摘要流程。DOCX 提取主文档中的段落和表格文字，XLSX 提取单元格数据和公式缓存，PDF 提取最多 100 页的文字层。纯扫描件可以先转成图片，再用 [OCR 镜像](../ocr/README.md#recognize-text)。
 
+XLSX 正文按工作表坐标输出，保留空列和空行。用于占位的制表符和换行也计入 256 KiB 的 UTF-8 提取上限。
+
 ## 接入应用
 
 在离线 Runner 环境中声明 `documents.extract`、`documents.generate` 中需要的能力，用 `toolsRunner.createJobTools()` 的 `environments.documents` 指向该环境，再在服务中启用所需工具。
