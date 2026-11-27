@@ -1,13 +1,13 @@
 import type { HaiError, HaiResult } from '@h-ai/core'
-import type { RunnerContext, RunnerExecution, RunnerJson } from '@h-ai/runner'
-import type { ToolRegistryOperations } from '../tools-types.js'
-import type { ToolCatalog, ToolReceipt, ToolRun, ToolService, ToolServiceContext, ToolServiceOptions } from './tools-service-types.js'
+import type { RunnerContext, RunnerExecution, RunnerJson, RunnerSubmit } from '@h-ai/runner'
+import type { ToolRegistryOperations } from '@h-ai/tools'
+import type { ToolCatalog, ToolServiceContext } from '@h-ai/tools/server'
+import type { RunnerToolServiceContext, ToolReceipt, ToolRun, ToolService, ToolServiceOptions } from './tools-runner-types.js'
 import { setTimeout as delay } from 'node:timers/promises'
 import { core } from '@h-ai/core'
+import { HaiToolsError, tools } from '@h-ai/tools'
 import { z } from 'zod'
-import { toolsM } from '../tools-i18n.js'
-import { tools } from '../tools-main.js'
-import { HaiToolsError } from '../tools-types.js'
+import { toolsRunnerM } from './tools-runner-i18n.js'
 
 const logger = core.logger.child({ module: 'tools', scope: 'service' })
 const scopeSchema = z.strictObject({
@@ -38,16 +38,19 @@ const errorEvent = z.object({
 })
 
 function invalid(cause?: unknown) {
-  return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'), cause)
+  return core.err(HaiToolsError.VALIDATION_FAILED, toolsRunnerM('tools_validationFailed'), cause)
 }
 function forbidden(cause?: unknown) {
-  return core.err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'), cause)
+  return core.err(HaiToolsError.FORBIDDEN, toolsRunnerM('tools_forbidden'), cause)
 }
 function failed(cause?: unknown) {
-  return core.err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'), cause)
+  return core.err(HaiToolsError.EXECUTION_FAILED, toolsRunnerM('tools_executionFailed'), cause)
 }
-function cancelled(cause?: unknown) {
-  return core.err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), cause)
+function cancelled(cause?: unknown, receipt?: ToolReceipt) {
+  const error = core.error.buildHaiErrorInst(HaiToolsError.CANCELLED, toolsRunnerM('tools_cancelled'), cause)
+  if (receipt)
+    error.ext = { receipt }
+  return core.err(error)
 }
 
 /** 异步策略与 Schema 也受同一请求信号约束，不取消借入的模块。 */
@@ -82,7 +85,21 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
   const kind = `hai.tools.${id}.v1`
   let closed = false
 
-  function context(input: ToolServiceContext, execution?: RunnerContext): ToolServiceContext {
+  function operationFailed(cause: unknown) {
+    const failure = failed(cause)
+    if (!failure.success) {
+      const safe = core.error.toPublic(failure.error)
+      failure.error.traceId = safe.traceId
+      logger.error('Tool service operation failed', {
+        service: id,
+        errorCode: String(safe.code),
+        traceId: safe.traceId,
+      })
+    }
+    return failure
+  }
+
+  function context(input: ToolServiceContext, execution?: RunnerContext): RunnerToolServiceContext {
     return {
       scope: scopeSchema.parse(input.scope),
       ...(input.sessionId === undefined
@@ -97,7 +114,7 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
     }
   }
 
-  async function guarded<T>(input: ToolServiceContext, run: (current: ToolServiceContext) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+  async function guarded<T>(input: ToolServiceContext, run: (current: RunnerToolServiceContext) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
     if (closed)
       return failed()
     if (input.signal?.aborted)
@@ -116,24 +133,14 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
       if (input.signal?.aborted)
         return cancelled(cause)
       if (cause instanceof Error && cause.name === 'TimeoutError')
-        return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), cause)
+        return core.err(HaiToolsError.TIMEOUT, toolsRunnerM('tools_timeout'), cause)
       if (cause instanceof z.ZodError)
         return invalid(cause)
-      const failure = failed(cause)
-      if (!failure.success) {
-        const safe = core.error.toPublic(failure.error)
-        failure.error.traceId = safe.traceId
-        logger.error('Tool service operation failed', {
-          service: id,
-          errorCode: String(safe.code),
-          traceId: safe.traceId,
-        })
-      }
-      return failure
+      return operationFailed(cause)
     }
   }
 
-  async function resolve(current: ToolServiceContext): Promise<HaiResult<{ registry: ToolRegistryOperations, catalog: ToolCatalog, environments: ReadonlyMap<string, string> }>> {
+  async function resolve(current: RunnerToolServiceContext): Promise<HaiResult<{ registry: ToolRegistryOperations, catalog: ToolCatalog, environments: ReadonlyMap<string, string> }>> {
     const signal = current.signal ?? AbortSignal.timeout(runTimeoutMs)
     const set = await interrupted(() => options.createTools(current), signal)
     const select = options.enabled
@@ -168,7 +175,7 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
     })
   }
 
-  async function authorize(current: ToolServiceContext, name: string, input: unknown, phase: 'submit' | 'execute'): Promise<boolean> {
+  async function authorize(current: RunnerToolServiceContext, name: string, input: unknown, phase: 'submit' | 'execute'): Promise<boolean> {
     try {
       return await interrupted(() => options.authorize({ context: current, name, input, phase }), current.signal ?? AbortSignal.timeout(runTimeoutMs)) === true
     }
@@ -195,7 +202,7 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
         signal: execution.signal,
         objectId: JSON.stringify([execution.scope.tenantId, execution.scope.userId]),
         sessionId: current.sessionId,
-        authorize: request => authorize(current, parsed.name, request.input, 'execute'),
+        authorize: request => authorize({ ...current, signal: request.context.signal }, parsed.name, request.input, 'execute'),
       })
     }
     if (!result.success) {
@@ -233,7 +240,12 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
     return output.data
   }
 
-  const registration = options.runner.register(kind, execute)
+  const registration = options.runner.register(kind, (payload, execution) => {
+    const { locale } = execution
+    return locale === undefined
+      ? execute(payload, execution)
+      : core.i18n.runWithLocale(locale, () => execute(payload, execution))
+  })
   if (!registration.success)
     return registration
 
@@ -246,7 +258,7 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
       return found
     return found.data?.id === receipt.id
       ? core.ok(found.data)
-      : core.err(HaiToolsError.NOT_FOUND, toolsM('tools_notFound'))
+      : core.err(HaiToolsError.NOT_FOUND, toolsRunnerM('tools_notFound'))
   }
 
   async function project(execution: RunnerExecution, receipt: ToolReceipt, current: ToolServiceContext, after = 0): Promise<HaiResult<ToolRun>> {
@@ -267,6 +279,12 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
     })
   }
 
+  async function requestCancellation(scope: ToolServiceContext['scope'], executionId: string): Promise<void> {
+    const stopped = await options.runner.cancel(scope, executionId)
+    if (!stopped.success)
+      logger.warn('Tool cancellation could not be requested', { executionId, code: stopped.error.code })
+  }
+
   const service: ToolService = {
     find: (idempotencyKey, input) => guarded(input, async (current) => {
       const key = keySchema.safeParse(idempotencyKey)
@@ -285,69 +303,92 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
         ? core.ok(resolved.data.catalog)
         : resolved
     }),
-    submit: (request, input) => guarded(input, async (current) => {
-      const parsed = invocationSchema.safeParse({
-        name: request.name,
-        input: request.input,
-        ...(current.sessionId === undefined
-          ? {}
-          : { sessionId: current.sessionId }),
+    async submit(request, input) {
+      const deadline = performance.now() + runTimeoutMs
+      const requestLocale = core.i18n.getGlobalLocale()
+      const locale = core.i18n.DEFAULT_LOCALES.find(language => language.code === requestLocale)?.code ?? core.i18n.DEFAULT_LOCALE
+      const prepared = await guarded(input, async (current) => {
+        const parsed = invocationSchema.safeParse({
+          name: request.name,
+          input: request.input,
+          ...(current.sessionId === undefined
+            ? {}
+            : { sessionId: current.sessionId }),
+        })
+        const key = keySchema.safeParse(request.idempotencyKey ?? core.id.uuid())
+        if (!parsed.success || !key.success)
+          return invalid()
+        const resolved = await resolve(current)
+        if (!resolved.success)
+          return resolved
+        const tool = resolved.data.registry.get(parsed.data.name)
+        if (!tool)
+          return forbidden()
+        const signal = current.signal ?? AbortSignal.timeout(runTimeoutMs)
+        let validation: Awaited<ReturnType<typeof tool.parameters.safeParseAsync>>
+        try {
+          validation = await interrupted(() => tool.parameters.safeParseAsync(parsed.data.input), signal)
+        }
+        catch (cause) {
+          if (signal.aborted)
+            throw cause
+          return invalid(cause)
+        }
+        if (!validation.success)
+          return invalid(validation.error)
+        if (!await authorize(current, parsed.data.name, validation.data, 'submit'))
+          return forbidden()
+        const environmentId = resolved.data.environments.get(parsed.data.name)
+        const submission = {
+          kind,
+          scope: current.scope,
+          input: {
+            ...parsed.data,
+            ...(environmentId
+              ? { environmentId }
+              : {}),
+          },
+          ...(environmentId
+            ? { environmentId }
+            : {}),
+          locale,
+          idempotencyKey: key.data,
+          capacityClass: environmentId ? 'tool' : 'default',
+          runTimeoutMs,
+          queueTimeoutMs,
+        } satisfies RunnerSubmit
+        return core.ok({ signal, submission })
       })
-      const key = keySchema.safeParse(request.idempotencyKey ?? core.id.uuid())
-      if (!parsed.success || !key.success)
-        return invalid()
-      const resolved = await resolve(current)
-      if (!resolved.success)
-        return resolved
-      const tool = resolved.data.registry.get(parsed.data.name)
-      if (!tool)
-        return forbidden()
-      const signal = current.signal ?? AbortSignal.timeout(runTimeoutMs)
-      let validation: Awaited<ReturnType<typeof tool.parameters.safeParseAsync>>
+      if (!prepared.success)
+        return prepared
+
+      // 提交前最后检查取消和期限。Runner 开始持久化后，按实际回执或失败结算。
+      const { signal, submission } = prepared.data
+      if (input.signal?.aborted)
+        return cancelled(input.signal.reason)
+      if (signal.aborted || performance.now() >= deadline)
+        return core.err(HaiToolsError.TIMEOUT, toolsRunnerM('tools_timeout'), signal.reason)
       try {
-        validation = await interrupted(() => tool.parameters.safeParseAsync(parsed.data.input), signal)
+        const accepted = await options.runner.submit(submission)
+        if (!accepted.success)
+          return accepted
+        return core.ok({
+          receipt: { id: accepted.data.id, key: submission.idempotencyKey },
+          status: accepted.data.status,
+          ...(accepted.data.output === undefined
+            ? {}
+            : { output: accepted.data.output }),
+          ...(accepted.data.failure
+            ? { failure: accepted.data.failure }
+            : {}),
+          events: [],
+          next: 0,
+        })
       }
       catch (cause) {
-        if (signal.aborted)
-          throw cause
-        return invalid(cause)
+        return operationFailed(cause)
       }
-      if (!validation.success)
-        return invalid(validation.error)
-      if (!await authorize(current, parsed.data.name, validation.data, 'submit'))
-        return forbidden()
-      current.signal?.throwIfAborted()
-      const environmentId = resolved.data.environments.get(parsed.data.name)
-      const payload = {
-        ...parsed.data,
-        ...(environmentId
-          ? { environmentId }
-          : {}),
-      }
-      const accepted = await options.runner.submit({
-        kind,
-        scope: current.scope,
-        input: payload,
-        ...(environmentId
-          ? { environmentId }
-          : {}),
-        idempotencyKey: key.data,
-        capacityClass: environmentId ? 'tool' : 'default',
-        runTimeoutMs,
-        queueTimeoutMs,
-      })
-      if (!accepted.success)
-        return accepted
-      return core.ok({
-        receipt: { id: accepted.data.id, key: key.data },
-        status: accepted.data.status,
-        ...(accepted.data.output === undefined
-          ? {}
-          : { output: accepted.data.output }),
-        events: [],
-        next: 0,
-      })
-    }),
+    },
     inspect: (receipt, input, cursor = {}) => guarded(input, async (current) => {
       const after = z.number().int().min(0).max(100_000).safeParse(cursor.after ?? 0)
       if (!after.success)
@@ -371,6 +412,11 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
       if (!submitted.success)
         return submitted
       let current = submitted.data
+      if (input.signal?.aborted) {
+        if (request.idempotencyKey === undefined && live.has(current.status))
+          await requestCancellation(input.scope, current.receipt.id)
+        return cancelled(input.signal.reason, current.receipt)
+      }
       let lastError: HaiError | undefined
       const signal = input.signal
         ? AbortSignal.any([
@@ -412,20 +458,17 @@ export function createToolService(options: ToolServiceOptions): HaiResult<ToolSe
         if (current.status === 'cancelled')
           return cancelled()
         if (current.failure === 'run-timeout' || current.failure === 'queue-timeout')
-          return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'))
+          return core.err(HaiToolsError.TIMEOUT, toolsRunnerM('tools_timeout'))
         return failed()
       }
       catch (cause) {
         if (input.signal?.aborted)
           return cancelled(cause)
-        return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), cause)
+        return core.err(HaiToolsError.TIMEOUT, toolsRunnerM('tools_timeout'), cause)
       }
       finally {
-        if (signal.aborted && live.has(current.status)) {
-          const stopped = await options.runner.cancel(input.scope, current.receipt.id)
-          if (!stopped.success)
-            logger.warn('Tool cancellation could not be requested', { executionId: current.receipt.id, code: stopped.error.code })
-        }
+        if (signal.aborted && live.has(current.status))
+          await requestCancellation(input.scope, current.receipt.id)
       }
     },
     close() {

@@ -1,5 +1,5 @@
 import type { HaiResult } from '@h-ai/core'
-import type { ToolServiceContext } from './tools-service-types.js'
+import type { ToolServiceContext } from './tools-invocation-types.js'
 
 /**
  * 宿主验证所有权之后返回的文件或产物。

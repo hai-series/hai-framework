@@ -1,6 +1,6 @@
 /** 通用工具的真实业务输入、执行隔离和失败边界。 */
 import { core } from '@h-ai/core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { HaiToolsError, tools } from '../src/index.js'
 
@@ -212,6 +212,70 @@ describe('tools 中立执行内核', () => {
     }
     expect(executed).toBe(false)
     expect(checked).toEqual(['registry', 'execution'])
+  })
+
+  it('取消后完成注册器授权时不再启动单次授权', async () => {
+    const entered = Promise.withResolvers<void>()
+    const decision = Promise.withResolvers<boolean>()
+    const registry = tools.createRegistry({
+      authorize() {
+        entered.resolve()
+        return decision.promise
+      },
+    })
+    const handler = vi.fn(() => 'written')
+    const authorize = vi.fn(() => true)
+    expect(registry.register(tools.define({
+      name: 'write',
+      description: '受限写入',
+      parameters: z.object({}),
+      handler,
+    })).success).toBe(true)
+
+    const controller = new AbortController()
+    const call = registry.execute('write', {}, { signal: controller.signal, authorize })
+    await entered.promise
+    controller.abort()
+    const result = await call
+    decision.resolve(true)
+    await decision.promise
+
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiToolsError.CANCELLED.code)
+    expect(authorize).not.toHaveBeenCalled()
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('注册器授权耗尽绝对期限时即使定时器未触发也不启动单次授权', async () => {
+    const deadline = Date.now() + 10_000
+    const clock = vi.spyOn(Date, 'now')
+    try {
+      const registry = tools.createRegistry({
+        authorize() {
+          clock.mockReturnValue(deadline)
+          return true
+        },
+      })
+      const handler = vi.fn(() => 'written')
+      const authorize = vi.fn(() => true)
+      expect(registry.register(tools.define({
+        name: 'write',
+        description: '受限写入',
+        parameters: z.object({}),
+        handler,
+      })).success).toBe(true)
+
+      const result = await registry.execute('write', {}, { deadline, authorize })
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiToolsError.TIMEOUT.code)
+      expect(authorize).not.toHaveBeenCalled()
+      expect(handler).not.toHaveBeenCalled()
+    }
+    finally {
+      clock.mockRestore()
+    }
   })
 
   it('批量注册原子拒绝重名，显式替换后业务行为改变', async () => {

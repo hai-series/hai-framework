@@ -1,6 +1,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { RunnerScope } from '@h-ai/runner'
-import type { ToolArtifactAccess, ToolArtifactReference, ToolRun, ToolService, ToolServiceContext } from '@h-ai/tools/server'
+import type { ToolRun, ToolService } from '@h-ai/tools-runner'
+import type { ToolArtifactAccess, ToolArtifactReference, ToolServiceContext, ToolSet } from '@h-ai/tools/server'
 import type { ToolRun as WorkspaceToolRun } from '@h-ai/ui'
 import type { AgentResource } from '#lib/workspace.js'
 import { Buffer } from 'node:buffer'
@@ -9,6 +10,7 @@ import { ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { runner } from '@h-ai/runner'
+import { toolsRunner } from '@h-ai/tools-runner'
 import { tools } from '@h-ai/tools/server'
 import { z } from 'zod'
 import { artifactSummary } from './artifact-http.js'
@@ -213,13 +215,13 @@ async function project(run: ToolRun, scope: RunnerScope): Promise<WorkspaceToolR
 /** 只装配框架工具、业务归属和 HTTP 投影，不维护另一份任务状态。 */
 export const toolHost = {
   start() {
-    const created = tools.createService({
+    const created = toolsRunner.createService({
       id: 'agent',
       runner,
       createTools(context) {
         const workbench = config().workbench
         const environments = workbench.environments
-        const jobs = tools.createJobTools({
+        const jobs = toolsRunner.createJobTools({
           context,
           files,
           runner,
@@ -235,7 +237,7 @@ export const toolHost = {
         // 编排入口仅在依赖也被全局启用时提供；不能用任务授权绕过显式排除。
         const videoReady = ['web_capture', 'video_render'].every(name => selectedJobs.has(name)
           && !workbench.selection.exclude?.includes(name) && jobs.tools.some(tool => tool.name === name))
-        const sets = [
+        const sets: ToolSet[] = [
           ...(workbench.artifacts
             ? [
                 tools.createArtifactTools({ context, files }),
@@ -293,7 +295,7 @@ export const toolHost = {
           groups: [
             ...groups.values(),
           ],
-          environments: Object.assign({}, ...sets.map(set => set.environments ?? {})),
+          ...(workbench.artifacts && jobs.environments && { environments: jobs.environments }),
         }
       },
       enabled: () => config().workbench.tools

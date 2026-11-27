@@ -1,12 +1,12 @@
-import type { Tool } from '../tools-types.js'
-import type { ToolArtifactAccess } from './tools-service-resources.js'
-import type { ToolServiceContext, ToolSet } from './tools-service-types.js'
+import type { ToolArtifactAccess } from './tools-artifact-types.js'
+import type { ToolServiceContext, ToolSet } from './tools-invocation-types.js'
+import type { Tool } from './tools-types.js'
 import { createHash } from 'node:crypto'
 import { core } from '@h-ai/core'
 import { z } from 'zod'
-import { toolsM } from '../tools-i18n.js'
-import { tools } from '../tools-main.js'
-import { HaiToolsError } from '../tools-types.js'
+import { toolsM } from './tools-i18n.js'
+import { tools } from './tools-main.js'
+import { HaiToolsError } from './tools-types.js'
 
 /**
  * 可编辑产物工具所需的宿主权限接口。

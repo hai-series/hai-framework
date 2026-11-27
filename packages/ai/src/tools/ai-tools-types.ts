@@ -1,6 +1,5 @@
 import type { HaiResult } from '@h-ai/core'
-import type { RunnerJson } from '@h-ai/runner'
-import type { ToolArtifact, ToolArtifactAccess, ToolArtifactReference, ToolService, ToolServiceContext, ToolSet, ToolSubmitRequest } from '@h-ai/tools/server'
+import type { ToolArtifact, ToolArtifactAccess, ToolArtifactReference, ToolInvoker, ToolServiceContext, ToolSet } from '@h-ai/tools/server'
 import type { MCPServiceBinding, MCPServiceBindingRequest, MCPServiceBroker } from '../mcp/ai-mcp-types.js'
 
 /**
@@ -14,7 +13,7 @@ import type { MCPServiceBinding, MCPServiceBindingRequest, MCPServiceBroker } fr
 export type BuiltinArtifact = ToolArtifact
 
 /**
- * 业务资源引用，文件字节不会进入模型消息或 Runner 结果。
+ * 业务资源引用，文件字节不会进入模型消息或工具结果。
  * @example
  * ```ts
  * import type { BuiltinArtifactReference } from '@h-ai/ai'
@@ -45,11 +44,11 @@ export interface BuiltinToolOptions {
   context: ToolServiceContext
   files: BuiltinArtifactAccess
   /** 调用同一工具服务的固定容器作业；省略时不登记网址视频工作流。 */
-  executeJob?: (request: ToolSubmitRequest, context: ToolServiceContext) => Promise<HaiResult<RunnerJson>>
+  executeJob?: ToolInvoker['invoke']
 }
 
 /**
- * 本地工具服务与现有短期 MCP Broker 的装配。
+ * 工具目录和调用接口与现有短期 MCP Broker 的装配。
  * @example
  * ```ts
  * import type { BuiltinToolBrokerOptions } from '@h-ai/ai'
@@ -57,7 +56,7 @@ export interface BuiltinToolOptions {
  * ```
  */
 export interface BuiltinToolBrokerOptions {
-  service: ToolService
+  service: ToolInvoker
   url: string
 }
 

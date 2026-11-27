@@ -42,21 +42,11 @@
     "test:coverage": "vitest run --coverage",
     "build:clean": "rimraf dist"
   },
-  "peerDependencies": {
-    "@h-ai/runner": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@h-ai/runner": {
-      "optional": true
-    }
-  },
   "dependencies": {
     "@h-ai/core": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@h-ai/reldb": "workspace:*",
-    "@h-ai/runner": "workspace:*",
     "rimraf": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

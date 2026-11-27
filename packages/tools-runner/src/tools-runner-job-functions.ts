@@ -1,16 +1,15 @@
 import type { RunnerFunctions } from '@h-ai/runner'
-import type { Tool } from '../tools-types.js'
-import type { ToolArtifactAccess, ToolArtifactReference } from './tools-service-resources.js'
-import type { ToolServiceContext, ToolSet } from './tools-service-types.js'
+import type { Tool } from '@h-ai/tools'
+import type { ToolArtifactAccess, ToolArtifactReference } from '@h-ai/tools/server'
+import type { RunnerToolServiceContext, RunnerToolSet } from './tools-runner-types.js'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { isIPv4 } from 'node:net'
 import { extname } from 'node:path'
 import { core } from '@h-ai/core'
+import { HaiToolsError, tools } from '@h-ai/tools'
 import { z } from 'zod'
-import { toolsM } from '../tools-i18n.js'
-import { tools } from '../tools-main.js'
-import { HaiToolsError } from '../tools-types.js'
+import { toolsRunnerM } from './tools-runner-i18n.js'
 
 const jobTitles = {
   'documents.extract': 'tools_job_documents_extract',
@@ -23,17 +22,20 @@ const jobTitles = {
   'preview.build': 'tools_job_preview_build',
   'video.render': 'tools_job_video_render',
 } as const
+const browserUrlLimit = 2048
+const dnsHostname = /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z][A-Za-z0-9-]{0,61}[A-Za-z0-9]$/u
+const localDnsSuffix = /\.(?:localhost|local|internal|test|invalid)$/iu
 
 /**
  * 已登记作业环境；缺失的环境不会出现在工具目录。
  * @example
  * ```ts
- * import type { JobToolOptions } from '@h-ai/tools/server'
+ * import type { JobToolOptions } from '@h-ai/tools-runner'
  * function environments(options: JobToolOptions) { return options.environments }
  * ```
  */
 export interface JobToolOptions {
-  context: ToolServiceContext
+  context: RunnerToolServiceContext
   files: ToolArtifactAccess
   runner: RunnerFunctions
   environments: Partial<Record<'documents' | 'office' | 'ocr' | 'browser' | 'web' | 'preview' | 'video', string>>
@@ -48,7 +50,7 @@ export interface JobToolOptions {
  * function build(options: JobToolOptions) { return createJobTools(options) }
  * ```
  */
-export function createJobTools({ context, files, runner, environments, browserProxy }: JobToolOptions): ToolSet {
+export function createJobTools({ context, files, runner, environments, browserProxy }: JobToolOptions): RunnerToolSet {
   const proxy = browserProxy === undefined
     ? undefined
     : browserProxyAddress(browserProxy)
@@ -57,15 +59,11 @@ export function createJobTools({ context, files, runner, environments, browserPr
   const groups = new Map<string, string[]>()
   const fileId = z.string().min(1).max(200).meta({
     format: 'artifact-id',
-    title: toolsM('tools_field_fileId'),
+    title: toolsRunnerM('tools_field_fileId'),
   })
-  const url = z.url().max(4096).refine((value) => {
-    const parsed = new URL(value)
-    return parsed.protocol === 'https:' && !parsed.username && !parsed.password && !parsed.port
-      && /^(?:[a-z0-9-]+\.)+[a-z][a-z0-9-]+$/iu.test(parsed.hostname)
-      && !/(?:^|\.)(?:localhost|local|internal|test|invalid)$/iu.test(parsed.hostname)
-  }).meta({
-    title: toolsM('tools_field_url'),
+  const url = z.string().refine(isBrowserUrl).meta({
+    format: 'uri',
+    title: toolsRunnerM('tools_field_url'),
   })
   const safeName = /^[a-z0-9][\w.-]{0,127}$/iu
   const response = z.union([
@@ -113,18 +111,18 @@ export function createJobTools({ context, files, runner, environments, browserPr
     ])
     definitions.push(tools.define<TInput, { text?: string, sourceUrl?: string, title?: string, artifacts?: ToolArtifactReference[] }>({
       name,
-      title: toolsM(jobTitles[operation]),
-      description: toolsM(jobTitles[operation]),
+      title: toolsRunnerM(jobTitles[operation]),
+      description: toolsRunnerM(jobTitles[operation]),
       ...(operation === 'documents.generate'
         ? {
             examples: [
               {
-                label: toolsM('tools_example_report'),
+                label: toolsRunnerM('tools_example_report'),
                 input: {
                   format: 'docx',
-                  title: toolsM('tools_example_report'),
+                  title: toolsRunnerM('tools_example_report'),
                   paragraphs: [
-                    toolsM('tools_example_reportContent'),
+                    toolsRunnerM('tools_example_reportContent'),
                   ],
                 },
               },
@@ -134,13 +132,14 @@ export function createJobTools({ context, files, runner, environments, browserPr
       parameters,
       timeoutMs: 300_000,
       resultHandler: async (input, { signal }) => {
-        const fail = () => core.err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'))
+        const fail = (cause?: unknown) => core.err(HaiToolsError.EXECUTION_FAILED, toolsRunnerM('tools_executionFailed'), cause)
+        const execution = context.execution
         const environment = runner.environment(environmentId)
-        if (!context.execution || !environment.success || !environment.data.capabilities.includes(operation)
+        if (!execution || !environment.success || !environment.data.capabilities.includes(operation)
           || environment.data.networkPolicy !== (group === 'web' || group === 'browser'
             ? 'internal'
             : 'offline')) {
-          return core.err(HaiToolsError.FORBIDDEN, toolsM('tools_forbidden'))
+          return core.err(HaiToolsError.FORBIDDEN, toolsRunnerM('tools_forbidden'))
         }
         const spec = prepare(input)
         const inputs: Record<string, string> = {}
@@ -172,7 +171,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
         if (Buffer.byteLength(request) > 64 * 1024)
           return fail()
         signal.throwIfAborted()
-        const started = await context.execution.start({
+        const started = await execution.start({
           command: '/usr/bin/python3',
           args: ['-I', '-S', '-c', command, request],
           inputs,
@@ -186,7 +185,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
           return started
         const process = started.data
         process.stderr.resume()
-        // 无论协议、存储或取消在哪一步失败，都先核验容器清理。
+        // 产物只能从活跃容器读取，先在宿主暂存，确认清理后再发布。
         const outcome = await (async () => {
           const chunks: Buffer[] = []
           let total = 0
@@ -205,18 +204,18 @@ export function createJobTools({ context, files, runner, environments, browserPr
             return fail()
           if (!parsed.data.success) {
             const toolCode = parsed.data.error.code
-            const diagnostic = { operation, toolCode, executionId: context.execution!.id }
+            const diagnostic = { operation, toolCode, executionId: execution.id }
             logger.warn('Tool job operation rejected', diagnostic)
             if (toolCode === 'SANDBOX_UNAVAILABLE')
-              return core.err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_sandboxUnavailable'), diagnostic)
+              return core.err(HaiToolsError.EXECUTION_FAILED, toolsRunnerM('tools_sandboxUnavailable'), diagnostic)
             if (toolCode === 'UNSUPPORTED_PROJECT')
-              return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_previewUnsupported'), diagnostic)
+              return core.err(HaiToolsError.VALIDATION_FAILED, toolsRunnerM('tools_previewUnsupported'), diagnostic)
             if (toolCode === 'OUTPUT_LIMIT')
-              return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_outputLimit'), diagnostic)
+              return core.err(HaiToolsError.VALIDATION_FAILED, toolsRunnerM('tools_outputLimit'), diagnostic)
             if (toolCode === 'UNSAFE_DOCUMENT')
-              return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_unsafeDocument'), diagnostic)
+              return core.err(HaiToolsError.VALIDATION_FAILED, toolsRunnerM('tools_unsafeDocument'), diagnostic)
             if (toolCode === 'TIMEOUT')
-              return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), diagnostic)
+              return core.err(HaiToolsError.TIMEOUT, toolsRunnerM('tools_timeout'), diagnostic)
             // 只把已知输入拒绝归为校验错误，输出损坏和未知工作进程故障仍属服务故障。
             const invalidInput = [
               'INVALID_REQUEST',
@@ -227,8 +226,8 @@ export function createJobTools({ context, files, runner, environments, browserPr
             return core.err(invalidInput
               ? HaiToolsError.VALIDATION_FAILED
               : HaiToolsError.EXECUTION_FAILED, invalidInput
-              ? toolsM('tools_validationFailed')
-              : toolsM('tools_executionFailed'), diagnostic)
+              ? toolsRunnerM('tools_validationFailed')
+              : toolsRunnerM('tools_executionFailed'), diagnostic)
           }
           const result = parsed.data.data
           if (result.text !== undefined && !spec.output)
@@ -241,13 +240,38 @@ export function createJobTools({ context, files, runner, environments, browserPr
           const data = Buffer.from(bytes.data, 'base64')
           if (data.byteLength !== result.artifact.bytes)
             return fail()
-          signal.throwIfAborted()
-          // 确定性 ID 使执行重试复用相同业务产物；宿主仍核验内容一致。
-          const digest = createHash('sha256').update(`${context.execution!.id}:${spec.output}`).digest('hex')
-          const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`
+          return core.ok({ name: spec.output, data, summary: result.summary })
+        })().catch((cause: unknown) => {
+          logger.warn('Tool job response failed', { operation })
+          return fail(cause)
+        })
+        const closed = await process.close()
+        if (!closed.success) {
+          // 保留首次操作错误的安全摘要，避免泄露工作进程原文和私有上下文。
+          return outcome.success
+            ? closed
+            : core.err({
+                ...closed.error,
+                ext: {
+                  ...closed.error.ext,
+                  operationError: core.error.toPublic(outcome.error),
+                },
+              })
+        }
+        if (!outcome.success)
+          return outcome
+        const result = outcome.data
+        if ('text' in result)
+          return core.ok(result)
+        signal.throwIfAborted()
+        const { name, data, summary } = result
+        // 确定性 ID 使执行重试复用相同业务产物；宿主仍核验内容一致。
+        const digest = createHash('sha256').update(`${execution.id}:${name}`).digest('hex')
+        const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`
+        try {
           const published = await files.publish({ ...context, signal }, {
             id,
-            name: spec.output,
+            name,
             kind: spec.kind ?? 'file',
             mediaType: spec.mediaType ?? 'application/octet-stream',
             data,
@@ -256,27 +280,15 @@ export function createJobTools({ context, files, runner, environments, browserPr
             return published
           return core.ok({
             artifacts: [published.data],
-            ...(result.summary
-              ? { sourceUrl: result.summary.sourceUrl, title: result.summary.title, text: result.summary.text }
+            ...(summary
+              ? { sourceUrl: summary.sourceUrl, title: summary.title, text: summary.text }
               : {}),
           })
-        })().catch((cause: unknown) => {
-          logger.warn('Tool job response failed', { operation })
-          return core.err(HaiToolsError.EXECUTION_FAILED, toolsM('tools_executionFailed'), cause)
-        })
-        const closed = await process.close()
-        if (closed.success)
-          return outcome
-        // 清理不明保持主错误，同时保留安全的首次失败；工作进程原文和私有上下文不进入扩展字段。
-        return outcome.success
-          ? closed
-          : core.err({
-              ...closed.error,
-              ext: {
-                ...closed.error.ext,
-                operationError: core.error.toPublic(outcome.error),
-              },
-            })
+        }
+        catch (cause) {
+          logger.warn('Tool job artifact publication failed', { operation, executionId: execution.id })
+          return fail(cause)
+        }
       },
     }))
   }
@@ -297,28 +309,28 @@ export function createJobTools({ context, files, runner, environments, browserPr
   })
   const documentTable = (slide = false) => z.strictObject({
     headers: z.array(documentText(slide ? 32 : 2000)).min(1).max(slide ? 6 : 20).meta({
-      title: toolsM('tools_field_headers'),
+      title: toolsRunnerM('tools_field_headers'),
     }),
     rows: z.array(z.array(documentText(slide ? 32 : 2000)).max(slide ? 6 : 20)).max(slide ? 6 : 200).optional().meta({
-      title: toolsM('tools_field_rows'),
+      title: toolsRunnerM('tools_field_rows'),
     }),
   }).superRefine((table, check) => {
     if (table.rows?.some(row => row.length !== table.headers.length)) {
       check.addIssue({
         code: 'custom',
-        message: toolsM('tools_validationFailed'),
+        message: toolsRunnerM('tools_validationFailed'),
         path: ['rows'],
       })
     }
   }).meta({
-    title: toolsM('tools_field_table'),
+    title: toolsRunnerM('tools_field_table'),
   })
   const slide = z.strictObject({
     title: documentText(100, true).meta({
-      title: toolsM('tools_field_title'),
+      title: toolsRunnerM('tools_field_title'),
     }),
     paragraphs: z.array(documentText(160)).max(6).optional().meta({
-      title: toolsM('tools_field_paragraphs'),
+      title: toolsRunnerM('tools_field_paragraphs'),
     }),
     table: documentTable(true).optional(),
   }).superRefine((slide, check) => {
@@ -327,7 +339,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
     if (length > 800 || (slide.table && (paragraphs.length > 1 || length > 120))) {
       check.addIssue({
         code: 'custom',
-        message: toolsM('tools_validationFailed'),
+        message: toolsRunnerM('tools_validationFailed'),
         path: ['paragraphs'],
       })
     }
@@ -350,22 +362,22 @@ export function createJobTools({ context, files, runner, environments, browserPr
   })
   const document = z.strictObject({
     format: z.enum(['docx', 'xlsx', 'pptx']).default('docx').meta({
-      title: toolsM('tools_field_format'),
+      title: toolsRunnerM('tools_field_format'),
     }),
     title: documentText(200, true).meta({
-      title: toolsM('tools_field_title'),
+      title: toolsRunnerM('tools_field_title'),
     }),
     paragraphs: z.array(documentText(2000)).max(100).optional().meta({
-      title: toolsM('tools_field_paragraphs'),
+      title: toolsRunnerM('tools_field_paragraphs'),
     }),
     table: documentTable().optional(),
     slides: z.array(slide).min(1).max(20).optional().meta({
-      title: toolsM('tools_field_slides'),
+      title: toolsRunnerM('tools_field_slides'),
     }),
   }).superRefine(({ format, ...content }, check) => {
     const reject = (path: string) => check.addIssue({
       code: 'custom',
-      message: toolsM('tools_validationFailed'),
+      message: toolsRunnerM('tools_validationFailed'),
       path: [path],
     })
     if (Buffer.byteLength(JSON.stringify(content)) > 256 * 1024)
@@ -378,7 +390,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
       reject('paragraphs')
     }
   }).meta({
-    description: toolsM('tools_documentLimits'),
+    description: toolsRunnerM('tools_documentLimits'),
     allOf: [
       {
         if: {
@@ -469,7 +481,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
       'eng+chi_sim',
       'eng+jpn',
     ]).default('eng').meta({
-      title: toolsM('tools_field_language'),
+      title: toolsRunnerM('tools_field_language'),
     }),
   }), input => ({
     source: input.fileId,
@@ -484,7 +496,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
   add('web', 'web.capture', z.object({
     url,
     maxScreenshots: z.number().int().min(1).max(8).default(4).meta({
-      title: toolsM('tools_field_maxScreenshots'),
+      title: toolsRunnerM('tools_field_maxScreenshots'),
     }),
   }), input => ({ request: input, output: 'capture.zip', mediaType: 'application/zip' }))
   add('preview', 'preview.build', z.object({
@@ -506,7 +518,7 @@ export function createJobTools({ context, files, runner, environments, browserPr
       z.literal(25),
       z.literal(30),
     ]).default(30).meta({
-      title: toolsM('tools_field_fps'),
+      title: toolsRunnerM('tools_field_fps'),
     }),
   }), input => ({
     source: input.fileId,
@@ -520,6 +532,22 @@ export function createJobTools({ context, files, runner, environments, browserPr
     environments: bindings,
     groups: [...groups].map(([id, names]) => ({ id, title: id, tools: names })),
   }
+}
+
+/** 与 Python parse_url 同步校验原始地址和 Unicode 字符数。 */
+function isBrowserUrl(value: string): boolean {
+  if (value.slice(0, 8).toLowerCase() !== 'https://')
+    return false
+  let length = 0
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0
+    if (++length > browserUrlLimit || code <= 32 || character === '\\' || (code >= 0xD800 && code <= 0xDFFF))
+      return false
+  }
+  // 在 URL 解析器归一化前校验原始主机名，只允许省略端口或显式使用 HTTPS 默认端口。
+  const authority = value.slice(8).split(/[/?#]/u, 1)[0]
+  const host = authority.replace(/:0*443$/u, '')
+  return host.length <= 253 && dnsHostname.test(host) && !localDnsSuffix.test(host)
 }
 
 /** 与 Python deployment_proxy 同步校验，不接受 URL 归一化后的十六进制或简写 IP。 */

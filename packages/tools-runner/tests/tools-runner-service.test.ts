@@ -1,13 +1,15 @@
 import type { LogRecord } from '@h-ai/core'
 import type { RunnerFunctions } from '@h-ai/runner'
+import type { ToolServiceAuthorization, ToolServiceOptions } from '../src/index.js'
 import process from 'node:process'
+import { setImmediate } from 'node:timers/promises'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { runner as frameworkRunner } from '@h-ai/runner'
+import { runner as frameworkRunner, HaiRunnerError } from '@h-ai/runner'
+import { HaiToolsError, tools } from '@h-ai/tools'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { HaiToolsError } from '../src/index.js'
-import { tools } from '../src/server/index.js'
+import { toolsRunner } from '../src/index.js'
 
 const scope = { tenantId: 'team', userId: 'alice' }
 let runner: RunnerFunctions
@@ -27,8 +29,8 @@ afterEach(async () => {
   await reldb.close()
 })
 
-function createService(enabled = ['echo']) {
-  const result = tools.createService({
+function createService(enabled = ['echo'], overrides: Partial<Pick<ToolServiceOptions, 'authorize' | 'createTools' | 'runTimeoutMs'>> = {}) {
+  const result = toolsRunner.createService({
     id: 'test',
     runner,
     createTools: () => ({
@@ -52,6 +54,7 @@ function createService(enabled = ['echo']) {
     }),
     enabled: () => ({ tools: enabled }),
     authorize: () => true,
+    ...overrides,
   })
   expect(result.success).toBe(true)
   if (!result.success)
@@ -60,9 +63,149 @@ function createService(enabled = ['echo']) {
   return result.data
 }
 
-describe('tools.createService', () => {
+function pauseRunnerSubmit() {
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const submit = runner.submit
+  const spy = vi.spyOn(runner, 'submit').mockImplementation(async (input) => {
+    entered.resolve()
+    await release.promise
+    return submit(input)
+  })
+  return {
+    entered: entered.promise,
+    release: release.resolve,
+    restore: () => spy.mockRestore(),
+  }
+}
+
+describe('toolsRunner.createService', () => {
+  it('preserves queued jobs and receipts across the adapter cutover in both directions', async () => {
+    const api = frameworkRunner.create()
+    let closeFacade: (() => void) | undefined
+    const receiptKey = 'existing-before-cutover'
+    const kind = 'hai.tools.compatibility.v1'
+    const sessionId = 'original-session'
+    const received = vi.fn()
+    const options: Omit<ToolServiceOptions, 'runner'> = {
+      id: 'compatibility',
+      enabled: {
+        tools: ['echo'],
+      },
+      authorize: () => true,
+      createTools: context => ({
+        tools: [
+          tools.define({
+            name: 'echo',
+            description: 'Echo',
+            parameters: z.object({
+              value: z.string(),
+            }),
+            handler(input) {
+              received(context.execution?.id, context.scope, context.sessionId)
+              return input
+            },
+          }),
+        ],
+      }),
+    }
+
+    try {
+      expect((await api.init({ nodeId: 'cutover-api', executor: false })).success).toBe(true)
+      // 写入原服务提交的持久协议，模拟升级时已经排队且客户端已保存回执。
+      const legacy = await api.submit({
+        scope,
+        kind,
+        input: {
+          name: 'echo',
+          input: { value: 'retained' },
+          sessionId,
+        },
+        idempotencyKey: receiptKey,
+        capacityClass: 'default',
+        runTimeoutMs: 300_000,
+        queueTimeoutMs: 300_000,
+      })
+      expect(legacy.success).toBe(true)
+      if (!legacy.success)
+        throw new Error(legacy.error.message)
+      const receipt = { id: legacy.data.id, key: receiptKey }
+
+      const facade = toolsRunner.createService({ ...options, runner: api })
+      expect(facade.success).toBe(true)
+      if (!facade.success)
+        throw new Error(facade.error.message)
+      closeFacade = facade.data.close
+      expect(await facade.data.find(receiptKey, { scope, sessionId })).toMatchObject({
+        success: true,
+        data: { receipt, status: 'queued' },
+      })
+      expect(await facade.data.submit({
+        name: 'echo',
+        input: { value: 'retained' },
+        idempotencyKey: receiptKey,
+      }, { scope, sessionId })).toMatchObject({
+        success: true,
+        data: { receipt, status: 'queued' },
+      })
+
+      const worker = toolsRunner.createService({ ...options, runner })
+      expect(worker.success).toBe(true)
+      if (!worker.success)
+        throw new Error(worker.error.message)
+      closed.push(worker.data.close)
+      await expect.poll(() => facade.data.inspect(receipt, { scope, sessionId })).toMatchObject({
+        success: true,
+        data: {
+          receipt,
+          status: 'succeeded',
+          output: { value: 'retained' },
+        },
+      })
+      expect(received).toHaveBeenCalledExactlyOnceWith(receipt.id, scope, sessionId)
+
+      // 切换回按旧任务名和载荷消费的处理器，反向核对新入口写入的持久协议。
+      worker.data.close()
+      const legacyPayload = vi.fn()
+      const previousWorker = runner.register(kind, async (payload, context) => {
+        legacyPayload(payload, context.scope)
+        return { value: 'existing worker' }
+      })
+      expect(previousWorker.success).toBe(true)
+      if (!previousWorker.success)
+        throw new Error(previousWorker.error.message)
+      closed.push(previousWorker.data)
+
+      const fresh = await facade.data.submit({
+        name: 'echo',
+        input: { value: 'queued after cutover' },
+        idempotencyKey: 'moved-frontend',
+      }, { scope, sessionId })
+      expect(fresh.success).toBe(true)
+      if (!fresh.success)
+        throw new Error(fresh.error.message)
+      await expect.poll(() => facade.data.inspect(fresh.data.receipt, { scope, sessionId })).toMatchObject({
+        success: true,
+        data: {
+          receipt: fresh.data.receipt,
+          status: 'succeeded',
+          output: { value: 'existing worker' },
+        },
+      })
+      expect(legacyPayload).toHaveBeenCalledExactlyOnceWith({
+        name: 'echo',
+        input: { value: 'queued after cutover' },
+        sessionId,
+      }, scope)
+    }
+    finally {
+      closeFacade?.()
+      expect((await api.close()).success).toBe(true)
+    }
+  })
+
   it.each(['constructor', 'toString'])('执行合法的原型同名工具 %s，不误绑定继承的环境属性', async (name) => {
-    const created = tools.createService({
+    const created = toolsRunner.createService({
       id: 'prototype-name',
       runner,
       enabled: {
@@ -138,7 +281,7 @@ describe('tools.createService', () => {
     expect((await service.find('recover-me', { scope })).success).toBe(false)
   })
   it('调用者未取消的信号不会延长服务自己的目录截止时间', async () => {
-    const created = tools.createService({
+    const created = toolsRunner.createService({
       id: 'admission-deadline',
       runner,
       runTimeoutMs: 10,
@@ -156,7 +299,7 @@ describe('tools.createService', () => {
       expect(result.error.code).toBe(HaiToolsError.TIMEOUT.code)
   })
   it('相同幂等回执重读时保留业务失败码', async () => {
-    const created = tools.createService({
+    const created = toolsRunner.createService({
       id: 'result-failure',
       runner,
       enabled: {
@@ -178,15 +321,28 @@ describe('tools.createService', () => {
     if (!created.success)
       throw new Error(created.error.message)
     closed.push(created.data.close)
+    const request = { name: 'denied', input: {}, idempotencyKey: 'one' }
     for (let attempt = 0; attempt < 2; attempt++) {
-      const result = await created.data.invoke({ name: 'denied', input: {}, idempotencyKey: 'one' }, { scope })
+      const result = await created.data.invoke(request, { scope })
       expect(result.success).toBe(false)
       if (!result.success)
         expect(result.error.code).toBe(HaiToolsError.FORBIDDEN.code)
     }
+    const found = await created.data.find(request.idempotencyKey, { scope })
+    expect(found.success).toBe(true)
+    if (!found.success || !found.data)
+      throw new Error('Expected the persisted tool run')
+    expect(found.data.failure).toBe('handler-failed')
+    const submitted = await created.data.submit(request, { scope })
+    expect(submitted.success).toBe(true)
+    if (submitted.success) {
+      expect(submitted.data.receipt).toEqual(found.data.receipt)
+      expect(submitted.data.status).toBe('failed')
+      expect(submitted.data.failure).toBe(found.data.failure)
+    }
   })
   it('保留工具自己的短截止时间，Runner只提供更长的外层上限', async () => {
-    const created = tools.createService({
+    const created = toolsRunner.createService({
       id: 'deadline',
       runner,
       runTimeoutMs: 5000,
@@ -218,6 +374,53 @@ describe('tools.createService', () => {
       }).safeParse(result.data).success).toBe(true)
     }
   })
+
+  it('执行期的宿主授权接收工具的短截止信号', async () => {
+    const decision = Promise.withResolvers<boolean>()
+    const handler = vi.fn(() => 'written')
+    let executionSignal: AbortSignal | undefined
+    const created = toolsRunner.createService({
+      id: 'authorization-deadline',
+      runner,
+      runTimeoutMs: 5000,
+      enabled: {
+        tools: ['budget'],
+      },
+      authorize({ context, phase }) {
+        if (phase === 'submit')
+          return true
+        executionSignal = context.signal
+        return decision.promise
+      },
+      createTools: () => ({
+        tools: [
+          tools.define({
+            name: 'budget',
+            description: 'Deadline',
+            parameters: z.object({}),
+            timeoutMs: 100,
+            handler,
+          }),
+        ],
+      }),
+    })
+    expect(created.success).toBe(true)
+    if (!created.success)
+      throw new Error(created.error.message)
+    closed.push(created.data.close)
+    try {
+      const result = await created.data.invoke({ name: 'budget', input: {} }, { scope })
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiToolsError.TIMEOUT.code)
+      expect(executionSignal?.aborted).toBe(true)
+      expect(handler).not.toHaveBeenCalled()
+    }
+    finally {
+      decision.resolve(false)
+    }
+  })
+
   it('真实 Runner 完成调用，服务回执可观察且幂等', async () => {
     const service = createService()
     const request = {
@@ -298,7 +501,7 @@ describe('tools.createService', () => {
       }),
       authorize: () => true,
     }
-    const api = tools.createService({ ...options, runner })
+    const api = toolsRunner.createService({ ...options, runner })
     expect(api.success).toBe(true)
     if (!api.success)
       throw new Error(api.error.message)
@@ -310,7 +513,7 @@ describe('tools.createService', () => {
     enabled = false
     try {
       expect((await worker.init({ nodeId: 'worker', pollMs: 10 })).success).toBe(true)
-      const executor = tools.createService({ ...options, runner: worker })
+      const executor = toolsRunner.createService({ ...options, runner: worker })
       expect(executor.success).toBe(true)
       if (!executor.success)
         throw new Error(executor.error.message)
@@ -330,8 +533,93 @@ describe('tools.createService', () => {
     finally { await worker.close() }
   })
 
+  it('跨节点错误沿用首次提交的语言，旧任务使用执行节点的语言', async () => {
+    await runner.close()
+    expect((await runner.init({ nodeId: 'locale-api', executor: false })).success).toBe(true)
+    const worker = frameworkRunner.create()
+    const options = {
+      id: 'localized',
+      createTools: () => ({
+        tools: [
+          tools.define({
+            name: 'localized',
+            description: 'Localized failure',
+            parameters: z.object({}),
+            handler: () => null,
+          }),
+        ],
+      }),
+      enabled: {
+        tools: ['localized'],
+      },
+      authorize: ({ phase }: ToolServiceAuthorization) => phase === 'submit',
+    }
+    const api = toolsRunner.createService({ ...options, runner })
+    expect(api.success).toBe(true)
+    if (!api.success)
+      throw new Error(api.error.message)
+    closed.push(api.data.close)
+
+    const context = { scope }
+    const english = { name: 'localized', input: {}, idempotencyKey: 'english' }
+    const japanese = { ...english, idempotencyKey: 'japanese' }
+    const legacy = { ...english, idempotencyKey: 'legacy' }
+    const first = await core.i18n.runWithLocale('en-US', () => api.data.submit(english, context))
+    const replay = await core.i18n.runWithLocale('ja-JP', () => api.data.submit(english, context))
+    expect(first.success).toBe(true)
+    expect(replay.success).toBe(true)
+    if (first.success && replay.success)
+      expect(replay.data.receipt).toEqual(first.data.receipt)
+    expect((await core.i18n.runWithLocale('ja-JP', () => api.data.submit(japanese, context))).success).toBe(true)
+    const old = await runner.submit({
+      kind: 'hai.tools.localized.v1',
+      scope,
+      input: { name: legacy.name, input: legacy.input },
+      idempotencyKey: legacy.idempotencyKey,
+    })
+    expect(old.success).toBe(true)
+
+    try {
+      const started = await core.i18n.runWithLocale('zh-CN', () => worker.init({ nodeId: 'locale-worker', pollMs: 10 }))
+      expect(started.success).toBe(true)
+      const executor = toolsRunner.createService({ ...options, runner: worker })
+      expect(executor.success).toBe(true)
+      if (!executor.success)
+        throw new Error(executor.error.message)
+      closed.push(executor.data.close)
+
+      expect(await core.i18n.runWithLocale('ja-JP', () => api.data.invoke(english, context))).toMatchObject({
+        success: false,
+        error: {
+          code: HaiToolsError.FORBIDDEN.code,
+          message: expect.stringContaining('Tool execution is not authorized'),
+          traceId: expect.any(String),
+        },
+      })
+      expect(await core.i18n.runWithLocale('en-US', () => api.data.invoke(japanese, context))).toMatchObject({
+        success: false,
+        error: {
+          code: HaiToolsError.FORBIDDEN.code,
+          message: expect.stringContaining('このツールを実行する権限がありません'),
+          traceId: expect.any(String),
+        },
+      })
+      expect(await core.i18n.runWithLocale('en-US', () => api.data.invoke(legacy, context))).toMatchObject({
+        success: false,
+        error: {
+          code: HaiToolsError.FORBIDDEN.code,
+          message: expect.stringContaining('无权执行此工具'),
+          traceId: expect.any(String),
+        },
+      })
+    }
+    finally {
+      await worker.close()
+    }
+  })
+
   it('业务失败使Runner任务失败并通过安全事件返回错误', async () => {
-    const created = tools.createService({
+    const created = toolsRunner.createService({
       id: 'failure',
       runner,
       enabled: {
@@ -378,7 +666,7 @@ describe('tools.createService', () => {
       request: { input: 'PRIVATE_CATALOG_INPUT' },
     })
     try {
-      const created = tools.createService({
+      const created = toolsRunner.createService({
         id: 'catalog-diagnostic',
         runner,
         enabled: {},
@@ -439,7 +727,7 @@ describe('tools.createService', () => {
     }) as typeof process.stdout.write)
     const stop = core.logger.observe(record => records.push(record))
     try {
-      const created = tools.createService({
+      const created = toolsRunner.createService({
         id: 'diagnostic',
         runner,
         enabled: {
@@ -529,12 +817,170 @@ describe('tools.createService', () => {
     }
   })
 
+  it('持久化发起前取消时不调用 Runner', async () => {
+    const entered = Promise.withResolvers<void>()
+    const authorization = Promise.withResolvers<boolean>()
+    const service = createService(['echo'], {
+      authorize() {
+        entered.resolve()
+        return authorization.promise
+      },
+    })
+    const submit = vi.spyOn(runner, 'submit')
+    const controller = new AbortController()
+    try {
+      const pending = service.submit({
+        name: 'echo',
+        input: { value: 'before' },
+      }, { scope, signal: controller.signal })
+      await entered.promise
+      controller.abort()
+      const result = await pending
+      authorization.resolve(true)
+      await setImmediate()
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiToolsError.CANCELLED.code)
+      expect(submit).not.toHaveBeenCalled()
+    }
+    finally {
+      authorization.resolve(false)
+      submit.mockRestore()
+    }
+  })
+
+  it.each(['cancel', 'timeout', 'conflict'])('持久化发起后发生 %s 仍等待真实提交结果', async (scenario) => {
+    const admissionEnded = Promise.withResolvers<void>()
+    const service = createService(['echo'], {
+      runTimeoutMs: 250,
+      authorize({ context, phase }) {
+        if (phase === 'submit')
+          context.signal?.addEventListener('abort', () => admissionEnded.resolve(), { once: true })
+        return true
+      },
+    })
+    const controller = new AbortController()
+    const request = {
+      name: 'echo',
+      input: { value: 'after' },
+      idempotencyKey: 'paused',
+    }
+    if (scenario === 'conflict') {
+      const existing = await service.submit({
+        ...request,
+        input: { value: 'existing' },
+      }, { scope })
+      expect(existing.success).toBe(true)
+    }
+    const commit = pauseRunnerSubmit()
+    try {
+      let settled = false
+      const pending = service.submit(request, { scope, signal: controller.signal }).then((result) => {
+        settled = true
+        return result
+      })
+      await commit.entered
+      if (scenario !== 'timeout')
+        controller.abort()
+      await admissionEnded.promise
+      await setImmediate()
+      expect(settled).toBe(false)
+      commit.release()
+      const submitted = await pending
+      if (scenario === 'conflict') {
+        expect(submitted.success).toBe(false)
+        if (!submitted.success)
+          expect(submitted.error.code).toBe(HaiRunnerError.CONFLICT.code)
+        return
+      }
+      expect(submitted.success).toBe(true)
+      if (!submitted.success)
+        throw new Error(submitted.error.message)
+      const found = await service.find(request.idempotencyKey, { scope })
+      expect(found.success).toBe(true)
+      if (found.success)
+        expect(found.data?.receipt).toEqual(submitted.data.receipt)
+    }
+    finally {
+      commit.release()
+      commit.restore()
+    }
+  })
+
+  it.each([false, true])('invoke 在提交期间取消时按调用方是否提供幂等键处理（%s）', async (hasKey) => {
+    const service = createService(['waiting'], {
+      createTools: () => ({
+        tools: [
+          tools.define({
+            name: 'waiting',
+            description: 'Wait for cancellation',
+            parameters: z.object({}),
+            handler: (_input, { signal }) => new Promise<never>((_resolve, reject) => {
+              signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+            }),
+          }),
+        ],
+      }),
+    })
+    const request = {
+      name: 'waiting',
+      input: {},
+      ...(hasKey
+        ? { idempotencyKey: 'existing' }
+        : {}),
+    }
+    const existing = hasKey
+      ? await service.submit(request, { scope })
+      : undefined
+    if (existing)
+      expect(existing.success).toBe(true)
+
+    const commit = pauseRunnerSubmit()
+    const cancel = vi.spyOn(runner, 'cancel')
+    const controller = new AbortController()
+    try {
+      const pending = service.invoke(request, { scope, signal: controller.signal })
+      await commit.entered
+      controller.abort()
+      commit.release()
+      const result = await pending
+      expect(result.success).toBe(false)
+      if (result.success)
+        throw new Error('Expected invocation cancellation')
+      expect(result.error.code).toBe(HaiToolsError.CANCELLED.code)
+      const receipt = z.object({
+        id: z.string(),
+        key: z.string(),
+      }).parse(result.error.ext?.receipt)
+      const found = await service.find(receipt.key, { scope })
+      expect(found.success).toBe(true)
+      if (found.success)
+        expect(found.data?.receipt).toEqual(receipt)
+      if (existing?.success) {
+        expect(receipt).toEqual(existing.data.receipt)
+        expect(cancel).not.toHaveBeenCalled()
+        if (found.success)
+          expect(['queued', 'running']).toContain(found.data?.status)
+      }
+      else {
+        expect(cancel).toHaveBeenCalledExactlyOnceWith(scope, receipt.id)
+        if (found.success)
+          expect(['cancelling', 'cancelled']).toContain(found.data?.status)
+      }
+    }
+    finally {
+      commit.release()
+      commit.restore()
+      cancel.mockRestore()
+    }
+  })
+
   it('invoke取消请求写入Runner并等待协作处理器结算为cancelled', async () => {
     let started: () => void = () => {}
     const entered = new Promise<void>((resolve) => {
       started = resolve
     })
-    const created = tools.createService({
+    const created = toolsRunner.createService({
       id: 'cancellation',
       runner,
       enabled: {

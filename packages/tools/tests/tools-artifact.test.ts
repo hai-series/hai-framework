@@ -1,7 +1,7 @@
-import type { ToolArtifactAccess } from '../src/server/tools-service-resources.js'
+import type { ToolArtifactAccess } from '../src/tools-node-main.js'
 import { core } from '@h-ai/core'
 import { expect, it, vi } from 'vitest'
-import { tools } from '../src/server/index.js'
+import { tools } from '../src/tools-node-main.js'
 
 const context = {
   scope: { tenantId: 'team', userId: 'alice' },

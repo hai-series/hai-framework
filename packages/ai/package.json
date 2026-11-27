@@ -83,6 +83,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@h-ai/tools-runner": "workspace:*",
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
     "@types/yauzl": "catalog:",

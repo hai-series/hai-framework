@@ -1,12 +1,11 @@
-import type { RunnerFunctions } from '@h-ai/runner'
-import type { ToolArtifactAccess } from '../src/server/tools-service-resources.js'
+import type { ToolArtifactAccess } from '@h-ai/tools/server'
 import { Buffer } from 'node:buffer'
 import { PassThrough, Readable } from 'node:stream'
 import { core } from '@h-ai/core'
 import { runner as frameworkRunner, HaiRunnerError } from '@h-ai/runner'
+import { HaiToolsError, tools } from '@h-ai/tools'
 import { expect, it, vi } from 'vitest'
-import { HaiToolsError } from '../src/index.js'
-import { tools } from '../src/server/index.js'
+import { toolsRunner } from '../src/index.js'
 
 const files: ToolArtifactAccess = {
   read: vi.fn(async () => core.ok({
@@ -77,7 +76,7 @@ it.each([
       close,
     })),
   }
-  const set = tools.createJobTools({
+  const set = toolsRunner.createJobTools({
     context: { scope, execution },
     files: { ...files, publish },
     runner,
@@ -103,7 +102,8 @@ it.each([
   { operationFailure: 'worker', cleanupFails: false },
   { operationFailure: 'none', cleanupFails: true },
   { operationFailure: 'none', cleanupFails: false },
-])('preserves safe operation diagnostics with cleanup outcome %j', async ({ operationFailure, cleanupFails }) => {
+  { operationFailure: 'none', cleanupFails: false, cancelDuringCleanup: true },
+])('preserves diagnostics and publishes only after successful cleanup %j', async ({ operationFailure, cleanupFails, cancelDuringCleanup }) => {
   const runner = frameworkRunner.create()
   vi.spyOn(runner, 'environment').mockReturnValue(core.ok({
     id: 'office',
@@ -119,13 +119,22 @@ it.each([
     networkPolicy: 'offline',
   }))
   const privateDetail = 'private-worker-or-storage-details'
-  const close = vi.fn(async () => cleanupFails
-    ? core.err({
+  const abort = new AbortController()
+  let cleaned = false
+  const close = vi.fn(async () => {
+    if (cleanupFails) {
+      return core.err({
         ...HaiRunnerError.CLEANUP_UNCONFIRMED,
         message: 'Cleanup unconfirmed',
         ext: { cleanupStage: 'remove' },
       })
-    : core.ok(undefined))
+    }
+    await Promise.resolve()
+    if (cancelDuringCleanup)
+      abort.abort()
+    cleaned = true
+    return core.ok(undefined)
+  })
   const scope = { tenantId: 'team', userId: 'alice' }
   const artifact = Buffer.from('%PDF-fixture')
   const response = operationFailure === 'worker'
@@ -139,8 +148,11 @@ it.each([
           artifact: { name: 'result.pdf', bytes: artifact.byteLength },
         },
       }
-  const publish = vi.fn(files.publish)
-  const set = tools.createJobTools({
+  const publish = vi.fn<typeof files.publish>(async (context, input) => {
+    expect(cleaned).toBe(true)
+    return files.publish(context, input)
+  })
+  const set = toolsRunner.createJobTools({
     context: {
       scope,
       execution: {
@@ -173,10 +185,25 @@ it.each([
   })
   const registry = tools.createRegistry()
   expect(registry.registerMany(set.tools).success).toBe(true)
-  const result = await registry.execute('office_convert', { fileId: 'file' })
+  const result = await registry.execute('office_convert', { fileId: 'file' }, { signal: abort.signal })
   expect(close).toHaveBeenCalledOnce()
-  if (!cleanupFails && operationFailure === 'none') {
+  if (cancelDuringCleanup) {
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiToolsError.CANCELLED.code)
+  }
+  else if (!cleanupFails && operationFailure === 'none') {
     expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        artifacts: [
+          {
+            title: 'result.pdf',
+            mediaType: 'application/pdf',
+          },
+        ],
+      })
+    }
   }
   else {
     expect(result.success).toBe(false)
@@ -203,14 +230,14 @@ it.each([
       expect(result.error.ext?.operationError).toBeUndefined()
     }
   }
-  expect(publish).toHaveBeenCalledTimes(operationFailure === 'none'
+  expect(publish).toHaveBeenCalledTimes(operationFailure === 'none' && !cleanupFails && !cancelDuringCleanup
     ? 1
     : 0)
 })
 
 it('omits unconfigured jobs and binds each configured job to its trusted environment', async () => {
   const runner = frameworkRunner.create()
-  const set = tools.createJobTools({
+  const set = toolsRunner.createJobTools({
     context: {
       scope: { tenantId: 'team', userId: 'alice' },
     },
@@ -225,26 +252,79 @@ it('omits unconfigured jobs and binds each configured job to its trusted environ
   expect(files.read).not.toHaveBeenCalled()
 })
 
-it('rejects unsafe browser targets before starting an execution', async () => {
-  const runner: RunnerFunctions = frameworkRunner.create()
-  const set = tools.createJobTools({
+it.each(['browser_navigate', 'web_capture'])('validates the %s URL before starting an execution', async (name) => {
+  const runner = frameworkRunner.create()
+  vi.spyOn(runner, 'environment').mockReturnValue(core.ok({
+    id: 'web',
+    image: `sha256:${'a'.repeat(64)}`,
+    backend: 'container',
+    capabilities: ['browser.navigate', 'web.capture'],
+    resources: {
+      cpu: 1,
+      memoryMiB: 1024,
+      pids: 64,
+      scratchMiB: 256,
+    },
+    networkPolicy: 'internal',
+    network: 'egress',
+  }))
+  const scope = { tenantId: 'team', userId: 'alice' }
+  const start = vi.fn(async () => core.err({ code: 'not-started', message: 'Fixture' }))
+  const set = toolsRunner.createJobTools({
     context: {
-      scope: { tenantId: 'team', userId: 'alice' },
+      scope,
+      execution: {
+        id: 'a'.repeat(64),
+        scope,
+        owner: { nodeId: 'node', generation: 'one' },
+        signal: new AbortController().signal,
+        emit: async () => core.ok(undefined),
+        start,
+      },
     },
     files,
     runner,
-    environments: { web: 'web' },
+    environments: { browser: 'web', web: 'web' },
     browserProxy: 'http://172.20.0.1:8080',
   })
-  const capture = set.tools.find(tool => tool.name === 'web_capture')
-  expect(capture).toBeDefined()
+  const job = set.tools.find(tool => tool.name === name)!
+  const base = 'https://example.com/'
+  const atLimit = base + '🌐'.repeat(2048 - base.length)
   for (const url of [
     'http://example.com',
     'https://127.0.0.1',
     'https://user:pass@example.com',
     'https://example.com:444',
-  ])
-    expect((await capture!.execute({ url })).success).toBe(false)
+    'https://example.com:/',
+    'https://example.test/',
+    'https://example.INTERNAL/',
+    'https://-example.com/',
+    'https://例え.com/',
+    `${base}with space`,
+    `${base}tab\t`,
+    `${base}file\\name`,
+    `${atLimit}a`,
+  ]) {
+    const result = await job.execute({ url })
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiToolsError.VALIDATION_FAILED.code)
+  }
+  expect(start).not.toHaveBeenCalled()
+
+  const accepted = [
+    base,
+    'HTTPS://Example.COM:443/path?q=one#part',
+    'https://example.com:0443/',
+    atLimit,
+  ]
+  for (const url of accepted) {
+    const result = await job.execute({ url })
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe('not-started')
+  }
+  expect(start).toHaveBeenCalledTimes(accepted.length)
 })
 
 it('only advertises web jobs with a deployment-controlled valid IPv4 proxy', () => {
@@ -263,7 +343,7 @@ it('only advertises web jobs with a deployment-controlled valid IPv4 proxy', () 
     'http://172.20.0.1:80?token=x',
     'https://172.20.0.1:80',
   ]) {
-    const set = tools.createJobTools({
+    const set = toolsRunner.createJobTools({
       context: {
         scope: { tenantId: 'team', userId: 'alice' },
       },
@@ -302,7 +382,7 @@ it('injects the trusted browser proxy into the actual launch without accepting i
     emit: vi.fn(async () => core.ok(undefined)),
     start: vi.fn(async () => core.err({ code: 'not-started', message: 'Fixture' })),
   }
-  const set = tools.createJobTools({
+  const set = toolsRunner.createJobTools({
     context: { scope, execution },
     files,
     runner,
@@ -316,7 +396,7 @@ it('injects the trusted browser proxy into the actual launch without accepting i
 })
 
 it('rejects document specifications outside the real format, layout and UTF-8 byte limits before execution', async () => {
-  const set = tools.createJobTools({
+  const set = toolsRunner.createJobTools({
     context: {
       scope: { tenantId: 'team', userId: 'alice' },
     },
@@ -402,7 +482,7 @@ it('rejects document specifications outside the real format, layout and UTF-8 by
 })
 
 it('describes useful form fields and runnable examples without defaulting mutually exclusive content', async () => {
-  const set = tools.createJobTools({
+  const set = toolsRunner.createJobTools({
     context: {
       scope: { tenantId: 'team', userId: 'alice' },
     },

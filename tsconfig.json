@@ -27,7 +27,7 @@
       "@h-ai/feedback": ["./packages/feedback/src/index.ts"],
       "@h-ai/ai": ["./packages/ai/src/index.ts"],
       "@h-ai/tools": ["./packages/tools/src/index.ts"],
-      "@h-ai/tools/server": ["./packages/tools/src/server/index.ts"],
+      "@h-ai/tools/server": ["./packages/tools/src/tools-node-main.ts"],
       "@h-ai/ai/client": ["./packages/ai/src/client/index.ts"],
       "@h-ai/cache": ["./packages/cache/src/index.ts"],
       "@h-ai/cli": ["./packages/cli/src/index.ts"],

@@ -10,6 +10,7 @@ const scope = { tenantId: 'agent', userId: 'alice' }
 let selection: ToolSelection | undefined
 let environments: { web?: string, video?: string }
 let browserProxy: string | undefined
+let artifacts: boolean
 
 beforeEach(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
@@ -17,8 +18,14 @@ beforeEach(async () => {
   selection = undefined
   environments = { web: 'capture', video: 'render' }
   browserProxy = 'http://172.20.0.1:8080'
+  artifacts = true
   vi.spyOn(core.config, 'get').mockImplementation(() => ({
-    workbench: { selection, environments, browserProxy },
+    workbench: {
+      selection,
+      environments,
+      browserProxy,
+      artifacts,
+    },
   }))
 })
 
@@ -141,6 +148,18 @@ it.each(['web', 'video', 'proxy'] as const)('omits website videos when the %s pr
   expect(catalog.success).toBe(true)
   if (catalog.success)
     expect(catalog.data.tools.some(tool => tool.name === 'website_video')).toBe(false)
+})
+
+it('omits artifact tools, container jobs and their video workflow when artifacts are disabled', async () => {
+  expect(toolHost.start().success).toBe(true)
+  expect((await toolHost.catalog(scope)).map(tool => tool.name)).toEqual(expect.arrayContaining([
+    'artifact_create',
+    'web_capture',
+    'video_render',
+    'website_video',
+  ]))
+  artifacts = false
+  expect(await toolHost.catalog(scope)).toEqual([])
 })
 
 it('rechecks global dependency exclusions after service creation and rejects the parent before execution', async () => {

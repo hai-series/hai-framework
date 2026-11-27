@@ -42,7 +42,14 @@ function joinedAuthorizer(registry?: ToolAuthorizer, execution?: ToolAuthorizer)
     return execution
   if (!execution)
     return registry
-  return async request => await registry(request) && await execution(request)
+  return async (request) => {
+    if (!await registry(request))
+      return false
+    const { signal, deadline } = request.context
+    if (signal.aborted || Date.now() >= deadline)
+      return false
+    return execution(request)
+  }
 }
 
 /**

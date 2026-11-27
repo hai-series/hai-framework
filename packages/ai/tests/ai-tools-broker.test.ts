@@ -1,9 +1,11 @@
-import type { ToolService } from '@h-ai/tools/server'
+import type { ToolService, ToolServiceOptions } from '@h-ai/tools-runner'
+import type { ToolInvoker } from '@h-ai/tools/server'
 import type { BuiltinToolBroker } from '../src/index.js'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { runner as frameworkRunner } from '@h-ai/runner'
-import { tools } from '@h-ai/tools/server'
+import { tools } from '@h-ai/tools'
+import { toolsRunner } from '@h-ai/tools-runner'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { describe, expect, it, vi } from 'vitest'
@@ -12,17 +14,23 @@ import { ai } from '../src/index.js'
 
 const scope = { tenantId: 'team', userId: 'alice' }
 
-async function fixture(run: (input: { service: ToolService, broker: BuiltinToolBroker, setEnabled: (value: boolean) => void }) => Promise<void>, network = true) {
+async function fixture(run: (input: {
+  service: ToolInvoker
+  broker: BuiltinToolBroker
+  authorize: ToolServiceOptions['authorize']
+  setEnabled: (value: boolean) => void
+}) => Promise<void>, network = true) {
   const runner = frameworkRunner.create()
   let broker: BuiltinToolBroker | undefined
   let service: ToolService | undefined
   let enabled = true
+  const authorize = vi.fn<ToolServiceOptions['authorize']>(() => true)
   const server = createServer((req, res) => {
     void broker?.handleRequest(req, res)
   })
   try {
     expect((await runner.init({ nodeId: 'local-mcp', pollMs: 10 })).success).toBe(true)
-    const created = tools.createService({
+    const created = toolsRunner.createService({
       id: 'local-mcp',
       runner,
       enabled: () => ({
@@ -30,7 +38,7 @@ async function fixture(run: (input: { service: ToolService, broker: BuiltinToolB
           ? ['echo']
           : [],
       }),
-      authorize: () => true,
+      authorize,
       createTools: () => ({
         tools: [
           tools.define({
@@ -58,14 +66,16 @@ async function fixture(run: (input: { service: ToolService, broker: BuiltinToolB
         throw new Error('A TCP test endpoint is required')
       port = address.port
     }
-    const mounted = ai.tools.createBroker({ service, url: `http://127.0.0.1:${port}/mcp` })
+    const invoker = { catalog: service.catalog, invoke: service.invoke } satisfies ToolInvoker
+    const mounted = ai.tools.createBroker({ service: invoker, url: `http://127.0.0.1:${port}/mcp` })
     expect(mounted.success).toBe(true)
     if (!mounted.success)
       throw new Error(mounted.error.message)
     broker = mounted.data
     await run({
-      service,
+      service: invoker,
       broker,
+      authorize,
       setEnabled: (value) => { enabled = value },
     })
   }
@@ -166,7 +176,7 @@ describe('ai.tools.createBroker', () => {
     }, false)
   })
   it('本地服务通过既有短期绑定与真实 HTTP MCP 调用，不配置伪外部服务', async () => {
-    await fixture(async ({ broker, service, setEnabled }) => {
+    await fixture(async ({ broker, service, authorize, setEnabled }) => {
       const bound = await broker.bind({
         scope,
         sessionId: 'task',
@@ -198,6 +208,14 @@ describe('ai.tools.createBroker', () => {
         expect(response.content).toEqual([
           { type: 'text', text: '{"value":"hello"}' },
         ])
+        for (const phase of ['submit', 'execute']) {
+          expect(authorize).toHaveBeenCalledWith(expect.objectContaining({
+            context: expect.objectContaining({ scope, sessionId: 'task' }),
+            name: 'echo',
+            input: { value: 'hello' },
+            phase,
+          }))
+        }
         setEnabled(false)
         expect((await client.listTools()).tools).toEqual([])
         expect((await client.callTool({

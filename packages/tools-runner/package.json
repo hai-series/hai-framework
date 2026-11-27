@@ -1,0 +1,52 @@
+{
+  "name": "@h-ai/tools-runner",
+  "type": "module",
+  "version": "1.0.0-beta.37",
+  "description": "Node.js adapter for running Hai tools as durable Runner jobs",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:clean": "rimraf dist"
+  },
+  "peerDependencies": {
+    "@h-ai/runner": "workspace:*"
+  },
+  "dependencies": {
+    "@h-ai/core": "workspace:*",
+    "@h-ai/tools": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@h-ai/reldb": "workspace:*",
+    "@h-ai/runner": "workspace:*",
+    "@types/node": "catalog:",
+    "rimraf": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
