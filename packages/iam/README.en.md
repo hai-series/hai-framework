@@ -20,6 +20,8 @@ Generated projects define allowed sign-in methods, password rules, and session l
 
 See the [configuration reference](../../docs/usage/configuration/iam.en.md) for configuration entry points, defaults, accepted values and when changes take effect.
 
+Initialize the authorization cache revision in shared Redis before the first production start. For a stuck writer registration, verify database transactions and replace the generation during maintenance. [Initialization and recovery](../../docs/usage/data/iam.en.md#iam-read-cache-recovery)
+
 ## Features
 
 IAM sends built-in verification codes, password reset notices and initial password setup invitations through Reach during quiet hours. Applications can supply their own send callbacks. [Quiet-hours examples](../../docs/usage/function/reach.en.md#reach-quiet-hours)
@@ -28,7 +30,7 @@ Passwords and API keys share the Crypto worker pool for SM3. Stored hashes are s
 
 [Browse the API list](../../docs/usage/function/iam.en.md#api-reference) for entry points, inputs, results and examples.
 
-`iam.user.updateUserWithRoles` commits profile and roles together. One-time ticket keys use digests, and tickets are consumed after checking their purpose.
+Account creation and role assignment commit together. Administrators can specify roles in `iam.user.createUser` and `iam.user.inviteUser`. Invitations are sent after commit. `iam.user.updateUserWithRoles` commits profile changes and role assignments together. One-time ticket keys use digests, and tickets are consumed after checking their purpose.
 
 For an LDAP upgrade, follow [Migrate existing LDAP identity bindings](../../docs/usage/function/iam.en.md#ldap-identity-migration).
 
@@ -36,7 +38,7 @@ For an LDAP upgrade, follow [Migrate existing LDAP identity bindings](../../docs
 
 ## Data Structures
 
-See the [data reference](../../docs/usage/data/iam.en.md) for accounts, roles, permissions, sessions and one-time credentials.
+RelDB stores accounts, roles, permissions and the lockout version. Shared Redis stores sessions, sign-in failure counts and one-time credentials. [See the data reference](../../docs/usage/data/iam.en.md)
 
 ## Development and Testing
 

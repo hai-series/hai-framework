@@ -32,7 +32,7 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 - LDAP/Reach 均可选：基础认证无需安装；默认 LDAP 关闭，选用默认客户端才安装 ldapts 并设置 login.ldap + ldap。OTP 邮件/短信由 otp.email/sms 控制，选择 Reach 标准模板或自定义发送回调；具体签名与失败处理见参考中的“可选 LDAP 与通知”。
 - 多节点共享 DB + Redis，Memory 只用于单进程。重置的策略失败计入 maxAttempts；OTP 消费不解除 resendInterval。管理员 createUser 不受自助注册开关限制。
 
-- 受保护请求使用 `iam.auth.verifyToken`：会话校验读取共享代际缓存中的当前用户/凭据状态，校验激活状态、期限与 `credentialVersion`，再读取共享缓存中的当前角色/权限；缓存不可信时回源，必要读取失败即拒绝。`iam.session.get/verifyToken` 复用同一当前用户/凭据状态读取，但返回的角色/权限仍是会话快照，不能替代当前授权。serv 内置 IAM 注入默认使用当前授权入口，无需手动补查。
+- 受保护请求使用 `iam.auth.verifyToken`。IAM 通过一条共享查询结果取得当前账号状态、角色和权限，用激活状态、期限和 `credentialVersion` 核对会话。缓存不可用时查库，必要读取失败时拒绝继续。`iam.session.get/verifyToken` 从同一条记录核对账号状态，返回会话中保存的角色权限。serv 内置 IAM 注入默认使用当前授权入口。
 - 用户批量读取用 `iam.user.getUsers(ids, { include: ['roles'] })`（最多 1000，去重保留输入顺序，缺失省略）；角色筛选用 `listUsers({ roleCode })`，在分页前执行，避免 N+1 和分页后过滤。
 
 
@@ -69,7 +69,7 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 
 `password.minCharacterClasses` 支持任意 N 类字符；创建/改密/重置共用服务端强度校验。`expirationDays: 0` 关闭期限；`preventSamePassword` 可独立启用，期限或首次强改时也拒绝旧密码。`requireInitialChange` 只约束管理端初始/重置密码，关闭后不受历史标记约束。首次/过期用户用 `iam.user.renewPassword({identifier,password,newPassword})` 完成原密码验证与换密后重新登录，不能先授予普通会话。AuthPanel 与标准 Kit/Serv 端点提供该流程。
 
-`security.lockoutEnabled` 可关闭失败锁定；`failureWindow` 为首次失败起的固定窗口秒数（默认86400），并用 `maxLoginAttempts/lockoutDuration` 配置阈值/锁定时间。共享 DB 原子计次。`initialCredentials.enabled` 开启 `iam.user.inviteUser()`，只发送现有 passwordReset 短期单次设密邀请，随机初始秘密不外发；需要重置通知就绪。投递未知保留账号/已发布凭据并返回失败，先核对后恢复，不自动重发或删除账号。
+`security.lockoutEnabled` 可关闭失败锁定；`failureWindow` 为首次失败起的固定窗口秒数（默认86400），并用 `maxLoginAttempts/lockoutDuration` 配置阈值/锁定时间。共享 Redis 原子计次，读写失败时拒绝受策略保护的鉴别。生产使用可靠持久化与 `noeviction`。`initialCredentials.enabled` 开启 `iam.user.inviteUser()`，只发送现有 passwordReset 短期单次设密邀请，随机初始秘密不外发；需要重置通知就绪。投递未知保留账号/已发布凭据并返回失败，先核对后恢复，不自动重发或删除账号。
 
 `loginAccess.enabled` 配置 `allowIps/denyIps`（IP/CIDR，拒绝优先）、IANA `timezone` 和 `windows[{days,start,end}]`（周一1至周日7，HH:mm，含起不含止，跨午夜）。登录第二参 `AuthRequestContext` 必须来自可信宿主；不能使用任意转发头/JSON IP。地址规则启用但缺少可信地址时拒绝。`reauthentication.enabled/operations/ttlSeconds` 控制敏感操作证明；`reauthenticate` 验证原密码，`checkSensitiveOperation` 在原有权限/资源检查后原子消费短期单次票据，绑定用户/会话/操作。Serv 标准 IAM 写操作和 admin 守卫用 `x-hai-reauthentication`，Kit 业务用 `kit.guard.requireSensitive`；证明不提升权限且只短暂保存在内存。
 
@@ -80,7 +80,7 @@ OTP 发布/消费用单身份 CAS；密码重置最终 SQL 同时核验 resetVer
 
 配置示例用 `IamConfigInput` 表达可省略默认值的输入；需要完整策略快照时用对应 Schema.parse 得到输出类型。应用仅从 `@h-ai/iam` 取公开函数/类型，不深导内部策略与仓储。源码内部示例明确标注上下文，文档示例类型检查不替代真实共享存储和通知集成验证。
 
-先初始化 RelDB。`iam.init()` 创建并校验表结构。IAM 通过 Reach 发送内置验证码、密码重置和初始设密邀请时传 `ignoreDnd: true`。IAM 校验签发时的有效期。Reach 的普通发送历史会保存收件人、正文和变量。会话凭据代次不匹配时重新登录。
+先初始化 RelDB。`iam.init()` 创建并校验表结构。IAM 通过 Reach 立即发送内置验证码、密码重置和初始设密邀请，发送历史只保留投递元数据。IAM 按签发时的有效期校验凭据。实际更换邮箱或手机号后，旧会话和未完成的凭据验证失效，引导用户重新登录。
 
 - 可选再认证规则为文件 operations 与权限 sensitiveOperations 的并集，主开关仍是 reauthentication.enabled；可信管理端使用 authz.setPermissionSensitiveOperations，异步 iam.getPublicConfig 返回含数据库的有效公开策略，读取失败拒绝放行。session.terminalLimits 按 web/app/desktop/api 限制，非空时未列类型拒绝；全局 maxSessions/singleDevice 同时生效，终端分组不是硬件真实性证明。原地登录使用标准 expectedUserId 限定原用户，凭据/验证码/锁定规则照常执行。
 

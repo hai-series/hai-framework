@@ -20,6 +20,8 @@
 
 在[模块配置清单](../../docs/usage/configuration/iam.md)中查阅配置入口、默认值、取值限制和生效条件。
 
+生产首次启动前，在共享 Redis 初始化权限读缓存代次。写入登记滞留时按维护步骤核对数据库事务并换代。[初始化与恢复](../../docs/usage/data/iam.md#iam-read-cache-recovery)
+
 ## 功能说明
 
 IAM 通过 Reach 发内置验证码、密码重置和初始设密邀请时会跳过免打扰。应用可用自定义回调接管发送。[夜间通知](../../docs/usage/function/reach.md#reach-quiet-hours)
@@ -28,7 +30,7 @@ IAM 通过 Reach 发内置验证码、密码重置和初始设密邀请时会跳
 
 [查 API 清单](../../docs/usage/function/iam.md#api-reference)，包含调用入口、输入、返回值和用法。
 
-`iam.user.updateUserWithRoles` 一次提交账号资料和角色。一次性票据以摘要作为缓存键，并在核验用途后消费。
+创建账号和分配角色一次提交。`iam.user.createUser` 和 `iam.user.inviteUser` 可由管理端指定角色，邀请在提交后发送。`iam.user.updateUserWithRoles` 一次提交账号资料和角色。一次性票据以摘要作为缓存键，并在核验用途后消费。
 
 <a id="可选-ldap-与通知接入"></a>
 
@@ -44,7 +46,7 @@ IAM 通过 Reach 发内置验证码、密码重置和初始设密邀请时会跳
 
 ## 数据结构
 
-查看[数据结构](../../docs/usage/data/iam.md)，了解账号、角色、权限、会话和一次性凭据。
+RelDB 保存账号、角色、权限和锁定版本。共享 Redis 保存会话、登录失败计数和一次性凭据。[查看数据结构](../../docs/usage/data/iam.md)
 
 ## 开发测试
 

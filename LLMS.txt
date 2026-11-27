@@ -34,7 +34,7 @@
 | @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) |
 | @h-ai/storage | [本地/S3、流式读写、checksum、预签名上传与操作日志](packages/cli/templates/skills/hai-storage/SKILL.md) · [同一次读取的元数据与正文](docs/usage/function/storage.md#files) · [统一的 storage.client 上传下载入口](docs/usage/function/storage.md#browser-files) |
 | @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) |
-| @h-ai/iam | [登录、会话、账号与角色更新、一次性票据](packages/cli/templates/skills/hai-iam/SKILL.md)，[LDAP 身份迁移](docs/usage/function/iam.md#ldap-identity-migration) |
+| @h-ai/iam | [登录、会话、账号与角色更新、一次性票据](packages/cli/templates/skills/hai-iam/SKILL.md)，[账号锁定与 Redis 状态](docs/usage/data/iam.md#cache-iam-login-failures)，[LDAP 身份迁移](docs/usage/function/iam.md#ldap-identity-migration) |
 | @h-ai/reach | [邮件、短信、API 通知、敏感投递与免打扰](packages/cli/templates/skills/hai-reach/SKILL.md) |
 | @h-ai/feedback | [首帖现场、双向回复、补充请求、限额与保留期限](packages/cli/templates/skills/hai-feedback/SKILL.md) |
 | @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A、ACP](packages/cli/templates/skills/hai-ai/SKILL.md)，[原生记忆命名空间与升级](docs/usage/configuration/ai.md#共用-qdrant-的应用)、[本地文件解析](docs/usage/function/ai.md#bounded-local-files)、[浏览器录音](docs/usage/function/ai.md#browser-recording) |

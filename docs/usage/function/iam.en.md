@@ -1,8 +1,10 @@
 # @h-ai/iam API Reference
 
-<!-- translation: partial -->
+[简体中文](iam.md) · [日本語](iam.ja.md)
 
-[Chinese source](iam.md) · [Configuration](../configuration/iam.en.md) · [Data structures](../data/iam.en.md)
+IAM authenticates users, issues sessions and reads current grants on a Node.js server. The application uses the verified identity to authorize the operation and access to the target resource.
+
+[README](../../../packages/iam/README.en.md) · [Configuration](../configuration/iam.en.md) · [Data structures](../data/iam.en.md)
 
 <a id="module-dependencies"></a>
 
@@ -10,9 +12,9 @@
 
 | Dependency | Purpose | When required | Setup order |
 | --- | --- | --- | --- |
-| Node.js | Runs authentication and authorization services. | Server-side IAM features. | Start IAM before accepting authentication requests. |
+| Node.js | Runs authentication and authorization services. | The server uses Node.js 22.23.4, 24.22.1, or 26.12.1 or a later release in the same major version. | Start IAM before accepting authentication requests. |
 | `@h-ai/reldb` | Stores accounts, roles, and permissions. | Required. | Initialize before `iam.init()`. |
-| `@h-ai/cache` | Manages sessions, one-time codes, and tickets. | Required. | Initialize before `iam.init()`. |
+| `@h-ai/cache` | Manages sessions, sign-in failure counts, one-time codes, and tickets. | Required. | Initialize before `iam.init()`. |
 | `@h-ai/core` | Provides logging, errors, and request context. | Installed with IAM. | Configure Core first when the application uses custom logging or shared settings. |
 | `@h-ai/crypto` | Provides password hashing and other cryptographic operations. | Installed with IAM. | `iam.init()` reuses the existing Crypto instance or initializes it as needed. |
 | `@h-ai/audit` | Captures IAM security events. | Installed with IAM. Used when the application enables audit capture. | Start Audit with `capture` enabled before IAM. Close IAM first. |
@@ -20,120 +22,147 @@
 | LDAP directory and `ldapts` | Connects to a directory for LDAP sign-in. | LDAP sign-in requires a reachable directory. Install `ldapts` to use the default client. | Pass directory settings to IAM. To use a custom client, pass `ldapClientFactory`. |
 | `altcha`, `zod` | Create and verify CAPTCHA challenges and validate configuration and input. | Installed with IAM. ALTCHA is used when CAPTCHA is enabled. | IAM invokes these libraries according to the configuration. |
 
-## Quick start
+<a id="quick-start"></a>
 
-### Example
+## Quick Start
 
-Initialize the server IAM instance before accepting authentication requests. The application verifies identity before invoking authorization and uses trusted IDs for administration.
+Install these packages in a Node.js project. Save the example as `src/iam-example.ts` and run it through your TypeScript runner. Each run uses a fresh in-memory SQLite database and Memory cache. Production instances share a relational database and Redis.
 
-```bash
-pnpm add @h-ai/iam @h-ai/reldb @h-ai/cache @h-ai/core
+```sh
+pnpm add @h-ai/iam @h-ai/reldb @h-ai/cache @h-ai/core @h-ai/crypto
 ```
 
 ```ts
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 
-// 基础密码认证不需要安装 Reach 或 ldapts。
-async function example() {
+async function run() {
   try {
-    // Open project-local data.db as SQLite. Success has no data; failure stops IAM setup.
-    const db = await reldb.init({ type: 'sqlite', database: './data.db' })
-    if (!db.success)
-      return db
-    // Initialize a local cache for the development sign-in. Success has no data; shared-backend policy can reject it.
-    const cached = await cache.init({ type: 'memory' })
-    if (!cached.success)
-      return cached
-    // Apply default IAM settings over the ready database and cache. Success has no data; failure stops registration.
-    const initialized = await iam.init({})
-    if (!initialized.success)
-      return initialized
-    // Register demo with the sample password. Success returns the registration result; duplicate usernames or policy violations fail.
-    const registered = await iam.user.register({ username: 'demo', password: 'Password123' })
-    if (!registered.success)
-      return registered
-    // Sign in as the newly registered demo with the same password. Success returns user and tokens; invalid credentials fail.
-    const login = await iam.auth.login({ identifier: 'demo', password: 'Password123' })
-    if (!login.success)
-      return login
-    // Validate the access token from sign-in. Success returns the current authorized session; invalid or expired tokens fail.
-    return await iam.auth.verifyToken(login.data.tokens.accessToken)
+    const db = await reldb.init({ type: 'sqlite', database: ':memory:' })
+    if (!db.success) return db
+    const store = await cache.init({ type: 'memory' })
+    if (!store.success) return store
+    const cryptography = await crypto.init()
+    if (!cryptography.success) return cryptography
+    const identity = await iam.init({ login: { otp: false } })
+    if (!identity.success) return identity
+
+    const account = { username: 'demo', password: 'ExampleOnly-123!' }
+    const registered = await iam.user.register(account)
+    if (!registered.success) return registered
+
+    const login = await iam.auth.login({
+      identifier: registered.data.user.username,
+      password: account.password,
+    })
+    if (!login.success) return login
+
+    const session = await iam.auth.verifyToken(login.data.tokens.accessToken)
+    if (!session.success) return session
+
+    const logout = await iam.auth.logout(login.data.tokens.accessToken)
+    if (!logout.success) return logout
+    return core.ok(session.data.userId)
   }
   finally {
-    // 应用关闭时按依赖的反向顺序释放。
-    // Close IAM without arguments and stop using its current runtime. The host still owns the cache and database.
     await iam.close()
-    // Release this example's in-memory cache and data with no arguments. The cache reports its own cleanup result.
-    await cache.close()
-    // Close data.db last without arguments. Its cleanup result is separate from sign-in.
-    await reldb.close()
+    await crypto.close()
+    const cacheClosed = await cache.close()
+    if (!cacheClosed.success) core.logger.error('Cache shutdown failed', { code: cacheClosed.error.code })
+    const dbClosed = await reldb.close()
+    if (!dbClosed.success) core.logger.error('Database shutdown failed', { code: dbClosed.error.code })
   }
 }
 
-const result = await example()
-if (!result.success)
-  // Write an error-level event with the failure code, omitting passwords and tokens.
-  core.logger.error('Authentication example failed', { code: result.error.code })
+const result = await run()
+if (!result.success) {
+  core.logger.error('IAM example failed', { code: result.error.code })
+  process.exitCode = 1
+}
+else {
+  core.logger.info('IAM example authenticated a user', { userId: result.data })
+}
 ```
+
+The success log contains the authenticated user ID. Logout revokes both access and refresh credentials for that session. Browser clients use HTTP integrations for cookies and refresh. [Kit sign-in](kit.en.md#authorization-example) · [Serv authentication](serv.en.md#authentication)
 
 <a id="api-reference"></a>
 
-## Features
+## API Reference
 
-Each section lists individual interfaces, then follows the calls through a task. Parameters and defaults describe the arguments; call examples show the invocation, and returns describe the result or successful data as noted below. Check `success` on `HaiResult` before reading `data`. Detailed parameter defaults and advanced constraints remain linked to the Chinese reference.
-
-Run these examples after IAM initialization. Check success after each call, return the original failed result, and read data only on success. Scenarios without a function declaration are fragments inside an async application function. Authorize management operations at the application boundary.
-
+The scenarios below use `iam` from `@h-ai/iam` and `core` and `HaiCommonError` from `@h-ai/core` on a server where IAM is already running. Return types in the tables describe `HaiResult.data`, except for properties and explicitly identified synchronous methods. Successful `void` results carry no payload, while successful `null` results mean the record is absent. The application authorizes the caller and scope before invoking an administrative method.
 
 <a id="lifecycle"></a>
 
-### Prepare IAM and public policies: `iam`
+### Start IAM and publish policy · `iam`
 
-Prepare the database and cache before IAM. Public settings drive available authentication UI without exposing secrets.
+Start IAM before accepting requests. At shutdown, close IAM before releasing host-owned dependencies.
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `iam.init(config)` | 先连接 RelDB 和 Cache，再等待身份服务可用 | `config: IamConfigInput` is required. An empty object uses defaults. See [configuration](../configuration/iam.en.md). | `void` | `await iam.init({})` |
-| `iam.close()` | 释放 IAM 运行时状态；缓存和数据库仍由应用关闭 | No arguments | `Promise<void>` | `await iam.close()` |
-| `iam.getPublicConfig()` | Read public policy including stored sensitive operations | No arguments | `Promise<HaiResult<IamPublicConfig>>` | `await iam.getPublicConfig()` |
+| `iam.init(config)` | Start IAM once RelDB and Cache are ready | `config: IamConfigInput` is required. An empty object uses defaults. See [configuration](../configuration/iam.en.md). | `void` | `await iam.init({})` |
+| `iam.close()` | Release IAM runtime resources | No arguments | `Promise<void>` | `await iam.close()` |
+| `iam.getPublicConfig()` | Read public policy including stored sensitive operations | No arguments | `IamPublicConfig` | `await iam.getPublicConfig()` |
 | `iam.config` | Read the current redacted config | Read-only property; no arguments | `IamConfig \| null` | `iam.config` |
-| `iam.publicConfig` | Read the last public policy snapshot | Read-only property; no arguments | `IamPublicConfig \| null` | `iam.publicConfig` |
+| `iam.publicConfig` | Read the file-derived public snapshot | Read-only property | `IamPublicConfig \| null` | `iam.publicConfig` |
 | `iam.isInitialized` | Check whether IAM is ready | Read-only property; no arguments | `boolean` | `iam.isInitialized` |
+| `iam.isRegisterEnabled` | Read registration flag | Read-only property | `boolean` | [`iam.isRegisterEnabled`](#users) |
+| `iam.auth` | Authentication operations | Read-only property | `AuthnOperations` | [`iam.auth`](#authentication) |
+| `iam.user` | Account operations | Read-only property | `UserOperations` | [`iam.user`](#users) |
+| `iam.authz` | Authorization operations | Read-only property | `AuthzOperations` | [`iam.authz`](#authorization) |
+| `iam.session` | Session operations | Read-only property | `SessionOperations` | [`iam.session`](#sessions) |
+| `iam.apiKey` | API key operations | Read-only property | `ApiKeyOperations` | [`iam.apiKey`](#api-keys) |
+| `iam.ticket` | Single-use ticket operations | Read-only property | `TicketOperations` | [`iam.ticket`](#tickets) |
 
-##### Parameters and result semantics: Public settings and lifecycle
+##### Object arguments and fields
 
-The public settings exclude directory, database and notification credentials. Check `iam.isInitialized` before relying on `iam.isRegisterEnabled`, which is true before initialization or unless public registration is explicitly disabled.
+| Type or field | Values and behavior |
+| --- | --- |
+| `IamConfigInput` | Pass defaultable configuration accepted by `IamConfigSchema`. Optionally add `reach`, `ldapClientFactory`, `ldapSyncUser` and delivery callbacks. |
+| `IamPublicConfig` | Public settings for sign-in, registration, challenges, passwords, resets, reauthentication, agreements and form appearance. When reauthentication is enabled, `getPublicConfig()` merges file and database rules. |
+| `config / publicConfig / isRegisterEnabled` | The first two properties are `null` before initialization. The registration flag defaults to true until initialization, so check readiness first. `config` is a redacted server-side snapshot. |
 
-[Detailed parameters and workflows](iam.md#lifecycle)
+The browser entry exports schemas, public types and `HaiIamError`. `IamConfigSettingsInput` describes file input and `IamConfig` describes the parsed settings.
 
-config/publicConfig are null before initialization. publicConfig is the last in-memory snapshot; call getPublicConfig to refresh persisted policy and check its result. isInitialized does not grant authorization.
+##### Runtime dependencies supplied by the host
 
-#### Scenario: Prepare IAM and public policies
+| Field | Type | Default and use |
+| --- | --- | --- |
+| `reach?` | `ReachFunctions` | Install, initialize and close Reach in the application. IAM uses the initialized instance to resolve templates and gives explicit callbacks priority. Without either a usable callback or a template, the corresponding notification route is unavailable. |
+| `ldapClientFactory?` | `(config: LdapConfig) => Promise<HaiResult<LdapClient>>` | When LDAP is enabled and no factory is supplied, the application installs `ldapts` for the default client. Custom factories return a client with `bind`, `search` and `unbind` and report failures through `HaiResult`. |
+| `ldapSyncUser?` | `boolean` | Defaults to `true`, which allows local provisioning and profile synchronization. `false` accepts only an existing binding for an account that can sign in. |
+| `onPasswordResetRequest?` | `(user: User, token: string, context: IamNotificationContext) => Promise<void>` | Delivers reset tokens by email or SMS, including initial password setup invitations. If omitted, a Reach reset template can provide the implementation. |
+| `onOtpSendEmail?` | `(email: string, code: string, context: IamNotificationContext) => Promise<void>` | Sends an email verification code. If omitted, the Reach `otp_email` template can provide the implementation. |
+| `onOtpSendSms?` | `(phone: string, code: string, context: IamNotificationContext) => Promise<void>` | Sends an SMS verification code. If omitted, the Reach `otp_sms` template can provide the implementation. |
+
+Delivery callbacks receive `IamNotificationContext`. `expiresAt: Date` is the credential deadline, and `idempotencyKey: string` is a stable deduplication key for the publication. Reject the promise if sending fails or times out so IAM can report the result.
+
+<a id="detailed-workflow"></a>
+
+#### Scenario: Return the current policy to the sign-in page
+
+With the standard Kit or Serv handler, the client calls `client.iam.auth.publicConfig()`. A custom handler can read the policy below and forward only its public result. The standard form prefers Markdown when the same agreement also has a URL.
 
 ```ts
-// Fragment inside an async application function; return failed results to its caller.
-// Read merged public authentication policy with no arguments. Success omits private settings; return the failed result on failure.
-const publicSettingsResult = await iam.getPublicConfig()
-if (!publicSettingsResult.success)
-  return publicSettingsResult
-const publicSettings = publicSettingsResult.data // merged public IAM settings
-// Read only the returned public policy; never return iam.config as a public response.
+async function publicSignInPolicy() {
+  const result = await iam.getPublicConfig()
+  if (!result.success) return result
+  return core.ok(result.data)
+}
 ```
-
-See the quick start for initialization and reverse shutdown. Public policy reflects current settings and cannot bypass server checks. File settings stay in the configuration guide.
-
-Examples assume that IAM is initialized and that the application has checked permissions for the target user or resource. For a `HaiResult`, check `success` before reading `data` or `error`. The success column shows the value inside `data`; `void` means there is no data to read. `?` marks an optional argument.
 
 <a id="authentication"></a>
 
-### Sign in, register and reauthenticate: `iam.auth`
+### Sign in, verify ownership and approve sensitive operations · `iam.auth`
 
-Follow enabled server authentication flows, including challenges, password expiry and operation-bound proof. The frontend does not establish identity.
+Use a sign-in method enabled by the server. Once the credential is valid, IAM still checks account state, request policy and session limits. The host then authorizes the business operation.
+
+Use `iam.auth.verifyToken()` for protected requests. After locating the session, it reads account state, roles and permissions from one shared query result. The host checks the returned permissions for the requested operation. [Account and authorization cache record](../data/iam.en.md#cache-iam-result)
 
 #### Interface list
 
@@ -148,33 +177,113 @@ Follow enabled server authentication flows, including challenges, password expir
 | `iam.auth.sendOtp(identifier, options?)` | Send a code through an enabled channel | `identifier: string` account identifier for the enabled channel, such as email or phone · `options?: { captcha?: string }` supplies the challenge proof when asked for it | `{ expiresAt: Date; }` | `await iam.auth.sendOtp(identifier)` |
 | `iam.auth.verifyToken(accessToken)` | Verify an access token and current identity | `accessToken: string` access token for the current session | `Session` | `await iam.auth.verifyToken(accessToken)` |
 | `iam.auth.logout(accessToken)` | Revoke the presented access and refresh credentials | `accessToken: string` access token for the current session | `void` | `await iam.auth.logout(accessToken)` |
-| `iam.auth.reauthenticate(accessToken, password, operation)` | Recheck a password and issue an operation ticket | `accessToken: string` access token for the current session · `password: string` password checked against the password policy · `operation: string` sensitive operation name registered by the server | `IssuedTicket` | `await iam.auth.reauthenticate(accessToken, password, 'users:delete')` |
-| `iam.auth.checkSensitiveOperation(accessToken, operation, ticket?)` | Check and consume operation proof | `accessToken: string` access token for the current session · `operation: string` sensitive operation name registered by the server · `ticket?: string` one-time ticket issued by the server | `void` | `await iam.auth.checkSensitiveOperation(accessToken, 'users:delete', operationTicket)` |
+| `iam.auth.reauthenticate(accessToken, password, operation)` | Recheck a password and issue an operation ticket | `accessToken: string` access token for the current session · `password: string` password checked against the password policy · `operation: string` sensitive operation name registered by the server | `IssuedTicket` | `await iam.auth.reauthenticate(accessToken, password, 'orders.cancel')` |
+| `iam.auth.checkSensitiveOperation(accessToken, operation, ticket?)` | Check and consume operation proof | `accessToken: string` access token for the current session · `operation: string` sensitive operation name registered by the server · `ticket?: string` one-time ticket issued by the server | `void` | `await iam.auth.checkSensitiveOperation(accessToken, 'orders.cancel', operationTicket)` |
 
 <a id="authentication-arguments"></a>
 
-##### Object arguments
+##### Object arguments and fields
 
-| Type or call | Fields and values |
+| Type or field | Values and behavior |
 | --- | --- |
-| `PasswordCredentials` | Requires `identifier` (username, email, or phone) and `password`. |
-| `OtpCredentials` | Requires `identifier` (email or phone) and one-time `code`. |
-| `LdapCredentials` | Requires the directory `username` and `password`. |
-| `PasswordCredentials / OtpCredentials / LdapCredentials` | Send `captcha` when an interactive challenge is required. For session recovery, use `expectedUserId` to bind the attempt to the original account. |
-| `ApiKeyCredentials` | Required `key: string` is the original API key returned at issuance. |
-| `AuthRequestContext` | Optional `terminalType` (`web`, `app`, `desktop`, `api`; ordinary sign-ins default to `web`), `ip`, `userAgent`, and `requestId`. Supply them from the trusted host. |
+| `PasswordCredentials / OtpCredentials / LdapCredentials` | Password credentials use `identifier` and `password`. OTP takes a contact `identifier` and `code`. LDAP takes the directory `username` and `password`. Supply `captcha` when ALTCHA is enabled. A trusted recovery flow may bind `expectedUserId` to the original principal. |
+| `ApiKeyCredentials` | `key` is the plaintext returned once on issuance. Grants are limited to the intersection of the owner’s current grants and the key scopes. |
+| `AuthRequestContext` | `terminalType` is `web`, `app`, `desktop` or `api`. Interactive sign-in defaults to `web` and API-key sign-in to `api`. Supply `ip`, `userAgent` and `requestId` from the trusted host. |
+| `CaptchaOperation / captcha` | Operations are `login`, `register`, `sendOtp`, `passwordReset` and `renewPassword`. The challenge returns `id` and `challenge`. Submit `{ id, solution }` as a JSON string. Each challenge can be submitted once. |
+| `AuthResult` | Success supplies the public `user`, `tokens`, role and permission codes, and optional `agreements`. Manage access and refresh tokens at the trusted server boundary. |
+
+#### Scenario: Open the workspace after registration
+
+Public registration commits the account and its default role before attempting to create a session. The account can exist even if its initial state, login access policy, or session limit prevents sign-in. Use the error to guide the user to sign in or wait for activation. The standard client solves an enabled challenge first.
+
+![Sign-in checks credentials and account state, then grants and session limits](../images/function-iam-login.en.svg)
+
+```ts
+import { type AuthRequestContext, type RegisterOptions, iam } from '@h-ai/iam'
+
+async function registerWorkspace(input: RegisterOptions, context: AuthRequestContext) {
+  const signedIn = await iam.auth.registerAndLogin(input, context)
+  if (!signedIn.success) return signedIn
+  return core.ok({ userId: signedIn.data.user.id, tokens: signedIn.data.tokens })
+}
+```
+
+<a id="可选-ldap-与通知接入"></a>
+<a id="使用可选-reach-自动发送"></a>
+
+#### Scenario: Sign in with an emailed code
+
+Enable `login.otp` and `otp.email` and supply a working mail sender. Inject `onOtpSendEmail`, or initialize Reach with an `otp_email` template and pass the instance to IAM. For SMS use `otp.sms` with `onOtpSendSms` or `otp_sms`. Resets and invitations use `onPasswordResetRequest` or Reach’s `password_reset` (email) and `password_reset_sms` (SMS). OTP templates use `{code}`, and reset templates can use `{token}`, `{expiresAt}` and `{resetUrl}`. The built-in integration attempts immediate delivery and retains only sensitive-message metadata. [Reach and quiet hours](reach.en.md#reach-quiet-hours)
+
+Request delivery using the email address from the form and show the expiry. In a separate request, submit the code the user received. Pass separate challenge proofs when enabled. Delivery callbacks run after credential publication and receive `idempotencyKey` and `expiresAt` in their third argument. A timeout leaves delivery uncertain. Check provider records before deciding whether to send again.
+
+```ts
+import { type AuthRequestContext, iam } from '@h-ai/iam'
+
+async function sendEmailCode(email: string, captcha?: string) {
+  const sent = await iam.auth.sendOtp(email, { captcha })
+  if (!sent.success) return sent
+  return core.ok({ expiresAt: sent.data.expiresAt })
+}
+
+async function signInWithEmailCode(email: string, code: string, context: AuthRequestContext, captcha?: string) {
+  const login = await iam.auth.loginWithOtp({ identifier: email, code, captcha }, context)
+  if (!login.success) return login
+  return core.ok({ userId: login.data.user.id, tokens: login.data.tokens })
+}
+```
+
+The code is bound to the account or unregistered contact resolved at issuance. Changing the contact binding does not transfer the code to a new principal. A consumed code expires immediately and the resend cooldown still applies. With public registration enabled (`register.enabled`), the account and default role commit together. [OTP records](../data/iam.en.md#cache-iam-otp)
+
+#### Scenario: Use ALTCHA in a custom form
+
+Enable `captcha.enabled`. The server issues a `login` challenge and the browser uses the Altcha solver to compute `solution`. The sign-in request submits the JSON string `{ id, solution }` with the credentials. Built-in forms do this automatically. Request a new challenge after a failed sign-in or expiry.
+
+Return only `id` and `challenge` to the form. Applications can use the standard component or install `altcha` in a custom frontend to use its solver.
+
+```ts
+async function loginChallenge() {
+  const challenge = await iam.auth.createCaptcha({ operation: 'login' })
+  if (!challenge.success) return challenge
+  return challenge
+}
+
+async function submitPassword(identifier: string, password: string, id: string, solution: object) {
+  const login = await iam.auth.login({ identifier, password, captcha: JSON.stringify({ id, solution }) })
+  if (!login.success) return login
+  return core.ok({ userId: login.data.user.id, tokens: login.data.tokens })
+}
+```
+
+#### Scenario: Sign in with a company directory account
+
+Enable `login.ldap` and configure the directory URL, search base, `directoryId`, and immutable identity attribute. The default client requires `pnpm add ldapts`. A custom host can inject `ldapClientFactory`. Use LDAPS or enable StartTLS with `useTls: true`. OpenLDAP commonly uses `entryUUID`, and Active Directory can use `objectGUID`. A renamed bound entry retains its IAM user ID. With `ldapSyncUser: false`, only existing bindings are accepted. Conflicts and ambiguous matches are rejected.
+
+[Directory configuration](../configuration/iam.en.md#ldap)
+
+```ts
+import { type AuthRequestContext, type LdapCredentials, iam } from '@h-ai/iam'
+
+async function signInAtWork(credentials: LdapCredentials, context: AuthRequestContext) {
+  const login = await iam.auth.loginWithLdap(credentials, context)
+  if (!login.success) return login
+  return core.ok({ userId: login.data.user.id, tokens: login.data.tokens })
+}
+```
 
 <a id="ldap-identity-migration"></a>
 
-#### Migrate existing LDAP identity bindings
+#### Scenario: Bind existing accounts to verified directory entries
 
-Pause LDAP sign-in and upgrade all nodes. Have a directory administrator independently verify each immutable directory entry ID against its IAM user ID. The example binds a verified OpenLDAP entry to the existing `user-42` account and preserves its roles and data. The username, DN and legacy metadata are only inputs to that review.
+Pause LDAP sign-in. Have a directory administrator verify the mapping independently, then save the matching directory identifier, local user ID, and immutable entry ID in `approved-bindings.json`. `private-db.json` contains the private RelDB settings for the target database.
 
 ```json
 {
   "directoryId": "company-directory",
   "identityAttribute": "entryUUID",
-  "bindings": [{ "entryId": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76", "userId": "user-42" }]
+  "bindings": [
+    { "entryId": "3dd5e1a0-6199-49b7-a8e3-9f2d260f7b76", "userId": "user-42" }
+  ]
 }
 ```
 
@@ -183,50 +292,46 @@ node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json -
 node ./node_modules/@h-ai/iam/dist/ldap-bindings.js --database private-db.json --manifest approved-bindings.json --apply
 ```
 
-`private-db.json` contains the private RelDB JSON configuration for the target database. The first command previews the number of new and existing bindings. Run `--apply` after reviewing the counts. The import commits in one transaction, supports reruns of the same bindings and rejects conflicts. Keep both input files private. Reopen LDAP sign-in after checking the verified accounts. Use `ldapSyncUser: false` to require an existing binding.
+Read `newBindings` and `existingBindings` from the dry run before applying. A conflict rolls back the batch, while importing the same binding again leaves it as it was. Check that the directory account signs in with its original IAM user ID before reopening sign-in.
 
-##### Parameters and result semantics: Sign-in and registration
+#### Scenario: Confirm identity before cancelling an order
 
-IAM passes `ignoreDnd: true` when it sends built-in verification codes, password resets or initial password setup invitations through Reach. IAM validates credentials against their original deadlines. Applications using custom callbacks choose when to send. [Quiet-hours examples](reach.en.md#reach-quiet-hours)
+Register `orders.cancel` in the file or RBAC policy. The application first checks the session, grants and ownership of the order. If proof is required, ask for the current password and resubmit with the returned ticket. The standard HTTP header is `x-hai-reauthentication`. Proof is single-use and bound to the current user, session and operation.
 
-Choose the method that matches the configured credentials. `context` is optional and carries trusted request metadata. Success returns the user, tokens, roles and permissions.
+```ts
+async function proveCancellation(accessToken: string, password: string) {
+  const proof = await iam.auth.reauthenticate(accessToken, password, 'orders.cancel')
+  if (!proof.success) return proof
+  return core.ok({ ticket: proof.data.ticket, expiresAt: proof.data.expiresAt })
+}
 
-##### Parameters and result semantics: Challenges, verification and fresh proof
-
-Create a challenge for the intended operation. Pass the access token to validate or end a session. Bind a reauthentication ticket to the operation for which it was issued.
-
-[Detailed parameters and workflows](iam.md#authentication)
-
-#### Scenario: Sign in, register and reauthenticate
-
-Login requires valid input, challenge, account state and session policy. This follows password login; other strategies validate their own credentials.
-
-![Login: checks beyond valid credentials](../images/function-iam-login.en.svg)
-
-An enabled challenge is consumed once for its operation, even when the password is wrong. Valid credentials and account state precede effective authorization and shared terminal/session-limit checks. Tokens and user data do not grant access to every resource.
-
-The workflows cover registration, login, challenges, OTP/LDAP, session verification and reauthentication. Form values are inputs; use identities and proof only from successful results. Disabled methods fail.
+async function checkCancellationProof(accessToken: string, ticket: string) {
+  const checked = await iam.auth.checkSensitiveOperation(accessToken, 'orders.cancel', ticket)
+  if (!checked.success) return checked
+  return core.ok(undefined)
+}
+```
 
 <a id="users"></a>
 
-### Maintain users and passwords: `iam.user`
+### Maintain accounts, profiles and passwords · `iam.user`
 
-Authorize the actor before looking up or modifying users. Distinguish self-service password changes from administrative resets.
+Self-service operations use the holder’s access token. Administrative operations use an authorized target user ID. Use the combined method to commit profile and role changes in one transaction.
 
 #### Interface list
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `iam.user.createUser(options)` | Create a user as an administrator | `options: RegisterOptions` · Administrator-supplied account details and initial credentials · [Object arguments](#users-arguments) | `RegisterResult` | `await iam.user.createUser({ username, password })` |
+| `iam.user.createUser(options, management?)` | Create a user as an administrator | `options: RegisterOptions` supplies account details and initial credentials. Use `management.roleIds` to specify roles. [Object arguments](#users-arguments) | `RegisterResult` | `await iam.user.createUser({ username, password }, { roleIds: [reviewerRoleId] })` |
 | `iam.user.register(options)` | Register under the public policy | `options: RegisterOptions` · Account details and password for public registration · [Object arguments](#users-arguments) | `RegisterResult` | `await iam.user.register({ username, password })` |
-| `iam.user.inviteUser(options)` | Create a user and send a password-setup invitation | `options: Omit<RegisterOptions, "password">` · Supply account details and the contact for the invitation · [Object arguments](#users-arguments) | `RegisterResult` | `await iam.user.inviteUser({ username, email })` |
+| `iam.user.inviteUser(options, management?)` | Create a user and send a password-setup invitation | `options: Omit<RegisterOptions, "password">` supplies account details and the contact for the invitation. Use `management.roleIds` to specify roles. [Object arguments](#users-arguments) | `RegisterResult` | `await iam.user.inviteUser({ username, email }, { roleIds: [reviewerRoleId] })` |
 | `iam.user.getUser(userId, options?)` | Find a user by ID | `userId: string` target user ID · `options?: { include?: 'roles'[] }` requests roles when needed · [Object arguments](#users-arguments) | `User \| null` | `await iam.user.getUser(userId)` |
 | `iam.user.getUsers(userIds, options?)` | Read users and requested relations in bulk | `userIds: readonly string[]` user IDs to look up together · `options?: { include?: 'roles'[] }` requests roles when needed · [Object arguments](#users-arguments) | `User[]` | `await iam.user.getUsers([userId], { include: ['roles'] })` |
 | `iam.user.listUsers(options?)` | Filter and paginate users | `options?: ListUsersOptions` · Select accounts, ordering, pagination, and included relations · [Object arguments](#users-arguments) | `PaginatedResult<User>` | `await iam.user.listUsers({ page: 1, pageSize: 20 })` |
 | `iam.user.getCurrentUser(accessToken)` | Read the current token holder profile | `accessToken: string` access token for the current session | `User` | `await iam.user.getCurrentUser(accessToken)` |
 | `iam.user.updateCurrentUser(accessToken, data)` | Update the current token holder profile | `accessToken: string` access token for the current session · `data: UpdateCurrentUserInput` · [Object arguments](#users-arguments) | `User` | `await iam.user.updateCurrentUser(accessToken, { displayName: 'Alice' })` |
 | `iam.user.updateUser(userId, data)` | Update a user by ID | `userId: string` target user ID · `data: Partial<User>` contains fields to change. See the writable-fields guidance in this section | `User` | `await iam.user.updateUser(userId, { displayName: 'Alice' })` |
-| `iam.user.updateUserWithRoles` | Save profile and roles in one transaction | userId, { profile?, roleIds? } | `User` or an error after rollback | `await iam.user.updateUserWithRoles(userId, { profile: { displayName: 'Alice' }, roleIds: [reviewerRoleId] })` |
+| `iam.user.updateUserWithRoles(userId, input)` | Save profile and roles in one transaction | `userId: string` · `input: UpdateUserWithRolesInput` | `User` or an error after rollback | `await iam.user.updateUserWithRoles(userId, { profile: { displayName: 'Alice' }, roleIds: [reviewerRoleId] })` |
 | `iam.user.deleteUser(userId)` | Delete a user | `userId: string` target user ID | `void` | `await iam.user.deleteUser(userId)` |
 | `iam.user.adminResetPassword(userId, newPassword)` | Reset a password as an administrator | `userId: string` target user ID · `newPassword: string` new password subject to the current policy | `void` | `await iam.user.adminResetPassword(userId, newPassword)` |
 | `iam.user.renewPassword(input)` | Replace an expired or initial password using original credentials | `input` requires `identifier`, current `password`, `newPassword`, and optional `captcha` | `void` | `await iam.user.renewPassword({ identifier, password, newPassword })` |
@@ -239,74 +344,87 @@ Authorize the actor before looking up or modifying users. Distinguish self-servi
 
 <a id="users-arguments"></a>
 
-##### Object arguments
+##### Object arguments and fields
 
-| Type or call | Fields and values |
+| Type or field | Values and behavior |
 | --- | --- |
-| `RegisterOptions` | Requires `username` and, for direct creation or registration, `password`. Optional fields are `email`, `phone`, `displayName`, and `metadata`. Invitees set their own password. Public registration can require `captcha`. Admin callers may set `accountType`, `accountStatus`, and `accountExpiresAt`; temporary accounts need an expiry. |
-| `getUser / getUsers include` | Omit `include` for users alone. Pass `{ include: ['roles'] }` to load their roles. |
-| `ListUsersOptions` | Optional `page` and `pageSize` paginate. `search` searches username, email, phone, or display name. `roleCode` matches a role exactly. `accountStatus` filters `active`, `dormant`, or `closed`; `include` can load roles. Without `sortBy`, results are newest first. With `sortBy`, `sortDirection` defaults to `desc`. |
-| `UpdateCurrentUserInput` | Pass only the profile fields to change: `username`, `email`, `phone`, `displayName`, `avatarUrl`, or `metadata`. |
+| `RegisterOptions` | `username` and `password` are required. Optional fields are `email`, `phone`, `displayName`, `metadata` and the public registration proof `captcha`. `accountType` defaults to `permanent`. A `temporary` account needs a future `accountExpiresAt: Date`. `accountStatus` is `active`, `dormant` or `closed`. Public registration uses `register.defaultAccountStatus`. |
+| `management.roleIds / UpdateUserWithRolesInput` | On creation and invitation, supply the complete set of role IDs. Omit it to use the default role or pass `[]` to assign none. For updates, `profile` is a partial patch. Omitted `roleIds` preserves assignments and `[]` clears them. A role error rolls back the entire update. |
+| `UpdateCurrentUserInput` | Writable fields are `username`, `email`, `phone`, `displayName`, `avatarUrl` and `metadata`. Omitted fields are preserved. Changing or clearing email or phone clears its verification and invalidates existing sessions and reset credentials. Ordinary profile changes such as display name allow the session to continue. |
+| `ListUsersOptions / include` | `page` starts at 1. `pageSize` defaults to 20 and is capped at 200. `search` matches username, email, phone or display name. `roleCode` matches exactly before pagination. `accountStatus` filters account state. `sortBy` accepts `username`, `email`, `displayName`, `accountStatus`, `createdAt` and `updatedAt`. `sortDirection` is `asc` or `desc`, with newest creation first by default. `include: ['roles']` loads roles. Batch reads accept up to 1000 IDs, deduplicate in input order and omit missing records. |
+| `User / RegisterResult` | `User` carries public profile details, account status, expiry, contact verification flags and timestamps. `RegisterResult` adds optional `agreements`. Applications still authorize field disclosure. |
 
-##### User query options
+#### Scenario: Invite a reviewer and confirm their role
 
-| Field | Default or required | Effect and conditions |
-| --- | --- | --- |
-| `page: number` | `1` | One-based page to read |
-| `pageSize: number` | `20` | Maximum users per page, capped at 200 |
-| `search: string` | Optional | Match a substring of username, email, phone or display name |
-| `roleCode: string` | Optional | Match exact role code before pagination |
-| `accountStatus` | Optional | Select active, dormant, or closed. Omit for all statuses |
-| `sortBy / sortDirection` | `createdAt / desc` | Choose username, email, displayName, accountStatus, or createdAt. Direction applies with an explicit field |
-| `include: 'roles'[]` | `[]` | Include each user’s roles when the array contains roles |
-
-Assume the initialized directory contains one dormant user, Ada, with the reader role. The result shows only the relevant fields.
+The administrator is allowed to assign the reviewer role. Enable `initialCredentials.enabled` and `passwordReset.enabled` and set up the delivery channel. Use the verified role ID. IAM sends the one-time invitation after committing the account and roles. If delivery is uncertain, the committed account and roles remain. Check the provider before initiating recovery.
 
 ```ts
-import { iam } from '@h-ai/iam'
+async function inviteReviewer(username: string, email: string, reviewerRoleId: string) {
+  const invitation = await iam.user.inviteUser({ username, email }, { roleIds: [reviewerRoleId] })
+  if (!invitation.success) return invitation
 
-// Read at most two dormant users on page one with roles. Read error.code on failure.
-const result = await iam.user.listUsers({ accountStatus: 'dormant', page: 1, pageSize: 2, include: ['roles'] })
-if (result.success) {
-  const items = result.data.items.map(user => ({ displayName: user.displayName, roles: user.roles?.map(role => role.code) }))
-  void items // [{ displayName: 'Ada', roles: ['reader'] }]
+  const saved = await iam.user.getUser(invitation.data.user.id, { include: ['roles'] })
+  if (!saved.success) return saved
+  if (saved.data === null) return saved
+  return core.ok(saved.data.roles ?? [])
 }
-else result.error.code
 ```
 
-##### Parameters and result semantics: User records
+#### Scenario: Change a profile and its roles together
 
-Use the current-user methods with the caller’s access token. Authorize access to the target account before calling an administrative method. The optional read options can include roles; list options can set pagination.
-
-##### Parameters and result semantics: Password and account maintenance
-
-Use the submitted old password to change an existing credential. A reset link or an administrator can use the corresponding reset method. The account scan returns the number of affected users.
-
-[Detailed parameters and workflows](iam.md#users)
-
-#### Scenario: Maintain users and passwords
-
-User scenarios cover create, ID/name/email lookup, pages, updates and deletion; password scenarios cover reset proof, expiry and account state. Handle missing users separately from failed database operations.
-
-#### Scenario: Update the account profile and roles together
-
-The admin endpoint has authorized the caller to manage the target account and assign the reviewer role. Omit `roleIds` to keep the current assignments, or pass `[]` to clear them. Role changes take effect in existing sessions through current authorization checks. Account lifecycle changes invalidate prior sessions.
+Use the account and role IDs authorized for this administrator to update the display name and replace the role set. An unknown role rolls back the transaction. After a successful update, `iam.auth.verifyToken` reads the new grants for existing sessions.
 
 ```ts
-// Use the authorized user and role IDs to save the display name and replace the assigned roles.
-// Success returns the profile at commit. An invalid role rolls back both parts of the update.
-const updated = await iam.user.updateUserWithRoles(userId, {
-  profile: { displayName: 'Alice' },
-  roleIds: [reviewerRoleId],
-})
-if (!updated.success) throw new Error(updated.error.message)
+async function moveToReview(userId: string, reviewerRoleId: string) {
+  const updated = await iam.user.updateUserWithRoles(userId, {
+    profile: { displayName: 'Alice' },
+    roleIds: [reviewerRoleId],
+  })
+  if (!updated.success) return updated
+  return core.ok({ id: updated.data.id, displayName: updated.data.displayName })
+}
 ```
+
+#### Scenario: Sign in again after changing an email address
+
+The user submits the new email with the current session. After a successful save, prompt them to sign in again. Existing access and refresh tokens are invalidated. Follow the application’s verification flow before treating the new address as verified. Saving only a display name keeps the current session usable.
+
+```ts
+async function updateEmail(accessToken: string, email: string) {
+  const before = await iam.user.getCurrentUser(accessToken)
+  if (!before.success) return before
+
+  const saved = await iam.user.updateCurrentUser(accessToken, { email })
+  if (!saved.success) return saved
+  return core.ok({ email: saved.data.email, changed: before.data.email !== saved.data.email })
+}
+```
+
+#### Scenario: Restore access using a delivered reset link
+
+Configure the reset channel and page. First pass the email or phone from the user. A successful request conceals whether an account exists. Read the delivered token on the reset page and submit it with the new password. The token becomes unusable after consumption. Request a new one after expiry, consumption, exhausted attempts or a security-state change, then sign in after changing the password.
+
+```ts
+async function requestReset(email: string, captcha?: string) {
+  const request = await iam.user.requestPasswordReset(email, { captcha })
+  if (!request.success) return request
+  return core.ok(undefined)
+}
+
+async function finishReset(token: string, newPassword: string) {
+  const changed = await iam.user.confirmPasswordReset(token, newPassword)
+  if (!changed.success) return changed
+  return core.ok(undefined)
+}
+```
+
+Use `changeCurrentUserPassword` when a signed-in user supplies the current password. If a first change or expiry blocks sign-in, use original credentials with `renewPassword`. Before an administrative reset, authorize the target account. Hosts schedule `scanInactiveAccounts` as needed and receive the number of accounts moved to dormant.
 
 <a id="authorization"></a>
 
-### Assign roles and check permissions: `iam.authz`
+### Assign roles and read current grants · `iam.authz`
 
-Store roles and permissions on the server and authorize sensitive operations against the current principal and purpose.
+Relationships use database IDs, while authorization and guards use stable business codes. Before invoking management operations, check which accounts, roles and permissions the caller may administer.
 
 #### Interface list
 
@@ -323,196 +441,79 @@ Store roles and permissions on the server and authorize sensitive operations aga
 | `iam.authz.syncRoles(userId, roleIds, tx?)` | Replace a user role set | `userId: string` target user ID · `roleIds: string[]` target role IDs · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.syncRoles(userId, [roleId])` |
 | `iam.authz.assignPermissionToRole(roleId, permissionId, tx?)` | Assign a permission to a role | `roleId: string` role ID · `permissionId: string` permission ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.assignPermissionToRole(roleId, permissionId)` |
 | `iam.authz.removePermissionFromRole(roleId, permissionId, tx?)` | Remove a role permission | `roleId: string` role ID · `permissionId: string` permission ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.removePermissionFromRole(roleId, permissionId)` |
-| `iam.authz.createRole(role, tx?)` | Create a role | `role` provides the new role’s code, name, description and system-role flag · [Object arguments](#authorization-arguments) · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `Role` | `await iam.authz.createRole({ code: 'editor', name: 'Editor', description: null, isSystem: false })` |
+| `iam.authz.createRole(role, tx?)` | Create a role | `role` provides the new role’s code, name, description and system-role flag · [Object arguments](#authorization-arguments) · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `Role` | `await iam.authz.createRole({ code: 'editor', name: 'Editor', isSystem: false })` |
 | `iam.authz.getRole(roleId)` | Read a role by ID | `roleId: string` role ID | `Role \| null` | `await iam.authz.getRole(roleId)` |
 | `iam.authz.getRoleByCode(code)` | Read a role by code | `code: string` business code of the role or permission | `Role \| null` | `await iam.authz.getRoleByCode('editor')` |
-| `iam.authz.getAllRoles(options?)` | Read all roles | `options?: PaginationOptionsInput` selects the page, page size and sort order · [Object arguments](#authorization-arguments) | `PaginatedResult<Role>` | `await iam.authz.getAllRoles({ page: 1, pageSize: 20 })` |
+| `iam.authz.getAllRoles(options?)` | Read all roles | `options?: PaginationOptionsInput` selects the page and page size · [Object arguments](#authorization-arguments) | `PaginatedResult<Role>` | `await iam.authz.getAllRoles({ page: 1, pageSize: 20 })` |
 | `iam.authz.getRoleUserCounts(roleIds)` | Count users for roles | `roleIds: string[]` target role IDs | `Map<string, number>` | `await iam.authz.getRoleUserCounts([roleId])` |
 | `iam.authz.updateRole(roleId, data, tx?)` | Update a role | `roleId: string` role ID · `data` sets the role fields to patch, leaving omitted fields unchanged · [Object arguments](#authorization-arguments) · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `Role` | `await iam.authz.updateRole(roleId, { name: 'Editor' })` |
 | `iam.authz.deleteRole(roleId, tx?)` | Delete a role | `roleId: string` role ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.deleteRole(roleId)` |
 | `iam.authz.createPermission(permission, tx?)` | Create a permission | `permission` provides the new permission code, display name and category · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `Permission` | `await iam.authz.createPermission({ code: 'orders:read', name: 'Read orders', type: 'api' })` |
 | `iam.authz.getPermission(permissionId)` | Read a permission by ID | `permissionId: string` permission ID | `Permission \| null` | `await iam.authz.getPermission(permissionId)` |
 | `iam.authz.getPermissionByCode(code)` | Read a permission by code | `code: string` business code of the role or permission | `Permission \| null` | `await iam.authz.getPermissionByCode('orders:read')` |
-| `iam.authz.getAllPermissions(options?)` | Read all permissions | `options?: PermissionQueryOptions` selects the page, page size and sort order, and can filter by permission category · [Object arguments](#authorization-arguments) | `PaginatedResult<Permission>` | `await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })` |
+| `iam.authz.getAllPermissions(options?)` | Read all permissions | `options?: PermissionQueryOptions` selects the page and page size, and can filter by permission category · [Object arguments](#authorization-arguments) | `PaginatedResult<Permission>` | `await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })` |
 | `iam.authz.deletePermission(permissionId, tx?)` | Delete a permission | `permissionId: string` permission ID · `tx?: DmlWithTxOperations` optional RelDB transaction operations owned by the caller | `void` | `await iam.authz.deletePermission(permissionId)` |
 | `iam.authz.getRolePermissions(roleId)` | Read role permissions | `roleId: string` role ID | `Permission[]` | `await iam.authz.getRolePermissions(roleId)` |
-| `iam.authz.getSensitiveOperations(operation?)` | Read effective sensitive-operation rules | `operation?: string` sensitive operation name registered by the server | `string[]` | `await iam.authz.getSensitiveOperations('users:delete')` |
-| `iam.authz.setPermissionSensitiveOperations(permissionId, operations)` | Set sensitive-operation rules for a permission | `permissionId: string` permission ID · `operations: string[]` sensitive operation names to associate | `void` | `await iam.authz.setPermissionSensitiveOperations(permissionId, ['users:delete'])` |
+| `iam.authz.getSensitiveOperations(operation?)` | Read effective sensitive-operation rules | `operation?: string` sensitive operation name registered by the server | `string[]` | `await iam.authz.getSensitiveOperations('orders.cancel')` |
+| `iam.authz.setPermissionSensitiveOperations(permissionId, operations)` | Set sensitive-operation rules for a permission | `permissionId: string` permission ID · `operations: string[]` sensitive operation names to associate | `void` | `await iam.authz.setPermissionSensitiveOperations(permissionId, ['orders.cancel'])` |
 
 <a id="authorization-arguments"></a>
 
-##### Object arguments
+##### Object arguments and fields
 
-| Type or call | Fields and values |
+| Type or field | Values and behavior |
 | --- | --- |
-| `PaginationOptionsInput / PermissionQueryOptions` | Use `page` and `pageSize` to paginate. Permission queries also accept `type` and `search`. |
-| `role / data` | A new role requires `code` and `name` and accepts `description`, `isSystem`, and `permissionIds`. Send only changed fields when updating. |
-| `permission` | `code` and `name` are required. Optional fields are `description`, `type`, `resource`, `action`, and `sensitiveOperations`. |
+| `Role / permissionIds` | Creation requires unique `code` and a `name`. `description` and `isSystem` are optional. `permissionIds` replaces the complete set with duplicates removed. On update, omit to keep the set or pass `[]` to clear it. Set `expectedPermissionIds` from the verified current set to reject a stale update. |
+| `Permission / PermissionQueryOptions` | Creation requires `code` and `name`. `type` can be `menu`, `api` or `button`. `resource`, `action`, `description` and `sensitiveOperations` are optional. Use `page` and `pageSize` for pagination and `search` or `type` for filtering. Sensitive IDs have up to 128 characters and each permission accepts up to 1000 entries. `[]` removes rules for that permission while file rules remain. |
+| `tx` | IAM owns the write when omitted. When supplied, the host commits or rolls back. Roll back after any failure in a combined write. After a host-owned commit, read fresh grants if you need to update session snapshots. |
 
-##### Parameters and result semantics: Authorization reads
+#### Scenario: Set up order-reading access for a reviewer
 
-Pass trusted user or role IDs. The batch methods return maps keyed by the corresponding IDs.
-
-##### Parameters and result semantics: Role and permission assignments
-
-Assign or remove individual relations, or replace the user’s role set with `syncRoles`. Pass an existing transaction in `tx` only when grouping writes.
-
-##### Parameters and result semantics: Managing roles and permissions
-
-Create, retrieve, list, update or delete definitions. Lookups return `null` if nothing matches. The list options can specify pagination.
-
-##### Parameters and result semantics: Policies for sensitive operations
-
-Read the current RBAC operations that require additional proof. Omit `operation` to list all operations; when RBAC is disabled the list is empty. Assign a new list to a permission, or pass an empty list to clear the database rules for it and keep the file rules.
-
-[Detailed parameters and workflows](iam.md#authorization)
-
-#### Scenario: Assign roles and check permissions
-
-Use isolated development data with RBAC enabled and a test user with no other roles. syncRoles replaces the whole role set. Pages and Maps reflect the database; every failure stops subsequent writes.
+Run this in the trusted administration flow. Create the permission code, use its database ID to create the role with its complete grant set, then assign the role to an authorized account. Member counts are keyed by role ID. Surface a lookup error in the admin interface.
 
 ```ts
-async function reviewReader(userId: string) {
-  // Create the docs:read API permission and receive its ID. Return the failed result on a duplicate code or write failure.
-  const permissionResult = await iam.authz.createPermission({ code: 'docs:read', name: 'Read docs', type: 'api' })
-  if (!permissionResult.success)
-    return permissionResult
-  const permission = permissionResult.data
-  // Create the docs_reader role with no permissions. Success returns its ID; a conflicting code fails.
-  const roleResult = await iam.authz.createRole({ code: 'docs_reader', name: 'Docs reader', permissionIds: [] })
-  if (!roleResult.success)
-    return roleResult
-  const role = roleResult.data
-  // Link the newly created docs:read permission to docs_reader. Success has no data.
-  const assignPermissionToRoleResult = await iam.authz.assignPermissionToRole(role.id, permission.id)
-  if (!assignPermissionToRoleResult.success)
-    return assignPermissionToRoleResult
-  // Success has no business data.
-  // Assign the new role to the supplied user. Success has no data; return the failed result on a write error.
-  const assignRoleResult = await iam.authz.assignRole(userId, role.id)
-  if (!assignRoleResult.success)
-    return assignRoleResult
-  // Success has no business data.
-  // Replace this user's entire role set with the one newly created role. Success has no data.
-  const syncRolesResult = await iam.authz.syncRoles(userId, [role.id])
-  if (!syncRolesResult.success)
-    return syncRolesResult
-  // replaces the complete role set
-  // Check docs:read for this user. Success is true in this example; false means denied. Return a failed lookup result to the caller.
-  const checkPermissionResult = await iam.authz.checkPermission(userId, 'docs:read')
-  if (!checkPermissionResult.success)
-    return checkPermissionResult
-  checkPermissionResult.data // true (RBAC enabled)
-  // Read effective role and permission codes for the user, including docs_reader and docs:read.
-  const getUserAuthorizationResult = await iam.authz.getUserAuthorization(userId)
-  if (!getUserAuthorizationResult.success)
-    return getUserAuthorizationResult
-  getUserAuthorizationResult.data // role and permission codes
-  // Read role records for the same user, including the assigned docs_reader.
-  const getUserRolesResult = await iam.authz.getUserRoles(userId)
-  if (!getUserRolesResult.success)
-    return getUserRolesResult
-  getUserRolesResult.data // Role[]
-  // Read effective permission records for the user, including docs:read here.
-  const getUserPermissionsResult = await iam.authz.getUserPermissions(userId)
-  if (!getUserPermissionsResult.success)
-    return getUserPermissionsResult
-  getUserPermissionsResult.data // Permission[]
-  // Read roles for the one-user batch. The Map keys are user IDs and the values are role arrays.
-  const getUserRolesForManyResult = await iam.authz.getUserRolesForMany([userId])
-  if (!getUserRolesForManyResult.success)
-    return getUserRolesForManyResult
-  getUserRolesForManyResult.data // Map keyed by user ID
-  // Read permissions for the new role ID. The Map associates role IDs with permission arrays.
-  const getRolePermissionsForManyResult = await iam.authz.getRolePermissionsForMany([role.id])
-  if (!getRolePermissionsForManyResult.success)
-    return getRolePermissionsForManyResult
-  getRolePermissionsForManyResult.data // Map keyed by role ID
-  // Read counts for the role batch and look up this role ID. It has one member in the isolated example.
-  const getRoleUserCountsResult = await iam.authz.getRoleUserCounts([role.id])
-  if (!getRoleUserCountsResult.success)
-    return getRoleUserCountsResult
-  getRoleUserCountsResult.data.get(role.id) // 1 in this isolated example
-  // Look up the new role by ID. An absent record returns null.
-  const getRoleResult = await iam.authz.getRole(role.id)
-  if (!getRoleResult.success)
-    return getRoleResult
-  getRoleResult.data // the created Role
-  // Look up the same role by stable code docs_reader. A miss gives null.
-  const getRoleByCodeResult = await iam.authz.getRoleByCode('docs_reader')
-  if (!getRoleByCodeResult.success)
-    return getRoleByCodeResult
-  getRoleByCodeResult.data // same Role
-  // Read the first role page with up to 20 records and pagination metadata.
-  const getAllRolesResult = await iam.authz.getAllRoles({ page: 1, pageSize: 20 })
-  if (!getAllRolesResult.success)
-    return getAllRolesResult
-  getAllRolesResult.data // role page
-  // Rename this role to Document readers and return the updated record.
-  const updateRoleResult = await iam.authz.updateRole(role.id, { name: 'Document readers' })
-  if (!updateRoleResult.success)
-    return updateRoleResult
-  updateRoleResult.data // updated Role
-  // Look up the created permission by ID; a missing record gives null.
-  const getPermissionResult = await iam.authz.getPermission(permission.id)
-  if (!getPermissionResult.success)
-    return getPermissionResult
-  getPermissionResult.data // the created Permission
-  // Find the same permission by stable code docs:read; a miss gives null.
-  const getPermissionByCodeResult = await iam.authz.getPermissionByCode('docs:read')
-  if (!getPermissionByCodeResult.success)
-    return getPermissionByCodeResult
-  getPermissionByCodeResult.data // same Permission
-  // Read the first permission page, up to 20 records, with pagination metadata.
-  const getAllPermissionsResult = await iam.authz.getAllPermissions({ page: 1, pageSize: 20 })
-  if (!getAllPermissionsResult.success)
-    return getAllPermissionsResult
-  getAllPermissionsResult.data // permission page
-  // Read the permissions attached to this role ID, including docs:read.
-  const getRolePermissionsResult = await iam.authz.getRolePermissions(role.id)
-  if (!getRolePermissionsResult.success)
-    return getRolePermissionsResult
-  getRolePermissionsResult.data // includes docs:read
-  // Store docs:export as the sensitive operation for this permission. Success has no data.
-  const setPermissionSensitiveOperationsResult = await iam.authz.setPermissionSensitiveOperations(permission.id, ['docs:export'])
-  if (!setPermissionSensitiveOperationsResult.success)
-    return setPermissionSensitiveOperationsResult
-  // Success has no business data.
-  // Read effective sensitive operations for docs:export. An enabled reauthentication policy includes this rule; no match yields an empty array.
-  const getSensitiveOperationsResult = await iam.authz.getSensitiveOperations('docs:export')
-  if (!getSensitiveOperationsResult.success)
-    return getSensitiveOperationsResult
-  getSensitiveOperationsResult.data // configured rule when reauthentication is enabled
-  // Unlink the role and permission. Success has no data; their definitions remain.
-  const removePermissionFromRoleResult = await iam.authz.removePermissionFromRole(role.id, permission.id)
-  if (!removePermissionFromRoleResult.success)
-    return removePermissionFromRoleResult
-  // Success has no business data.
-  // Remove this example's role assignment from the user. Success has no data.
-  const removeRoleResult = await iam.authz.removeRole(userId, role.id)
-  if (!removeRoleResult.success)
-    return removeRoleResult
-  // Success has no business data.
-  // Delete the role created for this example. Success has no data; return the failed result on deletion failure.
-  const deleteRoleResult = await iam.authz.deleteRole(role.id)
-  if (!deleteRoleResult.success)
-    return deleteRoleResult
-  // Success has no business data.
-  // Delete the permission created for this example. Success has no data; return the failed result on deletion failure.
-  const deletePermissionResult = await iam.authz.deletePermission(permission.id)
-  if (!deletePermissionResult.success)
-    return deletePermissionResult
-  // Success has no business data.
+async function createOrderReviewer(userId: string) {
+  const permission = await iam.authz.createPermission({ code: 'orders:read', name: 'Read orders', type: 'api' })
+  if (!permission.success) return permission
+
+  const role = await iam.authz.createRole({
+    code: 'order-reviewer',
+    name: 'Order reviewer',
+    permissionIds: [permission.data.id],
+  })
+  if (!role.success) return role
+
+  const assigned = await iam.authz.assignRole(userId, role.data.id)
+  if (!assigned.success) return assigned
+
+  const members = await iam.authz.getRoleUserCounts([role.data.id])
+  if (!members.success) return members
+  return core.ok({ roleId: role.data.id, memberCount: members.data.get(role.data.id) ?? 0 })
 }
 ```
 
-The flow creates permissions and roles, links them, assigns users, checks and revokes access, then covers sensitive-operation policy. Boolean false means denied; a failed HaiResult means the check failed to complete.
+`checkPermission(userId, code)` checks the principal, including the configured super-admin role rule. For protected HTTP requests, check session grants returned by `iam.auth.verifyToken` through Kit or Serv guards and verify resource ownership. Retain the credential’s API key scope by using the grants returned at verification.
+
+#### Scenario: Register a reauthentication rule on a permission record
+
+Administrators store a stable operation ID on a permission record. When reauthentication is enabled, IAM combines file rules with rules on all permission records. A listed operation requires proof for every user. The host still authorizes the operation and target resource for each request. Stop if reading the rules fails.
+
+```ts
+async function configureOrderCancellationProof(permissionId: string) {
+  const changed = await iam.authz.setPermissionSensitiveOperations(permissionId, ['orders.cancel'])
+  if (!changed.success) return changed
+
+  const rules = await iam.authz.getSensitiveOperations('orders.cancel')
+  if (!rules.success) return rules
+  return core.ok({ required: rules.data.includes('orders.cancel') })
+}
+```
 
 <a id="sessions"></a>
 
-### Renew and revoke sessions: `iam.session`
+### Rotate, inspect and revoke sessions · `iam.session`
 
-Validate session tokens on the server. Refresh, list and revoke through the same session system; page-exit revocation is best effort.
+Normal sign-in creates sessions through `iam.auth`. Use the methods below to inspect, rotate or revoke sessions and check each result. Treat both access and refresh tokens as opaque credentials.
 
 #### Interface list
 
@@ -526,109 +527,65 @@ Validate session tokens on the server. Refresh, list and revoke through the same
 | `iam.session.deleteByUserId(userId)` | Revoke all user sessions | `userId: string` target user ID | `number` | `await iam.session.deleteByUserId(userId)` |
 | `iam.session.refresh(refreshToken)` | Rotate refresh credentials | `refreshToken: string` refresh token to rotate or revoke | `TokenPair` | `await iam.session.refresh(refreshToken)` |
 | `iam.session.revokeRefresh(refreshToken)` | Revoke refresh credentials | `refreshToken: string` refresh token to rotate or revoke | `void` | `await iam.session.revokeRefresh(refreshToken)` |
-| `iam.session.patchUserSessions(userId, updates)` | Patch user profile snapshots in sessions | `userId: string` target user ID · `updates: SessionFieldUpdates` · [Object arguments](#sessions-arguments) | `void` | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)` |
+| `iam.session.patchUserSessions(userId, updates)` | Patch role and permission snapshots | `userId: string` target user ID · `updates: SessionFieldUpdates` · [Object arguments](#sessions-arguments) | `void` | `await iam.session.patchUserSessions(userId, sessionFieldUpdates)` |
 
 <a id="sessions-arguments"></a>
 
-##### Object arguments
+##### Object arguments and fields
 
-| Type or call | Fields and values |
+| Type or field | Values and behavior |
 | --- | --- |
-| `CreateSessionOptions` | `userId` is required. The trusted host may supply `terminalType`, `expectedCredentialVersion`, and verified `apiKeyId` / `apiKeyScopes`. Other optional fields are `username`, `displayName`, `avatarUrl`, `roles`, `permissions`, `source`, `maxAge` in seconds, and application `data`. |
-| `SessionFieldUpdates` | Optional `roles: string[]` and `permissions: string[]` update existing sessions for the user. |
+| `CreateSessionOptions` | `userId` must come from server-side authentication. Optional identity fields are `username`, `displayName` and `avatarUrl`, with trusted `roles`, `permissions`, `source`, `terminalType` and `data`. `maxAge` overrides access lifetime in seconds. Set `expectedCredentialVersion`, `apiKeyId` and `apiKeyScopes` only from verified server state. |
+| `TokenPair / Session` | `TokenPair` has access and refresh tokens, `expiresIn` in seconds and `tokenType: 'Bearer'`. Read `Session.version` from a successful current lookup. `get` and the low-level `verifyToken` check account and credential state, but grants may be stored snapshots. For HTTP authorization, use the current grants returned by `iam.auth.verifyToken`. |
+| `update / SessionFieldUpdates` | Update accepts profile fields, grants, `source`, `expiresAt`, `lastActiveAt` and shallow-merged `data`. A changed version causes a conflict. Read again before deciding whether to retry. Bulk updates accept only `roles` and `permissions`, preserving session activity and expiry. |
 
-##### Parameters and result semantics: Sessions
+#### Scenario: Rotate tokens and replace the stored pair
 
-Verify or revoke credentials and rotate a token pair with a refresh token. Use the most recently read version for optimistic updates. Use `create` only with trusted session input.
+Read the refresh token from trusted storage and replace both access and refresh tokens on success. Each old refresh token can produce at most one successor. Sign in again after failure or an uncertain response. An expired access token can be refreshed while its refresh credential, account, credential generation, idle deadline and absolute deadline remain valid. Refresh does not count as activity. Use HttpOnly cookies for the browser and secure TokenStorage on native clients. [Access, refresh, idle and absolute deadlines](../configuration/iam.en.md#session-deadlines)
 
-[Detailed parameters and workflows](iam.md#sessions)
-
-#### Scenario: Renew and revoke sessions
-
-Refresh does not extend the same token string. IAM prepares a successor and atomically consumes the old refresh token while publishing the new session.
-
-![refresh: one successor per old token](../images/function-iam-refresh.en.svg)
-
-Two nodes using the same old token cannot both publish successors. Account, API Key and credential-version checks can reject refresh. After success the client replaces the credential pair. Storage or network failures must not be reported as completed refresh.
-
-Session workflows explain create’s TokenPair, verify’s session, refresh’s replacement tokens and destroy/destroyAll revocation. Tokens are described by source and type rather than logged; optional policies remain server-enforced.
-
-#### Scenario: Request revocation when a page closes
-
-Enable `session.endOnPageHide` to opt in. A SvelteKit server layout derives a fingerprint with `kit.auth.sessionFingerprint(locals.accessToken)` from the verified session and passes only the fingerprint to the page. Call `actions.bindPageExit({ enabled, sessionFingerprint })` in Kit, or `actions.bindPageExit({ enabled })` with the Bearer typed client. Call the returned function to remove the listener.
-
-Kit skips revocation when the cookie token has changed or the fingerprint is absent. The browser may also leave before the request completes. Keep server-side idle or absolute expiry configured and use the normal logout operation for explicit sign-out.
-
-#### Scenario: Manage sessions and rotate tokens
-
-Only trusted server code may build options after verifying the user. These low-level methods do not grant business authorization. The first function affects all sessions for the test user. Run the second separately with a refresh token from a successful login.
+![Successful refresh issues one successor pair. Failure requires a new sign-in](../images/function-iam-refresh.en.svg)
 
 ```ts
-import type { CreateSessionOptions } from '@h-ai/iam'
-
-async function manageTrustedSession(options: CreateSessionOptions, refreshToken: string) {
-  // Create a Session from the host's trusted options. Return the failed result on storage failure.
-  const createdResult = await iam.session.create(options)
-  if (!createdResult.success)
-    return createdResult
-  const created = createdResult.data // Session, not TokenPair
-  const token = created.accessToken
-  // Look up the session by the access token just created. An absent session yields null.
-  const foundResult = await iam.session.get(token)
-  if (!foundResult.success)
-    return foundResult
-  const found = foundResult.data // Session or null
-  // Validate the same access token at the session layer. Success yields a Session; an absent or expired token fails.
-  const verifiedResult = await iam.session.verifyToken(token)
-  if (!verifiedResult.success)
-    return verifiedResult
-  const verified = verifiedResult.data // Session; missing/expired fails
-  // Set theme dark on this session using the observed version. Success has no data; a version mismatch fails.
-  const updateResult = await iam.session.update(token, { data: { theme: 'dark' } }, verified.version)
-  if (!updateResult.success)
-    return updateResult
-  // Success has no business data.
-  // Apply the verified role and permission snapshot to this user's sessions. Success has no data; return the failed result on write failure.
-  const patchUserSessionsResult = await iam.session.patchUserSessions(options.userId, { roles: verified.roles, permissions: verified.permissions })
-  if (!patchUserSessionsResult.success)
-    return patchUserSessionsResult
-  // Success has no business data.
-  // Revoke this session using its original access token. Success has no data; return the failed result on storage failure.
-  const deleteResult2 = await iam.session.delete(token)
-  if (!deleteResult2.success)
-    return deleteResult2
-  // undefined; revokes this session
-  // Revoke the remaining sessions for the user ID in options and return the count.
-  const deleteByUserIdResult = await iam.session.deleteByUserId(options.userId)
-  if (!deleteByUserIdResult.success)
-    return deleteByUserIdResult
-  deleteByUserIdResult.data // remaining revoked count
+async function rotateSession(refreshToken: string) {
+  const refreshed = await iam.session.refresh(refreshToken)
+  if (!refreshed.success) return refreshed
+  return core.ok(refreshed.data)
 }
+```
 
-async function rotateThenRevoke(refreshToken: string) {
-  // Rotate the supplied refresh token to obtain a new token pair. A used or expired token fails.
-  const pairResult = await iam.session.refresh(refreshToken)
-  if (!pairResult.success)
-    return pairResult
-  const pair = pairResult.data // new TokenPair
-  // Revoke the newly issued refresh token to prevent renewal. Success has no data; the access token is separate.
-  const revokeRefreshResult = await iam.session.revokeRefresh(pair.refreshToken)
-  if (!revokeRefreshResult.success)
-    return revokeRefreshResult
-  // undefined; access remains valid until expiry/revocation
-  // Revoke the session for the access token issued in the same rotation. Success has no data.
-  const deleteResult = await iam.session.delete(pair.accessToken)
-  if (!deleteResult.success)
-    return deleteResult
-  // Success has no business data.
+#### Scenario: Store a session display preference using the latest version
+
+The server first authorizes the current principal and writable data. This example reads the session and adds a display preference. Start sign-in again after a `null` result and fetch the latest version after a conflict.
+
+```ts
+async function rememberListLayout(accessToken: string) {
+  const current = await iam.session.get(accessToken)
+  if (!current.success) return current
+  if (current.data === null) return current
+
+  const saved = await iam.session.update(accessToken, { data: { listLayout: 'compact' } }, current.data.version)
+  if (!saved.success) return saved
+  return core.ok({ saved: true })
+}
+```
+
+#### Scenario: End one session or revoke an account’s sessions
+
+At logout, submit the access token the user holds. The associated refresh token is revoked even if the access token has expired. A scoped administrator can revoke all sessions and read the actual count. Page-exit requests are best effort, so keep server-side deadlines in place.
+
+```ts
+async function revokeAccountSessions(userId: string) {
+  const removed = await iam.session.deleteByUserId(userId)
+  if (!removed.success) return removed
+  return core.ok({ count: removed.data })
 }
 ```
 
 <a id="api-keys"></a>
 
-### Issue and revoke API keys: `iam.apiKey`
+### Issue and revoke program credentials · `iam.apiKey`
 
-Issue API keys with ownership and scopes for programmatic access. Give the raw key to its holder only at issuance.
+Enable `login.apikey` to issue credentials for programs. Effective grants are the intersection of the account’s current grants and the key scopes. `verifyApiKey` works without creating a session.
 
 #### Interface list
 
@@ -642,42 +599,53 @@ Issue API keys with ownership and scopes for programmatic access. Give the raw k
 
 <a id="api-keys-arguments"></a>
 
-##### Object arguments
+##### Object arguments and fields
 
-| Type or call | Fields and values |
+| Type or field | Values and behavior |
 | --- | --- |
-| `CreateApiKeyOptions` | `name` is required. `expirationDays` is in days, defaults to configuration, and accepts `0` for no expiry. Optional `scopes` is a list of permission codes. |
-| `ListApiKeysOptions` | Optional `page`, `pageSize`, `search` (name or prefix), and `enabled` narrow the list. Sort by `name`, `createdAt`, `lastUsedAt`, or `expiresAt` in `asc` or `desc` order. The default is newest first. |
+| `CreateApiKeyOptions` | `name` is required. `expirationDays` defaults to `apikey.defaultExpirationDays`, and explicit `0` means no expiry. `scopes` defaults to `[]`, which grants no operations. Use permission codes, a namespace `:*` or global `*`. |
+| `ListApiKeysOptions` | `page` and `pageSize` paginate. `search` matches the name or prefix, and `enabled` filters enabled state. `sortBy` accepts `name`, `createdAt`, `lastUsedAt` or `expiresAt`. `sortDirection` is `asc` or `desc`, with newest keys first by default. |
+| `CreateApiKeyResult / VerifiedApiKey` | Issuance returns `apiKey` and shows `rawKey` once. A metadata lookup by `id` returns fields such as `keyPrefix`, scopes and timestamps. `verifyApiKey` returns current `permissions`. Concurrent issuance respects the per-account limit. A missing owner returns `USER_NOT_FOUND`. |
 
-##### Key issuance and listing options
+#### Scenario: Issue a read-only credential for a reporting service
 
-| Field | Default or required | Effect and conditions |
-| --- | --- | --- |
-| `create.options.name: string` | Required | Display name used to identify the key |
-| `create.options.expirationDays: number` | `config.apikey.defaultExpirationDays` | Lifetime in days. The framework setting defaults to 0; explicit 0 means no expiry |
-| `create.options.scopes: string[]` | `[]` | Limit access to the listed permission codes |
-| `list.options.page / list.options.pageSize` | `1 / 20` | Page number and keys per page |
-| `list.options.search: string` | Optional | Match a substring of the key name or prefix |
-| `list.options.enabled: boolean` | Optional | Select enabled or disabled keys. Omit for both |
-| `list.options.sortBy / list.options.sortDirection` | `createdAt / desc` | Sort on name, createdAt, lastUsedAt or expiresAt |
+The administrator first checks whether they may issue a key to this account and delegate `orders:read`. Deliver the raw key securely. The reporting service obtains the raw key from the request, checks effective grants and constrains results by the verified `userId`. An explicit `*` preserves roles, while other scopes remove role grants from key sessions. Revocation prevents direct verification and subsequent verification or refresh of derived sessions.
 
-##### Parameters and result semantics: API keys
+```ts
+import { core, HaiCommonError } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
 
-Save the raw key securely when creating it; only the creation result contains it. List or get key metadata, verify a submitted secret, or revoke a key.
+async function issueReportingKey(userId: string) {
+  const issued = await iam.apiKey.createApiKey(userId, {
+    name: 'Daily reports',
+    scopes: ['orders:read'],
+    expirationDays: 30,
+  })
+  if (!issued.success) return issued
+  return core.ok({ keyId: issued.data.apiKey.id, rawKey: issued.data.rawKey })
+}
 
-`verifyApiKey(rawKey)` checks that the key is enabled and unexpired and its account is active. It returns key metadata and the intersection of current account grants and key scopes as `VerifiedApiKey.permissions`, without opening a session. A reporting service checks `orders:read` against these permissions and uses the verified `userId` to select the caller’s reports. [A2A executor example](ai.en.md#a2a-http-example)
+async function verifyReportReader(rawKey: string) {
+  const key = await iam.apiKey.verifyApiKey(rawKey)
+  if (!key.success) return key
+  if (!core.auth.matchPermission('orders:read', key.data.permissions)) {
+    return core.err(HaiCommonError.FORBIDDEN, core.i18n.coreM('core_errorForbidden'))
+  }
+  return core.ok({ userId: key.data.userId })
+}
 
-[Detailed parameters and workflows](iam.md#api-keys)
-
-#### Scenario: Issue and revoke API keys
-
-Use issuance results for validation, listing, updates and revocation. Stored summaries cannot reconstruct the secret. Pass the keyId or issued secret according to each method’s signature.
+async function revokeReportingKey(keyId: string) {
+  const revoked = await iam.apiKey.revokeApiKey(keyId)
+  if (!revoked.success) return revoked
+  return core.ok(undefined)
+}
+```
 
 <a id="tickets"></a>
 
-### Issue and consume one-time proof: `iam.ticket`
+### Issue and consume single-use tickets · `iam.ticket`
 
-Allow a verified principal to perform one purpose for a short period. A successfully consumed ticket cannot be reused.
+When a client connection cannot carry the usual access token, issue a short-lived ticket through an authenticated request. Issue only for an authorized operation and check its purpose and business grant at the destination.
 
 #### Interface list
 
@@ -688,37 +656,46 @@ Allow a verified principal to perform one purpose for a short period. A successf
 
 <a id="tickets-arguments"></a>
 
-##### Object arguments
+##### Object arguments and fields
 
-| Type or call | Fields and values |
+| Type or field | Values and behavior |
 | --- | --- |
-| `IssueTicketOptions` | `subjectId: string` and `purpose: string` are required. Optional `grant` binds authorization details. `ttlMs` defaults to 30000 milliseconds. |
-| `ConsumeTicketOptions` | Specify `purpose: string` to require the issued purpose. A mismatch returns `TICKET_INVALID`. |
+| `IssueTicketOptions` | `subjectId` is the verified principal, `purpose` is a stable purpose, `grant` is a JSON-value object defined by the application and defaults to `{}`, and `ttlMs` defaults to 30,000 milliseconds. Issuance returns `ticket` and `expiresAt` in Unix milliseconds. |
+| `ConsumeTicketOptions / ConsumedTicket` | Constrain the operation with `purpose`. A mismatch preserves the ticket and a match consumes it atomically. At most one concurrent consumer succeeds. Check the returned `subjectId`, `purpose` and `grant` against the current resource. |
 
-##### Ticket issuance and consumption fields
+#### Scenario: Authorize a one-off audio transcription connection
 
-| Field | Default or required | Effect and conditions |
-| --- | --- | --- |
-| `subjectId: string` | Required | Principal bound to the ticket and returned when consumed |
-| `purpose: string` | Required | Purpose recorded at issuance and checked on demand when consumed |
-| `grant: TicketGrant` | Optional | Bind operation, model, sessionId or app fields for the server to check after consumption |
-| `ttlMs: number` | `30000 ms` | Lifetime measured from issuance |
-| `consume.options.purpose: string` | Optional | When supplied, check the issued purpose. A mismatch returns TICKET_INVALID |
+After checking sign-in and transcription permission, bind the verified `userId` to `ai-audio`. At the connection boundary, check purpose and read the grant. Stop the connection on a failure, expiry or already-consumed ticket.
 
-##### Parameters and result semantics: One-time tickets
+```ts
+async function issueAudioTicket(userId: string) {
+  const issued = await iam.ticket.issue({
+    subjectId: userId,
+    purpose: 'ai-audio',
+    grant: { operation: 'transcribe' },
+  })
+  if (!issued.success) return issued
+  return core.ok({ ticket: issued.data.ticket, expiresAt: issued.data.expiresAt })
+}
 
-Issue a short-lived ticket for a purpose and subject. Consume it with the expected binding; a consumed ticket cannot be reused.
-
-[Detailed parameters and workflows](iam.md#tickets)
-
-#### Scenario: Issue and consume one-time proof
-
-issue takes a purpose and binding and returns random proof. consume checks the proof and expected purpose before returning bound data. A purpose mismatch rejects the request and leaves the ticket available for its intended purpose. An expired or consumed ticket cannot be used.
+async function consumeAudioTicket(ticket: string) {
+  const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' })
+  if (!consumed.success) return consumed
+  if (consumed.data.grant.operation !== 'transcribe') {
+    return core.err(HaiCommonError.FORBIDDEN, core.i18n.coreM('core_errorForbidden'))
+  }
+  return core.ok(consumed.data.subjectId)
+}
+```
 
 <a id="http-contract-extensions"></a>
 
-### Enable optional HTTP contracts
+### Expose IAM through HTTP
 
-Admin services can mount API key management and role permission assignments. The raw key appears only in the create response. Replacing role permissions uses the operation ID `iam.roles.replacePermissions` in the host’s reauthentication policy. [Endpoints and fields](api-contract.en.md#http-contract-extensions)
+In Serv, mount standard authentication and administration with `serv.createIamProcedures({ iam })`. For per-account key management or complete role-permission replacement, also mount `serv.createIamManagementProcedures` and supply resource authorization. Kit applications reuse server-side authentication handlers and guards. Clients use the public settings to discover available actions and handle `HaiResult`.
 
-Replacing permissions returns HTTP 409 if another write changed the permission snapshot. Read the current permissions and obtain a fresh ticket if required before retrying. Direct callers of `iam.authz.updateRole()` can pass `expectedPermissionIds` with `permissionIds` to check the snapshot under the role lock.
+[Endpoints and fields](api-contract.en.md#http-contract-extensions) · [Serv](serv.en.md#iam-procedures-api) · [Kit](kit.en.md#auth)
+
+### Handle failures
+
+Use `HaiIamError` codes for business failures. Return public error details to the interface, and keep codes and available trace IDs in internal logs. Keep access and refresh tokens, passwords, verification codes and tickets out of logs. Sign in again after session expiry. On a CAS conflict, reread the current value before deciding whether to submit again. When persistence or delivery is uncertain, reconcile the state using the relevant workflow.

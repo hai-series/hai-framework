@@ -187,12 +187,60 @@ test('文档切换保留章节与共享锚点，目录和搜索使用当前语�
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN')
   await expect(page.locator('.document-translation-note')).toHaveCount(0)
 
-  await page.goto(`${docs}/ja/function/iam/#api-reference`)
+  await page.goto(`${docs}/ja/function/reldb/#api-reference`)
   await expect(page.locator('article')).toHaveAttribute('lang', 'ja-JP')
   await expect(page.locator('.document-translation-note')).toContainText('このページは一部のみ翻訳されています')
   await page.getByRole('link', { name: '中国語の原文を読む' }).click()
-  await expect(page).toHaveURL(`${docs}/function/iam/`)
+  await expect(page).toHaveURL(`${docs}/function/reldb/`)
   await expect(page.locator('article')).toHaveAttribute('lang', 'zh-CN')
+})
+
+test('IAM 三份手册切换语言时保留章节并在窄屏可读', async ({ page }) => {
+  const chapters = [
+    { section: 'configuration', anchor: 'configuration-fields' },
+    { section: 'function', anchor: 'api-reference' },
+    { section: 'data', anchor: 'cache-iam-otp' },
+  ]
+  for (const { section, anchor } of chapters) {
+    await page.goto(`/docs/ja/${section}/iam/#${anchor}`)
+    const article = page.locator('article')
+    const target = article.locator(`#${anchor}`)
+    await expect(article).toHaveAttribute('lang', 'ja-JP')
+    await expect(target).toHaveCount(1)
+    await expect(page.locator('.document-translation-note')).toHaveCount(0)
+
+    const picker = page.getByRole('button', { name: /语言|language|言語/i })
+    await picker.click()
+    await page.getByRole('button', { name: /English/ }).click()
+    await expect(page).toHaveURL(`/docs/en/${section}/iam/#${anchor}`)
+    await expect(article).toHaveAttribute('lang', 'en-US')
+    await expect(target).toHaveCount(1)
+    await expect(page.locator('.document-translation-note')).toHaveCount(0)
+
+    await picker.click()
+    await page.getByRole('button', { name: /简体中文/ }).click()
+    await expect(page).toHaveURL(`/docs/${section}/iam/#${anchor}`)
+    await expect(article).toHaveAttribute('lang', 'zh-CN')
+    await expect(target).toHaveCount(1)
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  for (const { section } of chapters) {
+    await page.goto(`/docs/${section}/iam/`)
+    await expect(page.locator('article').getByRole('heading', { level: 1 })).toContainText('@h-ai/iam')
+    const width = await page.evaluate(() => document.documentElement.scrollWidth)
+    expect(width).toBeLessThanOrEqual(390)
+  }
+
+  await page.goto('/docs/function/iam/')
+  for (const diagramName of ['function-iam-login.svg', 'function-iam-refresh.svg']) {
+    const diagram = page.locator(`article img[src$="${diagramName}"]`)
+    await expect.poll(() => diagram.evaluate((element) => {
+      const image = element as HTMLImageElement
+      image.scrollIntoView({ block: 'center' })
+      return image.complete && image.naturalWidth > 0 && image.width <= 390
+    })).toBe(true)
+  }
 })
 
 test('三级配置目录、接口配置代码与账号操作图在桌面和手机可读', async ({ page }, testInfo) => {

@@ -30,6 +30,7 @@ agreements:
 
 | `ldap` 配置 | 框架默认 | 用途与取值影响 |
 | --- | --- | --- |
+| `directoryId` | 启用 LDAP 时必填 | 目录的稳定标识。连接同一目录的所有服务节点使用相同值 |
 | `url` | 必填，无默认 | 目录地址，协议为 ldap 或 ldaps；LDAPS 直接建立 TLS 连接 |
 | `bindDn` / `bindPassword` | 必填，无默认 | 查询目录所用服务账号及密码；使用最小查询权限，密码放私有环境或 Secret |
 | `searchBase` | 必填，无默认 | 用户查询的起始 DN；范围过窄找不到用户，范围过宽应核对唯一性 |
@@ -42,6 +43,7 @@ agreements:
 ```yaml schema=@h-ai/iam:IamConfigSchema
 login: { ldap: true }
 ldap:
+  directoryId: company-directory
   url: ldaps://directory.example.invalid:636
   bindDn: cn=app-reader,ou=services,dc=example,dc=invalid
   bindPassword: ${HAI_IAM_LDAP_BINDPASSWORD}

@@ -20,6 +20,8 @@
 
 設定の入口、既定値、指定できる値、反映の条件は[設定一覧](../../docs/usage/configuration/iam.ja.md)を参照してください。
 
+本番環境の初回起動前に、共有 Redis で権限キャッシュの世代を初期化します。書き込み登録が残ったときは、メンテナンス中にデータベースのトランザクションを確認してから世代を切り替えます。[初期化と復旧](../../docs/usage/data/iam.ja.md#iam-read-cache-recovery)
+
 ## 機能
 
 IAM の組み込みの確認コード、パスワード再設定、初期設定の招待は、通知を控える時間帯にも Reach で即時送信を試みます。独自の送信コールバックも指定できます。[夜間の通知](../../docs/usage/function/reach.ja.md#reach-quiet-hours)
@@ -28,7 +30,7 @@ IAM の組み込みの確認コード、パスワード再設定、初期設定�
 
 [API 一覧](../../docs/usage/function/iam.ja.md#api-reference)で、呼び出し方、入力、戻り値、使用例を確認できます。
 
-`iam.user.updateUserWithRoles` は利用者情報とロールを一緒に確定します。一回用チケットはキャッシュキーにダイジェストを使い、用途確認後に消費します。
+アカウントの作成とロールの割当を一緒に確定します。管理者は `iam.user.createUser` と `iam.user.inviteUser` でロールを指定できます。招待は確定後に送信します。`iam.user.updateUserWithRoles` は利用者情報の変更とロールの割当を一緒に確定します。一回用チケットはキャッシュキーにダイジェストを使い、用途確認後に消費します。
 
 LDAP の更新時は[既存の ID 関連付けを移行する](../../docs/usage/function/iam.ja.md#ldap-identity-migration)を参照してください。
 
@@ -36,7 +38,7 @@ LDAP の更新時は[既存の ID 関連付けを移行する](../../docs/usage/
 
 ## データ構造
 
-アカウント、ロール、権限、セッション、ワンタイム認証情報については[データ構造](../../docs/usage/data/iam.ja.md)を参照してください。
+RelDB はアカウント、ロール、権限、ロックの世代を保存します。共有 Redis はセッション、ログイン失敗回数、ワンタイム認証情報を保持します。[データ構造](../../docs/usage/data/iam.ja.md)
 
 ## 開発とテスト
 

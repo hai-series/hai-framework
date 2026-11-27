@@ -109,7 +109,7 @@ Token 和 OTP 存储在 cache 中（不落库）。session/refresh/index 位于�
 LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h-ai/reach` 是可选 peer dependency，基础密码/RBAC 无需安装这两个包。
 
 - 默认 LDAP 客户端：在服务端 workspace 执行 `pnpm add ldapts`，配置 `login.ldap: true` 与 `ldap.directoryId/url/bindDn/bindPassword/searchBase`。同一目录的各个应用节点使用同一个 `directoryId`。`searchFilter` 默认 `(uid={{username}})`。AD 可配置 `(sAMAccountName={{username}})`、对应的 `usernameAttribute` 和 `identityAttribute: objectGUID`。`ldaps://` 使用 TLS，`ldap://` + `useTls: true` 使用 StartTLS。`ldapClientFactory` 可注入返回 `bind/search/unbind` 和 HaiResult 的客户端，此时无需安装 ldapts。
-- Reach 自动发送。先初始化 `@h-ai/reach`，在 `iam.init({ ...settings, reach })` 中注入。`otp_email` 和 `otp_sms` 使用 `{code}`。`password_reset` 和 `password_reset_sms` 使用 `{token}`、`{expiresAt}`、`{resetUrl}`，也用于初始设密邀请。这几类通知均传 `ignoreDnd: true`。`passwordReset.mode` 选择 `email` 或 `phone`。直连阿里云时用 `templateCodes` 关联审核通过的编码。
+- Reach 自动发送。先初始化 `@h-ai/reach`，在 `iam.init({ ...settings, reach })` 中注入。`otp_email` 和 `otp_sms` 使用 `{code}`。`password_reset` 和 `password_reset_sms` 使用 `{token}`、`{expiresAt}`、`{resetUrl}`，也用于初始设密邀请。这几类通知均传 `ignoreDnd: true` 和 `sensitive: true`，让历史只保留投递元数据。`passwordReset.mode` 选择 `email` 或 `phone`。直连阿里云时用 `templateCodes` 关联审核通过的编码。
 - 自定义发送：直接传 `onOtpSendEmail(email, code, context)`、`onOtpSendSms(phone, code, context)`、`onPasswordResetRequest(user, token, context)`，均返回 `Promise<void>`；context 包含 expiresAt/idempotencyKey，发送服务按该稳定键持久化去重，异常表示结果未知，不自动重发。可以只实现选用通道或与 Reach 混用，显式回调优先。检查发送服务结果，投递失败在回调内抛错；IAM 捕获并返回业务错误，不要吞掉发送失败。
 - `otp` 必须有配置并开启所需通道；缺少回调或标准模板时 `iam.publicConfig` 不公布该入口。Reach 由应用管理生命周期，IAM 不负责初始化或关闭。Console 仅记录元数据。
 
@@ -198,7 +198,9 @@ const consumed = await iam.ticket.consume(issued.data.ticket, { purpose: 'ai-aud
 
 | 方法                        | 签名                                                                        | 说明                                                              |
 | --------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `register`                  | `(input) => Promise<HaiResult<RegisterResult>>`                             | 用户注册                                                          |
+| `register`                  | `(input) => Promise<HaiResult<RegisterResult>>`                             | 在同一事务中创建账号并分配默认角色                                 |
+| `createUser`                | `(input, { roleIds? }?) => Promise<HaiResult<RegisterResult>>`               | 管理端创建账号并分配角色                                           |
+| `inviteUser`                | `(input, { roleIds? }?) => Promise<HaiResult<RegisterResult>>`               | 管理端创建账号和角色，提交后发送单次设密邀请                       |
 | `getUser`                   | `(id, options?) => Promise<HaiResult<User \| null>>`                        | 获取用户（可选 include: ['roles']）                               |
 | `getCurrentUser`            | `(token) => Promise<HaiResult<User>>`                                       | 通过令牌获取当前用户                                              |
 | `updateCurrentUser`         | `(token, data: UpdateCurrentUserInput) => Promise<HaiResult<User>>`         | 当前用户修改个人资料（白名单字段）                                |
@@ -214,12 +216,14 @@ const consumed = await iam.ticket.consume(issued.data.ticket, { purpose: 'ai-aud
 | `adminResetPassword`        | `(userId, newPassword) => Promise<HaiResult<void>>`                         | 管理员直接重置密码                                                |
 | `validatePassword`          | `(password) => HaiResult<void>`                                             | 验证密码强度（**同步方法**）                                      |
 
+管理员先校验目标角色的分配权限，再向 `createUser` 或 `inviteUser` 的第二个参数传入完整角色 ID 集合。省略时用 `rbac.defaultRole`，`[]` 表示不分配角色。角色写入失败时账号一并回滚。邀请投递结果未知时保留已提交的账号和角色。
+
 ### RBAC 授权 — `iam.authz`
 
 | 方法                        | 签名                                                                                    | 说明                                                         |
 | --------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `checkPermission`           | `(userId, permission) => Promise<HaiResult<boolean>>`                                   | 检查权限（超管自动通过，支持通配符）                         |
-| `getUserAuthorization`      | `(userId) => Promise<HaiResult<{roles: string[], permissions: string[]}>>`              | 当前角色及权限代码，单条 JOIN 冷读与共享代际缓存；失效不确定时安全回源 |
+| `getUserAuthorization`      | `(userId) => Promise<HaiResult<{roles: string[], permissions: string[]}>>`              | 与账号状态共用一条缓存，返回当前角色和权限码。缓存缺失或存在未确认写入时查数据库 |
 | `getUserPermissions`        | `(userId) => Promise<HaiResult<Permission[]>>`                                          | 获取用户权限列表（通过角色聚合去重）                         |
 | `getUserRoles`              | `(userId) => Promise<HaiResult<Role[]>>`                                                | 获取用户角色列表                                             |
 | `getUserRolesForMany`       | `(userIds) => Promise<HaiResult<Map<string, Role[]>>>`                                  | 批量获取多用户角色（避免 N+1）                               |
@@ -256,6 +260,8 @@ apikey:
   maxKeysPerUser: 10
   defaultExpirationDays: 30
 ```
+
+并发签发遵守单账号 `maxKeysPerUser`。达到上限时返回 `INVALID_ARGUMENT`，账号不存在时返回 `USER_NOT_FOUND`。
 
 假设主体拥有 `record:read`、`record:write`、`user:read`，不同 scopes 的结果如下（主体授权改变后重新计算）：
 
@@ -534,13 +540,17 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 
 `create({ maxAge })` 可覆盖配置默认时长（正安全整数秒），该值持久化为 `Session.maxAge`；签发和刷新返回的 `expiresIn` 均使用它。滑动续期按该时长延长 access，返回已成功提交的 `lastActiveAt/expiresAt`；迟到请求只延长时间，不缩短较新续期。显式 `update` 的有效日期补丁完整生效并产生新内容版本。客户端根据本次返回的 `expiresIn` 安排刷新，不能硬编码配置默认值。
 
-未启用额外期限时，access 与 refresh 独立到期：access 过期仍可凭有效 refresh 轮换，刷新不先要求旧 access 认证。`session.idleTimeout`、`absoluteTimeout` 以秒配置，0关闭；启用后 access 与 refresh 均检查，刷新保留首次登录时间。成功的 access 认证请求算活动；自动 refresh 仅换票，不延长闲置期限。后台业务轮询仍需按项目设计。`maxSessions: 0` 不限，否则在用户分区 CAS 原子限制有效会话数；`singleDevice: true` 默认顶旧保新，`singleDeviceMode: 'reject'` 保留旧会话并拒绝新登录。删除 access、logoutAll、单设备替换均撤销对应 refresh；`revokeRefresh` 保留仍有效的 access。
+Access 与 refresh 各自到期。验票发现 access 过期时，仍可用有效 refresh 轮换。`session.idleTimeout` 和 `absoluteTimeout` 以秒配置，`0` 关闭。启用后两张令牌都受限，刷新保留首次登录时间。成功的 access 认证算活动，后台自动 refresh 仅换票。`maxSessions: 0` 表示不限，否则在用户分区原子限制会话数。单设备可以替换旧会话，也可以用 `singleDeviceMode: 'reject'` 拒绝新登录。主动删除会话、logoutAll 和单设备替换会撤销对应 refresh，`revokeRefresh` 保留仍有效的 access。
+
+滑动开启且闲置期限为 `0` 时，`session.touchMinInterval` 默认按 5 秒合并续期写入，窗口最多为本会话 `maxAge` 的十分之一。返回已提交的活动与到期时间。设为 `0` 恢复逐次推进，启用闲置期限时精确记录活动。
+
+生产首次部署在启动 IAM 前，用包内 `dist/read-cache-maintenance.js --cache <私有 Cache JSON>` 预检。恢复滞留登记时先停相关写入并在数据库主库核实事务都已结束，再执行 `--apply --expect-epoch <预检代次> --writers-drained`。首次预检的代次为 `missing`。核对回执的新代次及 `writers: 0` 后开放写入。确认结束的登记按 ID 重试清理，结果未知时鉴权回源。
 
 账号生命周期使用必填 `accountStatus`（active/dormant/closed）。列表过滤和排序使用同名字段，注册 `defaultAccountStatus` 默认为 `active`，也可设置为 `dormant`。账号默认 `permanent/active`；管理端可配置 `temporary` 与 `accountExpiresAt`，或设 `accountStatus` 为 `dormant/closed`。状态/有效期变化推进持久凭据代际，重新激活不恢复旧会话。`accounts.dormantAfterDays: 0` 关闭自动休眠；启用后按 `scanIntervalSeconds` 扫描最后成功登录/创建时间，也可从可信后台调用 `iam.user.scanInactiveAccounts()`。公开注册不能接受管理字段；`closed` 保留记录，个人数据注销由项目处理。
 
 `password.minCharacterClasses` 支持任意 N 类字符；创建/改密/重置共用服务端强度校验。`expirationDays: 0` 关闭期限；`preventSamePassword` 可独立启用，期限或首次强改时也拒绝旧密码。`requireInitialChange` 只约束管理端初始/重置密码，关闭后不受历史标记约束。首次/过期用户用 `iam.user.renewPassword({identifier,password,newPassword})` 完成原密码验证与换密后重新登录，不能先授予普通会话。AuthPanel 与标准 Kit/Serv 端点提供该流程。
 
-`security.lockoutEnabled` 可关闭失败锁定；`failureWindow` 为首次失败起的固定窗口秒数（默认86400），并用 `maxLoginAttempts/lockoutDuration` 配置阈值/锁定时间。共享 DB 原子计次。`initialCredentials.enabled` 开启 `iam.user.inviteUser()`，只发送现有 passwordReset 短期单次设密邀请，随机初始秘密不外发；需要重置通知就绪。投递未知保留账号/已发布凭据并返回失败，先核对后恢复，不自动重发或删除账号。
+`security.lockoutEnabled` 可关闭失败锁定；`failureWindow` 为首次失败起的固定窗口秒数（默认86400），并用 `maxLoginAttempts/lockoutDuration` 配置阈值/锁定时间。共享 Redis 原子计次，读写失败时拒绝受策略保护的鉴别。生产使用可靠持久化与 `noeviction`。`initialCredentials.enabled` 开启 `iam.user.inviteUser()`，只发送现有 passwordReset 短期单次设密邀请，随机初始秘密不外发；需要重置通知就绪。投递未知保留账号/已发布凭据并返回失败，先核对后恢复，不自动重发或删除账号。
 
 `loginAccess.enabled` 配置 `allowIps/denyIps`（IP/CIDR，拒绝优先）、IANA `timezone` 和 `windows[{days,start,end}]`（周一1至周日7，HH:mm，含起不含止，跨午夜）。登录第二参 `AuthRequestContext` 必须来自可信宿主；不能使用任意转发头/JSON IP。地址规则启用但缺少可信地址时拒绝。`reauthentication.enabled/operations/ttlSeconds` 控制敏感操作证明；`reauthenticate` 验证原密码，`checkSensitiveOperation` 在原有权限/资源检查后原子消费短期单次票据，绑定用户/会话/操作。Serv 标准 IAM 写操作和 admin 守卫用 `x-hai-reauthentication`，Kit 业务用 `kit.guard.requireSensitive`；证明不提升权限且只短暂保存在内存。
 
