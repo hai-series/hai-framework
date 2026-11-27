@@ -2,6 +2,7 @@ import type { ToolArtifactAccess } from '../src/tools-node-main.js'
 import { core } from '@h-ai/core'
 import { expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { HaiToolsError } from '../src/index.js'
 import { tools } from '../src/tools-node-main.js'
 
 const context = {
@@ -119,6 +120,63 @@ it('reauthorizes each page and rejects a cursor after a change to the host bytes
     { id: 'report' },
     { id: 'report' },
   ])
+})
+
+it('rejects an already cancelled host before calling its file callbacks', async () => {
+  const signal = AbortSignal.abort('request closed')
+  const read = vi.fn(files.read)
+  const publish = vi.fn(files.publish)
+  const save = vi.fn(files.save!)
+  const registry = tools.createRegistry()
+  expect(registry.registerMany(tools.createArtifactTools({
+    context: { ...context, signal },
+    files: { read, publish, save },
+  }).tools).success).toBe(true)
+  expect(await registry.execute('artifact_read', { id: 'report' })).toMatchObject({
+    success: false,
+    error: { code: HaiToolsError.CANCELLED.code },
+  })
+  expect(await registry.execute('artifact_create', { title: 'Report', kind: 'markdown', content: 'Draft' })).toMatchObject({
+    success: false,
+    error: { code: HaiToolsError.CANCELLED.code },
+  })
+  expect(await registry.execute('artifact_save', { id: 'report', baseVersion: 1, content: 'Draft' })).toMatchObject({
+    success: false,
+    error: { code: HaiToolsError.CANCELLED.code },
+  })
+  expect(read).not.toHaveBeenCalled()
+  expect(publish).not.toHaveBeenCalled()
+  expect(save).not.toHaveBeenCalled()
+})
+
+it.each(['host', 'call'])('propagates %s cancellation to a pending file callback', async (source) => {
+  const host = new AbortController()
+  const call = new AbortController()
+  const entered = Promise.withResolvers<AbortSignal>()
+  const read: ToolArtifactAccess['read'] = async (context, input) => {
+    const signal = context.signal!
+    await new Promise<void>((resolve) => {
+      signal.addEventListener('abort', () => resolve(), { once: true })
+      entered.resolve(signal)
+    })
+    return files.read(context, input)
+  }
+  const set = tools.createArtifactTools({
+    context: { ...context, signal: host.signal },
+    files: { ...files, read },
+  })
+  const reader = set.tools.find(tool => tool.name === 'artifact_read')!
+  const pending = reader.execute({ id: 'report' }, { signal: call.signal })
+  const observed = await entered.promise
+  const cancelled = source === 'host'
+    ? host
+    : call
+  cancelled.abort('closed')
+  expect(await pending).toMatchObject({
+    success: false,
+    error: { code: HaiToolsError.CANCELLED.code },
+  })
+  expect(observed.aborted).toBe(true)
 })
 
 it('creates interoperable table/chart artifacts and computes finite numeric summaries', async () => {

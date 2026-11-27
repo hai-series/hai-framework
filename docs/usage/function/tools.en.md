@@ -283,6 +283,8 @@ See the [artifact data contract](../data/tools.en.md#artifact-access) for storag
 
 `createArtifactTools()` constructs the tools. `artifact_create`, `artifact_read`, and `artifact_save` each handle one file per call. With a direct registry, use `registry.executeAll()` to run one call per file in sequence. A failed call returns an error for the batch. Files saved earlier remain available. With Tools Runner, submit a separate task for each new file so it has its own execution ID and artifact ID. A single `data_analyze` call produces two fixed outputs from the same data.
 
+Either the host `context.signal` or the per-call `signal` can cancel the tool. The tool checks cancellation before each file callback and passes the combined signal to the host.
+
 <a id="artifact-byte-limit"></a>
 
 `maxArtifactBytes` limits artifact bodies in UTF-8 bytes. It defaults to 1,048,576. Pass a positive integer such as `tools.createArtifactTools({ context, files, maxArtifactBytes: 256 * 1024 })` to set the same bound for creating, editing, and reading. Tools Runner also applies a 512 KiB JSON budget to each result. When a read returns `nextCursor`, call again with the same `id` and `cursor: nextCursor`, and join the `content` values in order until a response omits `nextCursor`. Every call rechecks authorization. If the file version or content changes during pagination, start again from the first page.

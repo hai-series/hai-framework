@@ -276,6 +276,8 @@ Agent ワークスペースでは、プロジェクトのメモをファイル�
 
 `createArtifactTools()` はツールを用意します。`artifact_create`、`artifact_read`、`artifact_save` を実行すると、1 回の呼び出しでファイル 1 件を処理します。レジストリを直接使う場合は、ファイルごとの呼び出しを `registry.executeAll()` で順番に実行できます。途中で失敗すると一括処理はエラーを返し、それまでに保存したファイルは残ります。Tools Runner では、新しいファイルごとにジョブを送信すると実行 ID と成果物 ID が別々になります。`data_analyze` は 1 回の呼び出しで同じデータから 2 種類の出力を作ります。
 
+ホストの `context.signal` または呼び出し時の `signal` がキャンセルされると、ツールも中止されます。ツールは各ファイルコールバックの前にキャンセルを確認し、結合したシグナルをホストに渡します。
+
 <a id="artifact-byte-limit"></a>
 
 `maxArtifactBytes` は成果物本文の UTF-8 バイト数の上限で、既定値は 1,048,576 バイトです。`tools.createArtifactTools({ context, files, maxArtifactBytes: 256 * 1024 })` のように正の整数を指定すると、作成・編集・読み取りに同じ上限が適用されます。Tools Runner では結果の JSON 1 件に 512 KiB の上限もあります。`nextCursor` が返ったら、同じ `id` と `cursor: nextCursor` を指定して再度呼び出し、`nextCursor` がなくなるまで `content` を順に連結します。呼び出すたびに権限を確認します。読み取り途中で版や内容が変わった場合は最初のページからやり直します。

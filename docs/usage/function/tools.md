@@ -273,6 +273,8 @@ async function manageSum() {
 
 `createArtifactTools()` 只构造工具。执行 `artifact_create`、`artifact_read` 或 `artifact_save` 时，每次各处理一个文件。多份文件各传一次调用，直接使用注册器时可用 `registry.executeAll()` 顺序执行。任何一项失败时，本批返回错误，之前已保存的文件仍在。接入 Tools Runner 时，每份新文件单独提交一条任务，让它取得独立的执行 ID 和产物 ID。一次 `data_analyze` 则为同一份数据生成固定的两种结果。
 
+宿主的 `context.signal` 和单次执行的 `signal` 任一取消都会中止工具调用。工具在进入每个文件回调前检查取消，并把合并后的信号交给宿主。
+
 <a id="artifact-byte-limit"></a>
 
 `maxArtifactBytes` 是产物正文的 UTF-8 字节上限，默认为 1,048,576 字节。应用可传入自己的正整数值，如 `tools.createArtifactTools({ context, files, maxArtifactBytes: 256 * 1024 })`，创建、编辑和读取使用同一个上限。Tools Runner 的单条结果另受 512 KiB JSON 预算限制。读到 `nextCursor` 时，用同一 `id` 和 `cursor: nextCursor` 继续读取，依次拼接 `content`，直到返回值省略 `nextCursor`。每次调用重新授权。期间文件内容或版本改变时，重新从第一页读取。

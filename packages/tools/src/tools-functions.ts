@@ -61,7 +61,7 @@ function joinedAuthorizer(registry?: ToolAuthorizer, execution?: ToolAuthorizer)
  * if (!result.success) throw new Error(result.error.message)
  * ```
  */
-export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput, TOutput>): Tool<TInput, TOutput> {
+export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput, TOutput>, boundSignal?: AbortSignal): Tool<TInput, TOutput> {
   const { name, description, parameters, handler, resultHandler, timeoutMs = 30_000 } = definition
   if (!portableName.test(name) || !validTimeout(timeoutMs))
     throw new TypeError('Tool definition requires a portable name and a valid timeout')
@@ -87,20 +87,23 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
       }
     },
     async execute(input, options = {}) {
+      const callerSignal = options.signal && boundSignal && options.signal !== boundSignal
+        ? AbortSignal.any([options.signal, boundSignal])
+        : options.signal ?? boundSignal
       const duration = options.deadline === undefined
         ? options.timeoutMs ?? timeoutMs
         : Math.max(0, options.deadline - Date.now())
       if (!validTimeout(duration) || (options.deadline !== undefined && !Number.isSafeInteger(options.deadline)))
         return core.err(HaiToolsError.VALIDATION_FAILED, toolsM('tools_validationFailed'))
-      if (options.signal?.aborted)
-        return core.err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), options.signal.reason)
+      if (callerSignal?.aborted)
+        return core.err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), callerSignal.reason)
       if (duration === 0)
         return core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'))
 
       const timeout = new AbortController()
       const timer = setTimeout(() => timeout.abort(new DOMException('Tool deadline exceeded', 'TimeoutError')), duration)
-      const signal = options.signal
-        ? AbortSignal.any([options.signal, timeout.signal])
+      const signal = callerSignal
+        ? AbortSignal.any([callerSignal, timeout.signal])
         : timeout.signal
       const context: ToolExecutionContext = {
         signal,
@@ -108,7 +111,7 @@ export function defineTool<TInput, TOutput>(definition: DefineToolOptions<TInput
         sessionId: options.sessionId,
         deadline: options.deadline ?? Date.now() + duration,
       }
-      const interrupted = (cause: unknown) => options.signal?.aborted
+      const interrupted = (cause: unknown) => callerSignal?.aborted
         ? core.err(HaiToolsError.CANCELLED, toolsM('tools_cancelled'), cause)
         : core.err(HaiToolsError.TIMEOUT, toolsM('tools_timeout'), cause)
       const refreshDeadline = () => {

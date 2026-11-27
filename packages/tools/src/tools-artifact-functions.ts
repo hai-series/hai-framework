@@ -5,8 +5,8 @@ import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { core } from '@h-ai/core'
 import { z } from 'zod'
+import { defineTool } from './tools-functions.js'
 import { toolsM } from './tools-i18n.js'
-import { tools } from './tools-main.js'
 import { HaiToolsError } from './tools-types.js'
 
 /**
@@ -34,7 +34,10 @@ export interface ArtifactToolOptions {
 export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 1024 }: ArtifactToolOptions): ToolSet {
   if (!Number.isSafeInteger(maxArtifactBytes) || maxArtifactBytes <= 0)
     throw new RangeError('maxArtifactBytes must be a positive safe integer')
-  const binding = (signal: AbortSignal) => ({ ...context, signal })
+  const binding = (signal: AbortSignal) => {
+    signal.throwIfAborted()
+    return { ...context, signal }
+  }
   const identifier = z.string().min(1).max(200).meta({
     format: 'artifact-id',
     title: toolsM('tools_field_id'),
@@ -66,7 +69,7 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
     data: new TextEncoder().encode(text),
   })
   const definitions: Tool[] = [
-    tools.define({
+    defineTool({
       name: 'artifact_create',
       title: toolsM('tools_artifactCreate'),
       description: toolsM('tools_artifactCreateDescription'),
@@ -91,8 +94,8 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
         }
         return publish(signal, input.title, input.kind, input.content, 'artifact_create:artifact')
       },
-    }),
-    tools.define({
+    }, context.signal),
+    defineTool({
       name: 'artifact_read',
       title: toolsM('tools_artifactRead'),
       description: toolsM('tools_artifactReadDescription'),
@@ -102,6 +105,7 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
       }),
       resultHandler: async (input, { signal }) => {
         const file = await files.read(binding(signal), { id: input.id })
+        signal.throwIfAborted()
         if (!file.success)
           return file
         if (file.data.data.byteLength > maxArtifactBytes || !/^(?:text\/(?:markdown|html|plain)|application\/json)$/u.test(file.data.mediaType))
@@ -116,8 +120,8 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
           ? core.ok(page)
           : invalid()
       },
-    }),
-    tools.define({
+    }, context.signal),
+    defineTool({
       name: 'data_analyze',
       title: toolsM('tools_dataAnalyze'),
       description: toolsM('tools_dataAnalyzeDescription'),
@@ -217,11 +221,11 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
           artifacts: [table.data, chart.data],
         })
       },
-    }),
+    }, context.signal),
   ]
   if (files.save) {
     const save = files.save
-    definitions.push(tools.define({
+    definitions.push(defineTool({
       name: 'artifact_save',
       title: toolsM('tools_artifactSave'),
       description: toolsM('tools_artifactSaveDescription'),
@@ -233,7 +237,7 @@ export function createArtifactTools({ context, files, maxArtifactBytes = 1024 * 
         content,
       }),
       resultHandler: (input, { signal }) => save(binding(signal), input),
-    }))
+    }, context.signal))
   }
   return {
     tools: definitions,
