@@ -3,6 +3,7 @@ import io
 import json
 import os
 import pathlib
+import shutil
 import stat
 import subprocess
 import sys
@@ -345,6 +346,36 @@ export async function runHyperframes(args, directory) {
         self.assertFalse(result['success'])
         self.assertEqual(list(self.outputs.iterdir()), [])
 
+    def test_capture_classifies_malformed_worker_output_separately_from_the_request(self):
+        module = load('web_capture')
+        cases = [
+            (b'{', b'Product description'),
+            (b'"\xff"', b'Product description'),
+            (b'[]', b'Product description'),
+            (b'{"colors":[false]}', b'Product description'),
+            (b'{"title":[]}', b'Product description'),
+            (b'{"description":4}', b'Product description'),
+            (b'{"title":"\\ud800"}', b'Product description'),
+            (b'{}', b'\xff'),
+        ]
+
+        for index, (tokens, text) in enumerate(cases):
+            with self.subTest(tokens=tokens, text=text):
+                def capture(args, timeout, workspace):
+                    destination = workspace / 'capture'
+                    (destination / 'screenshots').mkdir(parents=True)
+                    (destination / 'extracted').mkdir()
+                    (destination / 'screenshots' / 'page.png').write_bytes(b'\x89PNG\r\n\x1a\nfixture')
+                    (destination / 'extracted' / 'visible-text.txt').write_bytes(text)
+                    (destination / 'extracted' / 'tokens.json').write_bytes(tokens)
+
+                with patch.dict(os.environ, {'HAI_TOOL_BROWSER_PROXY': 'http://192.0.2.10:3128'}, clear=True):
+                    with patch.object(module, 'run_command', capture):
+                        result = self.invoke(module, {'operation': 'web.capture', 'url': 'https://example.com/', 'output': f'capture-{index}.zip'})
+                self.assertFalse(result['success'], result)
+                self.assertEqual(result['error']['code'], 'INVALID_OUTPUT')
+        self.assertEqual(list(self.outputs.iterdir()), [])
+
     def test_video_renders_valid_local_project_and_publishes_mp4(self):
         module = load('video_render')
         source = self.project(entries=[('assets/narration.wav', b'RIFFfixture')])
@@ -392,6 +423,32 @@ export async function runHyperframes(args, directory) {
                 self.assertEqual(self.invoke(module, {'operation': 'video.render', 'input': source, 'output': f'limit{index}.mp4'})['error']['code'], 'INVALID_PROJECT')
         source = self.project()
         self.assertEqual(self.invoke(module, {'operation': 'video.render', 'input': source, 'output': 'bad.mp4', 'fps': True})['error']['code'], 'INVALID_REQUEST')
+
+    def test_media_jobs_reject_file_directory_collisions_before_extracting(self):
+        for kind, operation, output in [('preview_build', 'preview.build', 'preview.html'),
+                                        ('video_render', 'video.render', 'render.mp4')]:
+            module = load(kind)
+            for directory in ('assets', 'ASSETS'):
+                entries = [('assets', 'File'), (f'{directory}/title.txt', 'Child of directory')]
+                for ordered in (entries, list(reversed(entries))):
+                    with self.subTest(operation=operation, ordered=ordered):
+                        source = self.project(entries=ordered)
+                        with patch('media_files.shutil.copyfileobj', wraps=shutil.copyfileobj) as copy, patch.object(module, 'run_command') as run:
+                            result = self.invoke(module, {'operation': operation, 'input': source, 'output': output})
+                        self.assertFalse(result['success'], result)
+                        self.assertEqual(result['error']['code'], 'UNSAFE_PROJECT')
+                        copy.assert_not_called()
+                        run.assert_not_called()
+        self.assertEqual(list(self.outputs.iterdir()), [])
+
+    def test_media_jobs_report_extraction_storage_errors_as_execution_failures(self):
+        module = load('video_render')
+        source = self.project()
+        with patch('media_files.shutil.copyfileobj', side_effect=PermissionError('Fixture storage error')):
+            result = self.invoke(module, {'operation': 'video.render', 'input': source, 'output': 'failed.mp4'})
+        self.assertFalse(result['success'], result)
+        self.assertEqual(result['error']['code'], 'TOOL_FAILED')
+        self.assertEqual(list(self.outputs.iterdir()), [])
 
     def test_video_failed_renderer_cannot_publish_partial_output(self):
         module = load('video_render')

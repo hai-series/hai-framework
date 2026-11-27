@@ -36,27 +36,38 @@ def capture(request, _source, artifact, workspace):
     names = [name for name, _ in files]
     if 'extracted/tokens.json' not in names or 'extracted/visible-text.txt' not in names:
         raise ToolError('INVALID_OUTPUT', 'Capture did not produce source text and design tokens')
-    tokens = json.loads((directory / 'extracted' / 'tokens.json').read_text(encoding='utf-8'))
+    try:
+        tokens = json.loads((directory / 'extracted' / 'tokens.json').read_text(encoding='utf-8'))
+        text = (directory / 'extracted' / 'visible-text.txt').read_text(encoding='utf-8')
+    except (ValueError, RecursionError):
+        raise ToolError('INVALID_OUTPUT', 'Capture tokens or source text could not be decoded') from None
     if not isinstance(tokens, dict):
         raise ToolError('INVALID_OUTPUT', 'Capture tokens are invalid')
+    title = tokens.get('title')
+    description = tokens.get('description')
+    if any(value is not None and not isinstance(value, str) for value in (title, description)):
+        raise ToolError('INVALID_OUTPUT', 'Capture title or description is invalid')
     colors = tokens.get('colors', [])
     if not isinstance(colors, list) or any(not isinstance(color, str) or len(color) > 256 for color in colors):
         raise ToolError('INVALID_OUTPUT', 'Capture colors are invalid')
-    text = (directory / 'extracted' / 'visible-text.txt').read_text(encoding='utf-8')
     screenshots = [name for name in names if name.startswith('screenshots/') and name.endswith('.png')]
     if not text.strip() or len(text.encode('utf-8')) > TEXT_LIMIT or not screenshots:
         raise ToolError('INVALID_OUTPUT', 'Capture did not produce bounded text and screenshots')
     summary = {
         'sourceUrl': url,
-        'title': str(tokens.get('title', ''))[:2048],
-        'description': str(tokens.get('description', ''))[:8192],
+        'title': (title or '')[:2048],
+        'description': (description or '')[:8192],
         'text': text,
         'colors': colors[:20],
         'screenshots': screenshots,
         'materials': names,
     }
     document = {**summary, 'renderer': {'name': 'hyperframes', 'version': '0.9.56'}}
-    (directory / 'capture.json').write_text(json.dumps(document, ensure_ascii=False), encoding='utf-8')
+    try:
+        encoded = json.dumps(document, ensure_ascii=False).encode('utf-8')
+    except UnicodeEncodeError:
+        raise ToolError('INVALID_OUTPUT', 'Capture metadata is not valid UTF-8 text') from None
+    (directory / 'capture.json').write_bytes(encoded)
     result = workspace / 'capture.zip'
     bundle_capture(directory, result)
     return {**publish(result, artifact, b'PK\x03\x04'), 'summary': summary}

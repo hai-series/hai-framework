@@ -25,6 +25,8 @@ def extract_project(source, destination):
         with zipfile.ZipFile(source) as archive:
             entries = archive.infolist()
             seen = set()
+            file_paths = set()
+            paths = []
             if len(entries) > ENTRY_LIMIT or sum(entry.file_size for entry in entries) > EXPANDED_LIMIT:
                 raise ToolError('UNSAFE_PROJECT', 'Project archive exceeds the extraction limits')
             for entry in entries:
@@ -35,6 +37,13 @@ def extract_project(source, destination):
                         or stat.S_ISLNK(mode) or (stat.S_IFMT(mode) not in (0, stat.S_IFREG, stat.S_IFDIR))):
                     raise ToolError('UNSAFE_PROJECT', 'Project contains duplicate, linked or unsupported entries')
                 seen.add(identity)
+                paths.append((entry, path))
+                if not entry.is_dir():
+                    file_paths.add(identity)
+            # 显式目录与隐式父目录都按同一套大小写规则检查，再开始解包。
+            if any(str(parent).casefold() in file_paths for _, path in paths for parent in path.parents):
+                raise ToolError('UNSAFE_PROJECT', 'Project uses a file path as a directory')
+            for entry, path in paths:
                 target = destination.joinpath(*path.parts)
                 if entry.is_dir():
                     target.mkdir(parents=True, exist_ok=True)

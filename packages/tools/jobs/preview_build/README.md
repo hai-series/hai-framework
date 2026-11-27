@@ -47,6 +47,8 @@ ZIP 最多 256 个条目，解包后总计最多 8 MiB，单个源码文件与�
 
 镜像成功时在 `data.artifact` 返回文件名和字节数。缺少根 `index.html` 返回 `INVALID_PROJECT`，不支持的依赖或资源返回 `UNSUPPORTED_PROJECT`。
 
+ZIP 中若有普通文件同时占用另一个条目的目录路径，作业在解包前返回 `UNSAFE_PROJECT`。重新打包时应为每条路径明确唯一的类型。
+
 ## 开发测试
 
 在仓库根目录运行 Python 测试，检查 ZIP 路径校验、本地依赖解析与产物边界。

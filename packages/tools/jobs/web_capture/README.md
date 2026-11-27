@@ -51,6 +51,8 @@ if (!capture.success)
 
 镜像响应的 `data.artifact` 提供 ZIP 文件名和大小，`data.summary` 包含来源、正文、颜色、截图和素材路径，`capture.json` 在归档中保存采集结果。返回成功需要有可见正文和截图。ZIP 上限 50 MiB，正文上限 256 KiB。通过 `capture-status.json` 检查缺失素材和警告，再将结果交给后续应用。 [采集输出与限制](../README.md#采集网页正文与制作素材)
 
+采集器产出的 JSON、UTF-8 正文或元数据无效时返回 `INVALID_OUTPUT`。可以检查镜像版本和采集日志。
+
 ## 开发测试
 
 在仓库根目录验证采集响应与归档、代理前置条件和沙箱错误分类。
