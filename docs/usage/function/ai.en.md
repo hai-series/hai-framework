@@ -1389,6 +1389,8 @@ Use `ai.acp.sessions.resume(id)` to recover the original native history. Agent d
 
 Run this on Node.js after authorizing the absolute repository directory and revision. The sample revision has no `notes.txt`. Reading and comparing snapshots produces a patch without changing or pushing the source repository.
 
+`ACPProjectSnapshot.executables` lists the relative paths of any files with Git mode `100755`. Return the complete snapshot from `acpPolicy.resolveProject` so ACP restores execute permission for those files in the private workspace. The patch compares file contents and uses regular file permissions for additions.
+
 ```ts
 
 import { type ACPPublishSnapshot, ai } from '@h-ai/ai'

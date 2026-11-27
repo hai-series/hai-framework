@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,7 +18,16 @@ it('exports a bounded Git snapshot, creates an applicable patch and pushes only 
     await exec('git', ['init', '--bare', remote])
     await mkdir(join(project, 'src'))
     await writeFile(join(project, 'src', 'index.txt'), 'old\n')
+    const script = '#!/bin/sh\nprintf executable\n'
+    await writeFile(join(project, 'src', 'check.sh'), script)
     await exec('git', ['-C', project, 'add', '.'])
+    await exec('git', [
+      '-C',
+      project,
+      'update-index',
+      '--chmod=+x',
+      'src/check.sh',
+    ])
     await exec('git', [
       '-C',
       project,
@@ -34,9 +44,11 @@ it('exports a bounded Git snapshot, creates an applicable patch and pushes only 
     expect(read.success).toBe(true)
     if (!read.success)
       throw new Error(read.error.message)
-    expect(read.data.files).toEqual({ 'src/index.txt': 'b2xkCg==' })
+    const executableContent = Buffer.from(script).toString('base64')
+    expect(read.data.files).toEqual({ 'src/index.txt': 'b2xkCg==', 'src/check.sh': executableContent })
+    expect(read.data.executables).toEqual(['src/check.sh'])
     expect((await ai.acp.workspaces.readGitSnapshot({ directory: project, revision: 'refs/heads/main', maxBytes: 2 })).success).toBe(false)
-    const pending = await ai.acp.workspaces.diffSnapshot(read.data.files, { 'src/new.txt': 'bmV3Cg==' })
+    const pending = await ai.acp.workspaces.diffSnapshot(read.data.files, { 'src/new.txt': 'bmV3Cg==', 'src/check.sh': executableContent })
     expect(pending.success).toBe(true)
     if (!pending.success)
       throw new Error(pending.error.message)

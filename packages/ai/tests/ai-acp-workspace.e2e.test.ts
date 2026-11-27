@@ -89,7 +89,9 @@ describe.skipIf(!image)('managed ACP workspace snapshot', () => {
                 revision: 'a'.repeat(40),
                 files: {
                   'src/readme.txt': Buffer.from('original\n').toString('base64'),
+                  'src/check.sh': Buffer.from('#!/bin/sh\nprintf executable\n').toString('base64'),
                 },
+                executables: ['src/check.sh'],
               }
             : undefined,
           publishProject,

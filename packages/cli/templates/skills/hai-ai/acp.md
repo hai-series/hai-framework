@@ -28,7 +28,7 @@ Linux 上运行 embedded Codex 前，按 [Codex 沙箱前置](https://learn.chat
 
 通过 `tasks.findSubmission(sessionId, idempotencyKey)` 核对响应丢失的提交。使用已持久化的原会话和原幂等键。找到后继续按同一 taskId 查询或取消，返回 null 时保留待核对状态。
 
-只有部署方在固定 DeepSeek Harness 0.2.1-rc.5 镜像的登记项开启 `sharedMode: true` 时，内置共享 profile 才可运行。它使用默认启动配置，停用工具。逐轮工具及产物信息保留有界脱敏事件。工程任务可通过 `resolveProject` 装载 `workspaces.readGitSnapshot` 的文件树，完成后由 `publishProject` 交付生成的补丁。托管任务的推送调用 `workspaces.publishSnapshot`，服务端先重新查验当前 Git 发布权限。
+只有部署方在固定 DeepSeek Harness 0.2.1-rc.5 镜像的登记项开启 `sharedMode: true` 时，内置共享 profile 才可运行。它使用默认启动配置，停用工具。逐轮工具及产物信息保留有界脱敏事件。工程任务的 `resolveProject` 返回 `workspaces.readGitSnapshot` 的完整快照，Runner 根据 `executables` 在私有工作区恢复已提交脚本的执行权限。完成后由 `publishProject` 交付文件内容补丁，容器内的权限变化不随补丁发布。托管任务的推送调用 `workspaces.publishSnapshot`，服务端先重新查验当前 Git 发布权限。
 
 ## Goose 的原生接入
 

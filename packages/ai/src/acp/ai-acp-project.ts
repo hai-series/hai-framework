@@ -22,16 +22,18 @@ const projectFiles = 512
 const patchBudget = projectBudget * 3
 
 /**
- * 已授权的 Git 提交文件树，包含规范 Base64 数据。
+ * 已授权的 Git 提交文件树，包含规范 Base64 数据和可选的可执行文件路径。
  * @example
  * ```ts
  * import type { ACPProjectSnapshot } from '@h-ai/ai'
- * function revision(snapshot: ACPProjectSnapshot) { return snapshot.revision }
+ * function executablePaths(snapshot: ACPProjectSnapshot) { return snapshot.executables ?? [] }
  * ```
  */
 export interface ACPProjectSnapshot {
   revision: string
   files: Record<string, string>
+  /** Git 中模式为 100755 的普通文件。路径与 files 中的键一致，无可执行文件时省略。 */
+  executables?: string[]
 }
 
 /**
@@ -141,7 +143,7 @@ export async function readGitSnapshot(input: { directory: string, revision: stri
     const path = entry.slice(tab + 1)
     if (tab < 0 || !oid || !sha.test(oid) || type !== 'blob' || !['100644', '100755'].includes(mode ?? '') || !pathAllowed(path))
       throw new ACPFailure('unsupported', { parameter: 'workspace' })
-    return { path, oid }
+    return { path, oid, executable: mode === '100755' }
   })
   const content = await git(directory, ['cat-file', '--batch'], {
     signal,
@@ -164,7 +166,12 @@ export async function readGitSnapshot(input: { directory: string, revision: stri
       content.subarray(start, cursor - 1).toString('base64'),
     ]
   }))
-  return { revision, files }
+  const executables = objects.filter(entry => entry.executable).map(entry => entry.path)
+  return {
+    revision,
+    files,
+    ...(executables.length > 0 && { executables }),
+  }
 }
 
 async function inTemporaryDirectory<T>(use: (directory: string) => Promise<T>): Promise<T> {

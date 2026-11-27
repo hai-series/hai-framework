@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import process from 'node:process'
 import { createInterface } from 'node:readline'
@@ -26,6 +27,8 @@ channel.on('line', (line) => {
   if (method === 'session/prompt') {
     if (params.prompt.at(-1).text === 'edit project') {
       const path = '/workspace/src/readme.txt'
+      if (execFileSync('/workspace/src/check.sh', { encoding: 'utf8' }) !== 'executable')
+        throw new Error('Project script did not run')
       writeFileSync(path, readFileSync(path, 'utf8').replace('original', 'edited'))
       send({
         method: 'session/update',

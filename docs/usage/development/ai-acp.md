@@ -60,6 +60,8 @@ Codex、DeepSeek Harness 和 Goose 使用固定版本的原生协议。DeepSeek 
 
 可信服务先检查工程 ACL，通过 `workspaces.readGitSnapshot` 从登记的本地 Git 仓库和 ref 读取普通文件树。设置 `acpPolicy.resolveProject` 时，执行器把该树复制到独占容器的 `/workspace`。完成后框架比较原始和当前文件生成补丁，由 `publishProject` 保存授权产物。使用 `workspaces.publishSnapshot` 可在明确确认后普通推送独立的 `agent/` 分支。源码和案卷不会作为 Runner 队列负载发送。完整示例见 [多用户工作台](agent.md)。
 
+解析工程时返回完整的 Git 快照。Runner 用其中的 `executables` 恢复已提交脚本的执行权限，便于直接运行测试或构建脚本。补丁仍比较文件内容，工作区内的权限变更或新文件模式不会发布到 Git。
+
 ## 选择运行模式和传输
 
 | 模式 | 如何接入 | 模型与工作目录 |

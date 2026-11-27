@@ -2205,6 +2205,8 @@ async function continueWork(identity: RunnerScope) {
 
 以下 ACP 调用运行在 Node.js。`directory` 是应用已授权的仓库绝对路径，`revision` 是完整提交 ID 或 `refs/heads/main` 等完整引用；示例假定该提交没有 `notes.txt`。读取快照取得提交 ID 和“相对路径 → Base64 内容”的文件表，再将 `hello` 加入测试文件，生成补丁供用户检查。这一步不会修改原仓库或推送。
 
+`ACPProjectSnapshot.executables` 在提交包含 Git 模式为 `100755` 的文件时列出这些相对路径。使用 `acpPolicy.resolveProject` 返回完整快照，ACP 会在私有工作区恢复这些文件的执行权限。生成的补丁比较文件内容，工作区 `chmod` 和新增文件的权限不会随补丁发布。
+
 ```ts
 
 import { type ACPPublishSnapshot, ai } from '@h-ai/ai'

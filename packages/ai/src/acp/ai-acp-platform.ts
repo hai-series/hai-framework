@@ -63,7 +63,7 @@ export interface ACPPlatformPolicy {
   allowWorkspace?: (scope: RunnerScope, workspaceId: string) => boolean | Promise<boolean>
   /** 在执行节点读取已授权的工作区文件。最多 8 个平铺普通文件，总量受执行环境和 16 MiB 上限约束。 */
   resolveWorkspace?: (scope: RunnerScope, workspaceId: string, signal: AbortSignal) => Promise<Readonly<Record<string, Uint8Array>>>
-  /** 在工作区授权之后读取部署方登记的普通文件项目快照。 */
+  /** 在工作区授权后读取部署方登记的项目快照及已有可执行文件路径。 */
   resolveProject?: (scope: RunnerScope, workspaceId: string, signal: AbortSignal) => Promise<ACPProjectSnapshot | undefined>
   /** 在成功轮次后发布补丁；只向浏览器交付已绑定主体的产物引用。 */
   publishProject?: (input: {
@@ -704,6 +704,7 @@ export function createACPPlatform(deps: {
       files: launch.files,
       inputs,
       workspace: project?.files,
+      workspaceExecutables: project?.executables,
       env: {
         HOME: '/state',
         ...environment,

@@ -1393,6 +1393,8 @@ submit は再読込可能な受付情報、run は今回の結果を待ちます
 
 Node.js で、認可済みリポジトリの絶対パスとリビジョンを入力します。この例のコミットには `notes.txt` がありません。スナップショットの取得と比較では元のリポジトリを変更せず、push もしません。
 
+`ACPProjectSnapshot.executables` には Git モード `100755` のファイルがある場合に、その相対パスが入ります。`acpPolicy.resolveProject` からスナップショット全体を返すと、ACP は専用ワークスペースで対象ファイルの実行権限を復元します。パッチはファイル内容を比較し、追加ファイルには通常の権限を使います。
+
 ```ts
 
 import { type ACPPublishSnapshot, ai } from '@h-ai/ai'
