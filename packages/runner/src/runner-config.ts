@@ -131,6 +131,7 @@ export const submitSchema = z.strictObject({
   }),
   kind: id,
   input: json,
+  locale: z.string().max(64).regex(/^[A-Za-z]+(?:-[A-Za-z0-9]+)*$/u).optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
   environmentId: id.optional(),
   resources: resources.partial().optional(),

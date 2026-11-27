@@ -187,6 +187,8 @@ export interface RunnerContext {
   scope: RunnerScope
   owner: RunnerOwner
   parentId?: string
+  /** 首次提交保存的语言，早期或省略语言的任务无此字段。 */
+  locale?: RunnerSubmit['locale']
   signal: AbortSignal
   emit: (data: RunnerJson) => Promise<HaiResult<void>>
   start: (launch: RunnerLaunch) => Promise<HaiResult<RunnerProcess>>

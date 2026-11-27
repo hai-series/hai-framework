@@ -78,6 +78,7 @@ const executions: ReldbTableDef = {
 interface StoredRequest {
   scope: RunnerScope
   input: RunnerJson
+  locale?: RunnerSubmit['locale']
   environment?: RunnerEnvironment
   resources?: RunnerResources
   runTimeoutMs: number
@@ -570,6 +571,7 @@ export function makeStore(config: RunnerConfig, owner: RunnerOwner, ownerProcess
         const saved: StoredRequest = {
           scope: request.scope,
           input: request.input,
+          locale: request.locale,
           environment,
           resources,
           runTimeoutMs: request.runTimeoutMs,

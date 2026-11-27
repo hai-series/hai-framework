@@ -203,6 +203,7 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
         id: claim.id,
         parentId: claim.parentId,
         scope: claim.request.scope,
+        ...(claim.request.locale !== undefined && { locale: claim.request.locale }),
         owner: holder,
         signal: abort.signal,
         start,
