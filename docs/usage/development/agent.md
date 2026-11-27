@@ -34,15 +34,17 @@
 
 在「工具」搜索操作、点示例填表，选择已上传文件或已有产物后运行。简单参数直接表单化；复杂结构留在高级参数。任务显示真实排队、运行、取消中和终态，完成后直接打开生成产物。取消回执只是停止请求，组件继续查询到终态。
 
-应用从 `@h-ai/tools/server` 创建服务，组合 `tools.createArtifactTools`、`tools.createJobTools` 和 `ai.tools.createBuiltinTools`。手动界面与智能体 Broker 共用同一目录、启用策略和授权。任务设置选择稳定工具名（例如 artifact_create），外部 MCP 使用 mcp_<配置 id>，继续经同一服务调用已有 `ai.mcp.services.invoke`。短期令牌和撤销机制复用现有 Broker。
+应用从 `@h-ai/tools-runner` 导入 `toolsRunner`，经 `toolsRunner.createService()` 创建持久工具服务。服务组合 `@h-ai/tools/server` 的 `tools.createArtifactTools`、`toolsRunner.createJobTools` 和 `ai.tools.createBuiltinTools`。手动界面与智能体 Broker 共用目录、启用策略和授权。任务设置选择稳定工具名（例如 `artifact_create`），外部 MCP 使用 `mcp_<配置 id>`，继续经同一服务调用已有 `ai.mcp.services.invoke`。短期令牌和撤销机制复用现有 Broker。 [工具服务接入](../function/tools-runner.md#quick-start)
 
-管理员通过 `HAI_AGENT.workbench` 设置 artifacts/tools 开关、selection 选择策略和 environments 环境映射。默认产物、工具开关为 true，环境映射为空；selection 完全省略时选择默认内置组，显式 {} 全部停用，可用 groups/tools/exclude 按组或单工具选择；未绑定环境的容器作业不显示。浏览器/网页还需要可信宿主的 browserProxy，使用 `http://非 loopback IPv4:port`，可复用现有模型出口代理，并以 HAI_TOOL_BROWSER_PROXY 传入作业，模型不可修改。完整配置见 [应用说明](../../../apps/agent/README.md#工作台按需启用) 和 [Tools 配置](../configuration/tools.md)。
+管理员通过 `HAI_AGENT.workbench` 设置 artifacts/tools 开关、selection 选择策略和 environments 环境映射。默认产物、工具开关为 true，环境映射为空；selection 完全省略时选择默认内置组，显式 {} 全部停用，可用 groups/tools/exclude 按组或单工具选择；未绑定环境的容器作业不显示。浏览器/网页还需要可信宿主的 browserProxy，使用 `http://非 loopback IPv4:port`，可复用现有模型出口代理，并以 HAI_TOOL_BROWSER_PROXY 传入作业，模型不可修改。完整配置见 [应用说明](../../../apps/agent/README.md#工作台按需启用) 和 [工具服务与容器配置](../configuration/tools-runner.md)。
 
 服务复用 Runner 原有表、租约与事件和 Storage，不新建队列或 Tools 状态表。API 节点可关闭 executor，执行节点重新检查工具是否仍启用，以及当前用户、任务和最终资源权限。文件读取、版本保存、媒体下载及 Range 请求均保持账号归属验证。
 
-上传根目录有 index.html 的项目 ZIP，绑定 `environments.preview` 后可用 web 组 `preview_build` 生成自包含 HTML，再由现有隔离产物预览打开。固定离线构建器支持本地 HTML/JS/TS/CSS 和纯浏览器 Svelte 组件，不执行项目脚本或配置、不下载依赖，不支持 SvelteKit 和任意 npm 包；无需常驻预览服务或 browserProxy。限额及具体支持范围见 [项目预览](../function/tools.md#从项目构建网页预览)。
+`data_analyze` 将表格和图表的文件记录与版本在同一事务中发布。发布失败时，应用清理本次写入且尚未被版本引用的对象。`artifact_read` 的受管结果可能分页，调用方以同一个文件 ID 和上页返回的游标继续读取。 [产物大小与分页](../function/tools.md#artifact-byte-limit)
 
-配置实际 LLM、默认 WAV TTS、web/video 环境和 browserProxy 后，website_video 可从 HTTPS 网址生成脚本、可编辑分镜、逐镜音频、字幕、工程和 MP4。失败或修改后通过 captureId/storyboardId/audioIds 复用采集及未改配音；工程包也可直接重渲染。详细参数及真实依赖见 [网址视频流程](../function/tools.md#从网址生成可编辑介绍视频)。
+上传根目录有 index.html 的项目 ZIP，绑定 `environments.preview` 后可用 web 组 `preview_build` 生成自包含 HTML，再由现有隔离产物预览打开。固定离线构建器支持本地 HTML/JS/TS/CSS 和纯浏览器 Svelte 组件，不执行项目脚本或配置、不下载依赖，不支持 SvelteKit 和任意 npm 包；无需常驻预览服务或 browserProxy。限额及具体支持范围见 [项目预览](../function/tools-runner.md#web-preview)。
+
+配置实际 LLM、默认 WAV TTS、web/video 环境和 browserProxy 后，website_video 可从 HTTPS 网址生成脚本、可编辑分镜、逐镜音频、字幕、工程和 MP4。失败或修改后通过 captureId/storyboardId/audioIds 复用采集及未改配音；工程包也可直接重渲染。详细参数及真实依赖见 [网址视频流程](../function/tools-runner.md#website-video)。
 
 ## 冷启动、回复速度和资源实测
 

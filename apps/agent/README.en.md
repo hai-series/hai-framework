@@ -55,7 +55,7 @@ HTML previews allow script interaction in an iframe without same-origin access a
 
 Find tools by name and start with forms or examples. Select uploaded files and existing artifacts by readable names, with manual IDs as a fallback. Complex objects stay in advanced parameters. Follow actual queued, running, cancelling and terminal states, then open output artifacts. Cancellation continues polling until a real terminal state; Refresh status resumes an interrupted wait.
 
-Manual actions and agents use one `@h-ai/tools/server` service. Task-setting tool IDs are stable tool names such as `artifact_create`; external MCP mappings use `mcp_<configuration id>`. Both entries share the catalog, enablement and authorization, checked again by executors. MCP goes through the same Broker and ToolsService to existing `ai.mcp.services.invoke`, without a second application execution pipeline.
+Manual actions and agents share an `@h-ai/tools-runner` service. `@h-ai/tools/server` provides artifact tools. Task settings use stable tool names such as `artifact_create`. External MCP tools use names such as `mcp_<configuration id>`. Both entry points share the catalog and enablement policy, and executors recheck authorization. The Broker and tool service forward MCP calls to `ai.mcp.services.invoke`. [Set up the tool service](../../docs/usage/function/tools-runner.en.md#quick-start)
 
 Enabled groups and environment bindings jointly determine the catalog. Artifacts and deterministic data analysis need no separate image. Image/audio/rewriting need the corresponding AI models; document, Office, OCR, website capture, project preview and video jobs need Runner environments. Unbound jobs are omitted. `video_render` renders a prepared project archive; the AI workflow below adds capture, planning, narration and asset assembly.
 
@@ -65,7 +65,7 @@ Menus, task changes, task creation, sign-out and SPA navigation confirm unsaved 
 
 Upload a project ZIP with `index.html` at its root, select `preview_build`, and choose the uploaded file by name. With `environments.preview` bound, a fixed offline builder bundles supported local HTML, JS/TS, CSS and browser-only Svelte components into one HTML artifact for the existing isolated preview. It belongs to `web`; local building requires no browserProxy. Closing the preview unloads its iframe, without a persistent preview server.
 
-It supports a restricted Vite-style layout, without executing package scripts, Vite/Svelte/TypeScript configuration or installing dependencies. SvelteKit, arbitrary npm packages, node_modules and plugins are unsupported. Only one module entry is allowed; srcset, async/defer and nested documents are unsupported, and assets must be supported local files. Limits are 8 MiB expanded input, 1 MiB per source and final HTML, and a 60-second build command. Failed builds do not publish an old page. See [Tools project previews](../../docs/usage/function/tools.en.md#build-a-website-preview-from-a-project).
+It supports a restricted Vite-style layout, without executing package scripts, Vite/Svelte/TypeScript configuration or installing dependencies. SvelteKit, arbitrary npm packages, node_modules and plugins are unsupported. Only one module entry is allowed; srcset, async/defer and nested documents are unsupported, and assets must be supported local files. Limits are 8 MiB expanded input, 1 MiB per source and final HTML, and a 60-second build command. Failed builds do not publish an old page. [Project preview requirements](../../docs/usage/function/tools-runner.en.md#web-preview)
 
 ### Website introduction videos
 
@@ -73,7 +73,7 @@ The global `workbench.selection` must also enable `web_capture` and `video_rende
 
 Configure an LLM, default WAV TTS, web/video environments and browserProxy. Select website_video, enter an HTTPS URL and goal, then optionally choose a 6–30 second duration and landscape, portrait or square canvas. The workflow captures the real site, plans its script/storyboard, synthesizes per-shot narration, assembles the project and returns MP4.
 
-Retained outputs include script, design, editable storyboard Markdown, WAVs, subtitles, a captured cover, project ZIP and workflow manifest. Retry an edited storyboard with storyboardId; reuse captureId and unchanged audioIds. Subtitles use sentence intervals; excessive narration fails explicitly without cutting off speech. Projects can be rendered again independently. See [video workflow](../../docs/usage/function/tools.en.md#editable-introduction-videos-from-websites) for inputs and recovery.
+Retained outputs include script, design, editable storyboard Markdown, WAVs, subtitles, a captured cover, project ZIP and workflow manifest. Retry an edited storyboard with storyboardId; reuse captureId and unchanged audioIds. Subtitles use sentence intervals; excessive narration fails explicitly without cutting off speech. Projects can be rendered again independently. [Video workflow inputs and recovery](../../docs/usage/function/tools-runner.en.md#website-video)
 
 ## Configuration
 

@@ -55,7 +55,7 @@ HTML は same-origin 権限のない iframe でスクリプト操作を許可し
 
 ツールは名前で探し、フォームやプリセットから実行します。アップロード済みファイル・成果物は表示名で選択でき、手動 ID も使えます。複雑な構造だけ詳細パラメーターで編集します。待機・実行・キャンセル中・完了の実状態を表示し、成果物を直接開けます。キャンセル後は終端まで取得を継続し、状態更新で中断した待機を再開できます。
 
-手動操作とエージェントは同じ `@h-ai/tools/server` サービスを使います。タスク設定の ID は `artifact_create` などのツール名、外部 MCP は `mcp_<設定 id>` です。同じカタログ・有効化・認可を共有し、実行ノードで再確認します。MCP も同じ Broker と ToolsService から既存 `ai.mcp.services.invoke` へ転送し、別の実行経路は作りません。
+手動操作とエージェントは同じ `@h-ai/tools-runner` サービスを使います。成果物ツールは `@h-ai/tools/server` が提供します。タスク設定には `artifact_create` などの安定したツール名を使い、外部 MCP ツールは `mcp_<設定 id>` で識別します。両方の入口でカタログと有効化設定を共有し、実行ノードが認可を再確認します。MCP 呼び出しは Broker とツールサービスを経由して `ai.mcp.services.invoke` に渡します。 [ツールサービスの導入](../../docs/usage/function/tools-runner.ja.md#quick-start)
 
 有効グループと環境割り当てでカタログが決まります。成果物・確定的な数値分析には別イメージは不要です。画像・音声・書き換えは AI モデル、文書・Office・OCR・Web 採集・プロジェクトプレビュー・動画ジョブは Runner 環境が必要です。環境なしのジョブは表示しません。`video_render` は準備済みプロジェクトを描画し、URL からの紹介動画全体は、次の AI ワークフローで採集・構成・ナレーション・素材も組み立てます。
 
@@ -65,7 +65,7 @@ HTML は same-origin 権限のない iframe でスクリプト操作を許可し
 
 ルートに `index.html` があるプロジェクト ZIP をアップロードし、`preview_build` でファイル名から選択します。`environments.preview` を割り当てると、固定のオフライン構築器が対応するローカル HTML・JS/TS・CSS・ブラウザー専用 Svelte コンポーネントを一つの HTML 成果物にまとめ、既存の隔離プレビューで開けます。`web` グループに属し、ローカル構築には browserProxy は不要です。閉じると iframe を破棄し、常駐プレビューサーバーは残しません。
 
-制限付き Vite 形式の構成に対応し、package scripts・Vite/Svelte/TypeScript 設定は実行せず、依存関係も取得しません。SvelteKit・任意 npm パッケージ・node_modules・プラグインは非対応です。module の入口は一つで、srcset・async/defer・入れ子の文書は非対応、素材は対応するローカルファイルに限ります。展開合計 8 MiB、各ソースと最終 HTML はそれぞれ 1 MiB、構築コマンド 60 秒が上限です。失敗時に古いページは公開しません。[Tools プロジェクトプレビュー](../../docs/usage/function/tools.ja.md#プロジェクトから-web-プレビューを構築) を参照してください。
+制限付き Vite 形式の構成に対応し、package scripts・Vite/Svelte/TypeScript 設定は実行せず、依存関係も取得しません。SvelteKit・任意 npm パッケージ・node_modules・プラグインは非対応です。module の入口は一つで、srcset・async/defer・入れ子の文書は非対応、素材は対応するローカルファイルに限ります。展開合計 8 MiB、各ソースと最終 HTML はそれぞれ 1 MiB、構築コマンド 60 秒が上限です。失敗時に古いページは公開しません。 [プロジェクトプレビューの対応範囲](../../docs/usage/function/tools-runner.ja.md#web-preview)
 
 ### Web サイトの紹介動画
 
@@ -73,7 +73,7 @@ HTML は same-origin 権限のない iframe でスクリプト操作を許可し
 
 LLM、既定 WAV TTS、web/video 環境、browserProxy を設定し、website_video で HTTPS URL と目標を入力します。6～30 秒の長さ、横・縦・正方形の画面も選択できます。実サイト採集、脚本・構成、ショット別ナレーション、工程の組み立てを経て MP4 を出力します。
 
-脚本・設計・編集可能な構成 Markdown・WAV・字幕・実画面の表紙・工程 ZIP・ワークフロー一覧を残します。構成変更後は storyboardId で再実行し、captureId と未変更の audioIds を再利用できます。字幕は文単位です。音声が長すぎる場合は切り捨てず明示的に失敗します。工程だけを再描画することも可能です。[動画ワークフロー](../../docs/usage/function/tools.ja.md#web-サイトから編集可能な紹介動画を作成) を参照してください。
+脚本・設計・編集可能な構成 Markdown・WAV・字幕・実画面の表紙・工程 ZIP・ワークフロー一覧を残します。構成変更後は storyboardId で再実行し、captureId と未変更の audioIds を再利用できます。字幕は文単位です。音声が長すぎる場合は切り捨てず明示的に失敗します。工程だけを再描画することも可能です。 [動画ワークフローの引数と再開手順](../../docs/usage/function/tools-runner.ja.md#website-video)
 
 ## 設定
 

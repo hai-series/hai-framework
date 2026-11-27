@@ -28,13 +28,14 @@ Agent 的“工具工作台”负责选择工具、填写参数、查看进度�
 | 归属 | 负责什么 | 状态由谁保存 |
 | --- | --- | --- |
 | `@h-ai/tools` | 定义、注册、输入校验、授权、截止时间与取消信号 | 轻量注册器只在当前进程存在 |
-| `@h-ai/tools/server` | 目录、启用选择、任务提交/恢复/取消，以及通用文件作业 | 复用 Runner，Tools 不建状态表或队列 |
+| `@h-ai/tools/server` | 读取、保存和分析宿主授权的文件 | 文件和版本由宿主保存 |
+| `@h-ai/tools-runner` | 工具目录、启用选择、任务提交、恢复、取消与受管容器作业 | 任务和事件由 Runner 保存 |
 | `@h-ai/ai` | 模型调用、Tools 协议适配、图片/语音/改写/视频编排、MCP 桥接 | 沿用 AI 和 MCP 的既有状态 |
 | `@h-ai/runner` | 领取任务、执行归属、容量、容器、事件与清理 | Runner 的数据库和租约 |
 | `@h-ai/ui` | 参数表单、资源选择、编辑器、预览、进度和恢复交互 | 草稿等短期界面状态 |
 | 应用 | 当前用户身份、资源归属、内容版本、HTTP 接口与装配 | 既有资源表、版本表和 Storage |
 
-依赖方向是 `AI → Tools → Core`。Tools 的根入口保持浏览器可用；只有服务端入口使用 Runner。Agent 不复制编辑器、工具执行器或任务调度器。
+Agent 装配 AI、Tools 和 Tools 的 Runner 适配包。`@h-ai/tools` 的根入口支持浏览器，Node 的产物入口通过宿主访问文件。`@h-ai/tools-runner` 消费工具定义并借用宿主初始化的 Runner。AI 为自己的 ACP 和 MCP 作业接入 Runner，给本地工具 Broker 提供的服务只需支持 `catalog` 和 `invoke`。
 
 ## 新增一个工具
 
@@ -61,16 +62,17 @@ if (result.success) {
 
 处理器原本返回 `HaiResult` 时使用互斥的 `resultHandler`，以保留原业务错误。需要额外授权时，将可信的身份与授权函数交给注册器或工具服务，不从工具参数中接收用户身份。
 
-服务端改从 `import { tools } from '@h-ai/tools/server'` 导入，再通过 `tools.createService({ runner, createTools, enabled, authorize, ... })` 装配工具。`createService/createArtifactTools/createJobTools` 不在浏览器根入口。将新工具加入 `createTools` 返回的 `tools` 和相应 `groups` 即可；不需要为每个工具增加一套路由或前端组件。标题、Schema 字段说明和 `examples` 会进入通用表单；复杂参数仍可使用高级 JSON。
+需要持久回执时，在 Node 从 `@h-ai/tools-runner` 导入 `toolsRunner`。使用 `toolsRunner.createService({ runner, createTools, enabled, authorize, ... })` 装配服务，将新工具加入 `createTools` 返回的 `tools` 和相应 `groups`。产物工具从 `@h-ai/tools/server` 的 `tools.createArtifactTools` 获得，容器作业由 `toolsRunner.createJobTools` 提供。合并容器作业时保留它返回的 `environments` 绑定。标题、Schema 字段说明和 `examples` 会进入通用表单，复杂参数可用高级 JSON。
 
-工厂不会初始化或关闭借入的 Runner。服务使用完毕调用 `service.close()`，应用再按自己的生命周期反序关闭基础模块。完整示例见 [Tools 功能手册](usage/function/tools.md)与[接入 skill](../packages/cli/templates/skills/hai-tools/server-guide.md)。
+宿主依次初始化 RelDB 和 Runner，再创建工具服务。关闭时调用 `service.close()` 注销服务，再由宿主关闭 Runner 和 RelDB。 [持久任务示例](usage/function/tools-runner.md#quick-start) · [接入 skill](../packages/cli/templates/skills/hai-tools/server-guide.md)
 
 | 调用入口 | 用途 |
 | --- | --- |
 | `tools.createRegistry()` | 当前进程直接注册和执行工具，无数据库依赖 |
-| `tools.createService()` | 创建借用 Runner 的服务，供业务、UI 和模型共用 |
+| `toolsRunner.createService()` | 创建借用 Runner 的服务，供业务、UI 和模型共用 |
 | `service.catalog/submit/inspect/find/cancel/invoke` | 发现、提交、查询、按幂等键恢复、取消、等待结果 |
-| `tools.createArtifactTools/createJobTools` | 复用文本成果、数据分析和固定容器作业 |
+| `tools.createArtifactTools()` | 复用文本成果和数据分析 |
+| `toolsRunner.createJobTools()` | 装配固定容器作业 |
 | `ai.tools.adapt` | 将中立工具转换成模型协议，复用原执行实现 |
 | `ai.tools.createBuiltinTools/createMcpTools/createBroker` | 装配模型能力和现有 MCP，供 Agent 使用 |
 
@@ -120,6 +122,6 @@ workbench:
 
 ## 继续阅读
 
-- [Tools 配置](usage/configuration/tools.md)、[功能](usage/function/tools.md)、[数据归属](usage/data/tools.md)
+- [Tools 轻量功能](usage/function/tools.md)、[持久任务与容器作业](usage/function/tools-runner.md)、[适配包配置](usage/configuration/tools-runner.md)、[任务数据归属](usage/data/tools-runner.md)
 - [AI 模型与工具](usage/function/ai.md)、[UI 工作台](usage/function/ui.md)、[Agent 使用](usage/development/agent.md)
 - [实施与验收清单](tools-platform-tasks.md)

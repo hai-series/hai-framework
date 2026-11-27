@@ -55,7 +55,7 @@ HTML 预览允许脚本交互，使用没有 same-origin 权限的 iframe 和默
 
 「工具」按名称搜索，优先使用表单和示例。文件及参考图片可按名称选择已上传文件或已有产物，仍提供手填 ID 兜底；复杂对象在高级参数中编辑。执行后显示实际排队、运行、取消中和完成状态，产物可直接打开。取消后会继续读取到真实终态；刷新状态可恢复一次中断的等待。
 
-手动操作和智能体调用共用 `@h-ai/tools/server` 服务。任务设置中的工具 ID 就是稳定的工具名，如 `artifact_create`；外部 MCP 映射为 `mcp_<配置 id>`。两种入口使用同一目录、启用策略和授权，执行节点会重新检查。MCP 工具经同一个 Broker 和 ToolsService 转发到已有 `ai.mcp.services.invoke`，不会另建一条应用执行管线。
+手动操作和智能体调用共用 `@h-ai/tools-runner` 服务，产物工具由 `@h-ai/tools/server` 提供。任务设置使用稳定的工具名，如 `artifact_create`。外部 MCP 工具按 `mcp_<配置 id>` 命名。两种入口使用同一目录和启用策略，执行节点会重新检查授权。MCP 工具经 Broker 和工具服务转发到 `ai.mcp.services.invoke`。 [工具服务接入](../../docs/usage/function/tools-runner.md#quick-start)
 
 已启用组和已配置环境共同决定工具目录：文档产物及数据分析无需独立镜像；图像、语音和改写需要相应 AI 模型；文档、Office、OCR、网页采集、项目网页构建和视频渲染需要对应 Runner 环境。未绑定环境的作业不出目录。`video_render` 渲染准备好的项目包，完整「网址生成介绍视频」由 AI 工作流编排这些步骤，见下节。
 
@@ -65,7 +65,7 @@ HTML 预览允许脚本交互，使用没有 same-origin 权限的 iframe 和默
 
 上传根目录含 `index.html` 的项目 ZIP，在工具中选择 `preview_build` 并按名称选择文件。绑定 `environments.preview` 后，固定离线构建器将支持的本地 HTML、JS/TS、CSS 与纯浏览器 Svelte 组件打包为一个 HTML 产物，再在现有隔离预览中打开。它属于 `web` 组，本地构建不需 browserProxy。关闭预览即卸载 iframe，不保留常驻预览服务。
 
-支持受限的 Vite 目录布局，不执行 package scripts、Vite/Svelte/TypeScript 配置或下载依赖，不支持 SvelteKit、任意 npm 包、node_modules 或插件。只允许一个 module 入口，暂不支持 srcset、async/defer 和嵌套文档；资源须为支持的本地文件。ZIP 展开最多 8 MiB、单源码和最终 HTML 各 1 MiB、构建命令最多 60 秒。构建失败不发布旧页面。详细支持范围见 [Tools 项目预览](../../docs/usage/function/tools.md#从项目构建网页预览)。
+支持受限的 Vite 目录布局，不执行 package scripts、Vite/Svelte/TypeScript 配置或下载依赖，不支持 SvelteKit、任意 npm 包、node_modules 或插件。只允许一个 module 入口，暂不支持 srcset、async/defer 和嵌套文档；资源须为支持的本地文件。ZIP 展开最多 8 MiB、单源码和最终 HTML 各 1 MiB、构建命令最多 60 秒。构建失败不发布旧页面。 [项目预览支持范围](../../docs/usage/function/tools-runner.md#web-preview)
 
 ### 网址介绍视频
 
@@ -73,7 +73,7 @@ HTML 预览允许脚本交互，使用没有 same-origin 权限的 iframe 和默
 
 配置 LLM、默认 WAV TTS、web/video 环境及 browserProxy 后，在工具中选择 website_video，输入 HTTPS 网址和目标，可设置 6～30 秒时长及横屏、竖屏或方形画布。流程采集真实网页、生成脚本分镜、逐镜配音、组装工程，再输出 MP4。
 
-结果保留脚本、设计、可编辑分镜 Markdown、WAV、字幕、网页封面、工程 ZIP 和工作流清单。修改分镜后带 storyboardId 重跑，可用 captureId 复用采集、audioIds 复用未改配音；字幕按句分段，配音过长会明确失败，不裁掉语音。工程包可单独重渲染。完整参数和恢复说明见 [Tools 视频流程](../../docs/usage/function/tools.md#从网址生成可编辑介绍视频)。
+结果保留脚本、设计、可编辑分镜 Markdown、WAV、字幕、网页封面、工程 ZIP 和工作流清单。修改分镜后带 storyboardId 重跑，可用 captureId 复用采集、audioIds 复用未改配音；字幕按句分段，配音过长会明确失败，不裁掉语音。工程包可单独重渲染。 [视频流程参数与恢复步骤](../../docs/usage/function/tools-runner.md#website-video)
 
 ## 配置
 
