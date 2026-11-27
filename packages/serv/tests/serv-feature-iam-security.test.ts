@@ -284,12 +284,53 @@ it('管理端邀请契约不接收密码，接收人可通过重置端点完成�
     },
   })).success).toBe(true)
   await signInAdmin()
+  const rejectedUsername = `rejected-invite-${crypto.randomUUID()}`
+  expect(await client.iam.users.invite({
+    username: rejectedUsername,
+    email: `${rejectedUsername}@example.com`,
+    roleIds: ['missing-role'],
+  })).toMatchObject({
+    success: false,
+    error: { code: HaiIamError.ROLE_NOT_FOUND.code },
+  })
+  expect(deliveries).toEqual([])
+  expect(await iam.user.listUsers({ search: rejectedUsername })).toMatchObject({
+    success: true,
+    data: { total: 0 },
+  })
+
   const created = await client.iam.users.invite({ username: `http-invite-${crypto.randomUUID()}`, email: 'invited@example.com' })
   expect(created.success).toBe(true)
   expect(deliveries).toHaveLength(1)
   const delivery = deliveries[0]!
   expect((await client.iam.auth.confirmPasswordReset({ token: delivery.token, newPassword: 'InvitedPassword123!' })).success).toBe(true)
   expect((await client.iam.auth.login({ identifier: delivery.user.username, password: 'InvitedPassword123!' })).success).toBe(true)
+})
+
+it('管理端更新拒绝无效角色时保留原资料、状态和会话', async () => {
+  await iam.close()
+  expect(await iam.init({})).toMatchObject({ success: true })
+  await signInAdmin()
+  const username = `role-update-${crypto.randomUUID()}`
+  expect(await iam.user.createUser({ username, password, displayName: 'Before update' })).toMatchObject({ success: true })
+  const login = await iam.auth.login({ identifier: username, password })
+  expect(login.success).toBe(true)
+  if (!login.success)
+    return
+  expect(await client.iam.users.update({
+    id: login.data.user.id,
+    displayName: 'After update',
+    accountStatus: 'dormant',
+    roleIds: ['missing-role'],
+  })).toMatchObject({
+    success: false,
+    error: { code: HaiIamError.ROLE_NOT_FOUND.code },
+  })
+  expect(await iam.user.getUser(login.data.user.id)).toMatchObject({
+    success: true,
+    data: { displayName: 'Before update', accountStatus: 'active' },
+  })
+  expect(await iam.auth.verifyToken(login.data.tokens.accessToken)).toMatchObject({ success: true })
 })
 
 it.each(['iam.profile.update', 'iam.profile.avatar'])('标准资料入口也执行 %s 再认证，不能绕过独立资料入口', async (operation) => {

@@ -36,6 +36,7 @@ export async function resolveIamNotifications(input: IamConfigInput): Promise<Pi
       template,
       vars,
       ignoreDnd: true,
+      sensitive: true,
     })
     if (!result.success || !result.data.success || result.data.deferred)
       throw new Error(iamM('iam_passwordResetDeliveryFailed'))

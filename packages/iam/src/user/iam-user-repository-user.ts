@@ -7,14 +7,14 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
-import type { LoginFailurePolicy } from '../authn/iam-authn-utils.js'
-import type { StoredUser } from './iam-user-types.js'
+import type { StoredUser, User } from './iam-user-types.js'
 import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
-import { guardIamMutation } from '../iam-cache.js'
+import { clearLoginFailures } from '../authn/iam-authn-lockout.js'
+import { guardIamMutation, guardIamStatement } from '../iam-cache.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
-import { isUserActive } from './iam-user-utils.js'
+import { isUserActive, normalizeIamContact } from './iam-user-utils.js'
 
 // ─── 用户存储接口 ───
 
@@ -46,9 +46,7 @@ export interface UserRepository extends ReldbCrudRepository<StoredUser> {
   claimPasswordReset: (tokenHash: string, maxAttempts: number) => Promise<HaiResult<StoredUser>>
   /** 最终一条 SQL 同时验证授权代际、有效期、启用状态、消费令牌并改密。 */
   commitPasswordReset: (input: { user: StoredUser, tokenHash: string, passwordHash: string }) => Promise<HaiResult<boolean>>
-  /** 在数据库中原子累加失败次数并执行锁定策略。 */
-  recordLoginFailure: (userId: string, policy: LoginFailurePolicy) => Promise<HaiResult<void>>
-  /** 仅未锁定且启用的账户可以清除失败计数。 */
+  /** 按当前账户状态与凭据代际清除 Redis 失败计数。 */
   resetLoginFailures: (userId: string, expectedCredentialVersion: string, lockoutEnabled?: boolean) => Promise<HaiResult<void>>
   /**
    * 根据用户名获取用户
@@ -69,6 +67,9 @@ export interface UserRepository extends ReldbCrudRepository<StoredUser> {
    * 根据标识符获取用户（用户名/邮箱/手机号）
    */
   findByIdentifier: (identifier: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredUser | null>>
+
+  /** 按 OTP 渠道匹配唯一的规范化联系方式；历史重复数据拒绝身份解析。 */
+  findByOtpContact: (channel: 'email' | 'phone', identifier: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredUser | null>>
 
   /**
    * 检查用户名是否存在
@@ -107,6 +108,52 @@ export async function lockIamUser(tx: DmlWithTxOperations, userId: string): Prom
   return locked.success
     ? core.ok(undefined)
     : locked
+}
+
+/**
+ * 更新已加锁的用户。真实换绑清除对应验证标记，联系方式或账号状态变化作废旧凭据。
+ * 返回是否在同一事务中推进了凭据代际。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function updateLocked(repository: UserRepository, tx: DmlWithTxOperations, current: StoredUser) {
+ *   return updateIamUserProfile(repository, tx, current, { displayName: 'Alice' })
+ * }
+ * ```
+ */
+export async function updateIamUserProfile(repository: UserRepository, tx: DmlWithTxOperations, current: StoredUser, data: Partial<User>): Promise<HaiResult<boolean>> {
+  const emailChanged = data.email !== undefined && normalizeIamContact('email', data.email) !== normalizeIamContact('email', current.email)
+  const phoneChanged = data.phone !== undefined && normalizeIamContact('phone', data.phone) !== normalizeIamContact('phone', current.phone)
+  const profile = { ...data }
+  if (emailChanged)
+    profile.emailVerified = false
+  if (phoneChanged)
+    profile.phoneVerified = false
+  const updated = await repository.updateById(current.id, profile, tx)
+  if (!updated.success)
+    return updated
+
+  const securityChanged = emailChanged || phoneChanged
+    || (data.accountStatus !== undefined && data.accountStatus !== current.accountStatus)
+    || (data.accountType !== undefined && data.accountType !== current.accountType)
+    || (data.accountExpiresAt !== undefined && (data.accountExpiresAt?.getTime() ?? null) !== (current.accountExpiresAt?.getTime() ?? null))
+  if (!securityChanged)
+    return core.ok(false)
+
+  const advanced = await tx.execute(
+    `UPDATE ${TABLE_NAME} SET credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL, reset_attempts = 0 WHERE id = ? AND credential_version = ?`,
+    [
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+      current.id,
+      current.credentialVersion ?? '',
+    ],
+  )
+  if (!advanced.success)
+    return advanced
+  return advanced.data.changes === 1
+    ? core.ok(true)
+    : core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
 }
 
 /**
@@ -274,36 +321,12 @@ const USER_FIELDS: ReldbCrudFieldDefinition[] = [
     update: true,
   },
   {
-    fieldName: 'loginFailedCount',
-    columnName: 'login_failed_count',
-    def: { type: 'INTEGER' as const, defaultValue: 0 },
+    fieldName: 'loginLockoutVersion',
+    columnName: 'login_lockout_version',
+    def: { type: 'TEXT', notNull: true, defaultValue: 'initial' },
     select: true,
-    create: true,
-    update: true,
-  },
-  {
-    fieldName: 'firstLoginFailedAt',
-    columnName: 'first_login_failed_at',
-    def: { type: 'TIMESTAMP' as const },
-    select: true,
-    create: true,
-    update: true,
-  },
-  {
-    fieldName: 'lastLoginFailedAt',
-    columnName: 'last_login_failed_at',
-    def: { type: 'TIMESTAMP' as const },
-    select: true,
-    create: true,
-    update: true,
-  },
-  {
-    fieldName: 'lockedUntil',
-    columnName: 'locked_until',
-    def: { type: 'TIMESTAMP' as const },
-    select: true,
-    create: true,
-    update: true,
+    create: false,
+    update: false,
   },
   {
     fieldName: 'metadata',
@@ -381,9 +404,9 @@ export async function createDbUserRepository(): Promise<UserRepository> {
   repo.create = guardIamMutation(repo.create.bind(repo), 1)
   repo.updateById = guardIamMutation(repo.updateById.bind(repo), 2)
   repo.deleteById = guardIamMutation(repo.deleteById.bind(repo), 1)
-  repo.suspendInactive = guardIamMutation(repo.suspendInactive.bind(repo))
-  repo.setPassword = guardIamMutation(repo.setPassword.bind(repo))
-  repo.commitPasswordReset = guardIamMutation(repo.commitPasswordReset.bind(repo))
+  repo.suspendInactive = guardIamStatement(repo.suspendInactive.bind(repo))
+  repo.setPassword = guardIamStatement(repo.setPassword.bind(repo))
+  repo.commitPasswordReset = guardIamStatement(repo.commitPasswordReset.bind(repo))
   userRepoInstance = repo
   userRepoSqlOps = reldb.sql
   return repo
@@ -523,15 +546,16 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     return core.ok({ ...user, resetVersion: version, resetAttempts: (user.resetAttempts ?? 0) + 1 })
   }
 
-  /** 密码与令牌消费同一行原子提交，禁止先消费 Redis 凭据再无条件写数据库。 */
+  /** 与新密码一同推进锁定代际，让迟到的失败计数继续停留在旧键中。 */
   async commitPasswordReset(input: { user: StoredUser, tokenHash: string, passwordHash: string }): Promise<HaiResult<boolean>> {
     const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET password_hash = ?, password_updated_at = ?, credential_version = ?, reset_version = ?, must_change_password = FALSE, reset_hash = NULL, reset_expires_at = NULL, reset_attempts = 0, login_failed_count = 0, first_login_failed_at = NULL, locked_until = NULL, last_login_failed_at = NULL WHERE id = ? AND reset_hash = ? AND reset_version = ? AND credential_version = ? AND reset_expires_at > ${this.databaseNow()} AND account_status = ?`,
+      `UPDATE ${TABLE_NAME} SET password_hash = ?, password_updated_at = ?, credential_version = ?, reset_version = ?, login_lockout_version = ?, must_change_password = FALSE, reset_hash = NULL, reset_expires_at = NULL, reset_attempts = 0 WHERE id = ? AND reset_hash = ? AND reset_version = ? AND credential_version = ? AND reset_expires_at > ${this.databaseNow()} AND account_status = ?`,
       [
         input.passwordHash,
         reldb.config?.type === 'sqlite'
           ? Date.now()
           : new Date(),
+        crypto.randomUUID(),
         crypto.randomUUID(),
         crypto.randomUUID(),
         input.user.id,
@@ -546,66 +570,21 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       : this.buildQueryError(result.error, result.error)
   }
 
-  async recordLoginFailure(userId: string, policy: LoginFailurePolicy): Promise<HaiResult<void>> {
-    if (policy.lockoutEnabled === false)
-      return core.ok(undefined)
-    const sqlite = reldb.config?.type === 'sqlite'
-    const timestamp = Date.now()
-    const now = sqlite
-      ? timestamp
-      : new Date(timestamp)
-    const cutoff = timestamp - (policy.failureWindow ?? 86400) * 1000
-    const windowStart = sqlite
-      ? cutoff
-      : new Date(cutoff)
-    const deadline = timestamp + policy.lockoutDuration * 1000
-    const lockedUntil = sqlite
-      ? deadline
-      : new Date(deadline)
-    // 到期解锁是条件更新；后续原子递增不读取进程中的旧计数。
-    const expired = await reldb.sql.execute(`UPDATE ${TABLE_NAME} SET login_failed_count = 0, locked_until = NULL, first_login_failed_at = ?, last_login_failed_at = NULL WHERE id = ? AND (locked_until <= ? OR (locked_until IS NULL AND (first_login_failed_at IS NULL OR first_login_failed_at <= ?)))`, [now, userId, now, windowStart])
-    if (!expired.success)
-      return this.buildQueryError(expired.error, expired.error)
-    // 先计算锁定期限再递增次数，避免 MySQL 按 SET 顺序读取已更新的计数而提前锁定。
-    const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET locked_until = CASE WHEN COALESCE(login_failed_count, 0) + 1 >= ? THEN ? ELSE locked_until END, login_failed_count = COALESCE(login_failed_count, 0) + 1, last_login_failed_at = ? WHERE id = ? AND locked_until IS NULL`,
-      [
-        policy.maxLoginAttempts,
-        lockedUntil,
-        now,
-        userId,
-      ],
-    )
-    if (!result.success)
-      return this.buildQueryError(result.error, result.error)
-    return core.ok(undefined)
-  }
-
   async resetLoginFailures(userId: string, expectedCredentialVersion: string, lockoutEnabled = true): Promise<HaiResult<void>> {
-    const params: unknown[] = [userId, expectedCredentialVersion, 'active']
-    if (lockoutEnabled) {
-      params.push(reldb.config?.type === 'sqlite'
-        ? Date.now()
-        : new Date())
-    }
-    const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET login_failed_count = 0, first_login_failed_at = NULL, last_login_failed_at = NULL, locked_until = NULL WHERE id = ? AND credential_version = ? AND account_status = ? ${lockoutEnabled ? 'AND (locked_until IS NULL OR locked_until <= ?)' : ''}`,
-      params,
-    )
-    if (!result.success)
-      return this.buildQueryError(result.error, result.error)
-    if (result.data.changes === 0) {
-      const user = await this.findById(userId)
+    return reldb.tx.wrapResult(async (tx) => {
+      // 持有账号行锁时核对原凭据仍有效，再清当前代计数，避免已撤销凭据清除新状态。
+      const locked = await lockIamUser(tx, userId)
+      if (!locked.success)
+        return locked
+      const user = await this.findById(userId, tx)
       if (!user.success)
         return user
       if (!user.data || !isUserActive(user.data))
         return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       if ((user.data.credentialVersion ?? '') !== expectedCredentialVersion)
         return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
-      if (lockoutEnabled && user.data.lockedUntil && user.data.lockedUntil > new Date())
-        return core.err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
-    }
-    return core.ok(undefined)
+      return clearLoginFailures(user.data, lockoutEnabled)
+    })
   }
 
   /** 根据用户名查找用户 */
@@ -626,6 +605,32 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
   /** 根据标识符查找用户（同时匹配用户名、邮箱、手机号） */
   async findByIdentifier(identifier: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredUser | null>> {
     return this.findOneBy('username = ? OR email = ? OR phone = ?', [identifier, identifier, identifier], tx)
+  }
+
+  async findByOtpContact(channel: 'email' | 'phone', identifier: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredUser | null>> {
+    // SQL 只缩小候选范围；最终匹配同时规避各数据库大小写、空白与排序规则差异。
+    // 手机号候选允许分隔符，邮箱候选允许首尾空白；非 ASCII 地址直接在应用侧折叠大小写。
+    const ascii = [...identifier].every(character => character.charCodeAt(0) < 128)
+    const where = channel === 'phone'
+      ? 'phone LIKE ?'
+      : ascii
+        ? 'LOWER(REPLACE(REPLACE(email, \'I\', \'i\'), \'K\', \'k\')) LIKE ? ESCAPE \'!\''
+        : 'email LIKE ?'
+    const candidate = channel === 'phone'
+      ? [...identifier].join('%')
+      : ascii
+        ? identifier.replace(/[!%_]/g, '!$&')
+        : '@'
+    const result = await this.findAll({
+      where,
+      params: [`%${candidate}%`],
+    }, tx)
+    if (!result.success)
+      return this.buildQueryError(result.error, result.error)
+    const matching = result.data.filter(user => normalizeIamContact(channel, user[channel]) === identifier)
+    if (matching.length > 1)
+      return core.err(HaiIamError.OTP_INVALID, iamM('iam_otpNotExistOrExpired'))
+    return core.ok(matching[0] ?? null)
   }
 
   /** 检查用户名是否已存在 */

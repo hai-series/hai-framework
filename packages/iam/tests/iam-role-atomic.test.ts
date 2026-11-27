@@ -1,7 +1,8 @@
+import { setImmediate } from 'node:timers/promises'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiIamError, iam } from '../src/index.js'
 import { TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
@@ -15,6 +16,54 @@ describe('iam atomic role permission replacement', () => {
     await iam.close()
     await cache.close()
     await reldb.close()
+  })
+
+  it('rolls back the account when registration cannot assign its default role', async () => {
+    // 禁止补偿删除，凭此区分一次事务回滚与先注册再清理用户。
+    expect((await reldb.sql.execute('CREATE TRIGGER reject_registration_role BEFORE INSERT ON hai_iam_user_roles BEGIN SELECT RAISE(ABORT, \'role write failed\'); END')).success).toBe(true)
+    expect((await reldb.sql.execute('CREATE TRIGGER reject_compensating_delete BEFORE DELETE ON hai_iam_users BEGIN SELECT RAISE(ABORT, \'cannot delete user\'); END')).success).toBe(true)
+    expect(await iam.user.register({ username: 'atomic-register', password: TEST_PASSWORD })).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.REPOSITORY_ERROR.code },
+    })
+    expect(await iam.user.listUsers({ search: 'atomic-register' })).toMatchObject({
+      success: true,
+      data: { total: 0 },
+    })
+  })
+
+  it('commits an explicit managed role set and rolls back an invalid set', async () => {
+    const role = await iam.authz.createRole({ code: 'managed-editor', name: 'Editor' })
+    expect(role.success).toBe(true)
+    if (!role.success)
+      return
+    const managed = await iam.user.createUser({ username: 'managed-editor-account', password: TEST_PASSWORD }, {
+      roleIds: [role.data.id],
+    })
+    expect(managed.success).toBe(true)
+    if (!managed.success)
+      return
+    expect(await iam.authz.getUserRoles(managed.data.user.id)).toMatchObject({
+      success: true,
+      data: [
+        { id: role.data.id },
+      ],
+    })
+    const empty = await iam.user.createUser({ username: 'managed-no-roles-account', password: TEST_PASSWORD }, { roleIds: [] })
+    expect(empty.success).toBe(true)
+    if (empty.success)
+      expect(await iam.authz.getUserRoles(empty.data.user.id)).toMatchObject({ success: true, data: [] })
+
+    expect(await iam.user.createUser({ username: 'managed-invalid-role', password: TEST_PASSWORD }, {
+      roleIds: ['missing-role'],
+    })).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.ROLE_NOT_FOUND.code },
+    })
+    expect(await iam.user.listUsers({ search: 'managed-invalid-role' })).toMatchObject({
+      success: true,
+      data: { total: 0 },
+    })
   })
 
   it('returns a failure instead of zero members when the relation table cannot be read', async () => {
@@ -98,12 +147,83 @@ describe('iam atomic role permission replacement', () => {
         permissions: ['atomic:view'],
       },
     })
-    expect((await iam.authz.updateRole(role.data.id, { permissionIds: [] })).success).toBe(true)
+    const writers: Array<number | undefined> = []
+    const patch = iam.session.patchUserSessions
+    const synchronize = vi.spyOn(iam.session, 'patchUserSessions').mockImplementation(async (...args) => {
+      const revision = await cache.kv.get<{ writers: number }>('hai:iam:read_cache:revision')
+      writers.push(revision.success ? revision.data?.writers : undefined)
+      return patch(...args)
+    })
+    try {
+      expect((await iam.authz.updateRole(role.data.id, { permissionIds: [] })).success).toBe(true)
+    }
+    finally { synchronize.mockRestore() }
+    expect(writers).toEqual([0])
     expect(await iam.authz.getRolePermissions(role.data.id)).toMatchObject({ success: true, data: [] })
     expect(await iam.session.get(session.data.accessToken)).toMatchObject({
       success: true,
       data: { permissions: [] },
     })
+  })
+
+  it('deduplicates affected users, reads authorization in batches, and shares the session sync concurrency limit', async () => {
+    const permission = await iam.authz.createPermission({ code: 'atomic:batch', name: 'batch' })
+    if (!permission.success)
+      throw new Error(permission.error.message)
+    const first = await iam.authz.createRole({
+      code: 'atomic-batch-first',
+      name: 'First',
+      permissionIds: [permission.data.id],
+    })
+    const second = await iam.authz.createRole({
+      code: 'atomic-batch-second',
+      name: 'Second',
+      permissionIds: [permission.data.id],
+    })
+    if (!first.success || !second.success)
+      throw new Error('Expected two roles with a shared permission')
+
+    // 这里只需要批量有效账号和成员关系；写入与同步走下方的公开授权入口。
+    const now = Date.now()
+    expect((await reldb.sql.execute(`WITH RECURSIVE members(n) AS (
+      SELECT 1 UNION ALL SELECT n + 1 FROM members WHERE n < 201
+    ) INSERT INTO hai_iam_users (id, username, created_at, updated_at)
+      SELECT 'sync-user-' || n, 'sync-user-' || n, ?, ? FROM members`, [now, now])).success).toBe(true)
+    expect((await reldb.sql.execute(`INSERT INTO hai_iam_user_roles (user_id, role_id)
+      SELECT u.id, r.id FROM hai_iam_users u CROSS JOIN hai_iam_roles r
+      WHERE u.id LIKE 'sync-user-%' AND r.id IN (?, ?)`, [first.data.id, second.data.id])).success).toBe(true)
+
+    let active = 0
+    let peak = 0
+    const query = vi.spyOn(reldb.sql, 'query')
+    const patch = vi.spyOn(iam.session, 'patchUserSessions').mockImplementation(async () => {
+      active++
+      peak = Math.max(peak, active)
+      await setImmediate()
+      active--
+      return core.ok(undefined)
+    })
+    try {
+      const [deleted, updated] = await Promise.all([
+        iam.authz.deletePermission(permission.data.id),
+        iam.authz.updateRole(first.data.id, { name: 'Batch updated' }),
+      ])
+      expect(deleted.success && updated.success).toBe(true)
+      expect(peak).toBe(8)
+      expect(patch).toHaveBeenCalledTimes(402)
+      const permissionOnly = patch.mock.calls.filter(([, updates]) => updates.roles === undefined)
+      expect(permissionOnly).toHaveLength(201)
+      expect(new Set(permissionOnly.map(([userId]) => userId)).size).toBe(201)
+      expect(permissionOnly.every(([, updates]) => updates.permissions?.length === 0)).toBe(true)
+      expect(query.mock.calls
+        .filter(([sql]) => sql.includes('WHERE ur.user_id IN ('))
+        .map(([, params]) => params?.length)
+        .sort()).toEqual([1, 1, 200, 200])
+    }
+    finally {
+      query.mockRestore()
+      patch.mockRestore()
+    }
   })
 
   it('concurrent replacements leave one complete set, never a union', async () => {

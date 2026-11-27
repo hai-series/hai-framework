@@ -117,12 +117,12 @@ export function observeUsers(operations: UserOperations): UserOperations {
       resource: 'iam.users',
       resourceId: result.success ? result.data.user.id : undefined,
     })),
-    createUser: options => observe(() => operations.createUser(options), result => ({
+    createUser: (options, management) => observe(() => operations.createUser(options, management), result => ({
       action: 'user.create',
       resource: 'iam.users',
       resourceId: result.success ? result.data.user.id : undefined,
     })),
-    inviteUser: options => observe(() => operations.inviteUser(options), result => ({
+    inviteUser: (options, management) => observe(() => operations.inviteUser(options, management), result => ({
       action: 'user.invite',
       resource: 'iam.users',
       resourceId: result.success ? result.data.user.id : undefined,
@@ -250,6 +250,30 @@ export function observeAuthorization(operations: AuthzOperations): AuthzOperatio
 }
 
 /**
+ * 记录用户会话撤销的结果，隐藏令牌和内部凭据代。
+ * @example 模块内部上下文
+ * ```ts
+ * function instrument(revoke: (userId: string, credentialVersion: string) => Promise<HaiResult<number>>) {
+ *   return observeCredentialSessionRevocation(revoke)
+ * }
+ * ```
+ */
+export function observeCredentialSessionRevocation(revoke: (userId: string, credentialVersion: string) => Promise<HaiResult<number>>) {
+  return (userId: string, credentialVersion: string) => observeUserSessionRevocation(userId, () => revoke(userId, credentialVersion))
+}
+
+function observeUserSessionRevocation(userId: string, operation: () => Promise<HaiResult<number>>) {
+  return observe(operation, result => ({
+    action: 'session.revoke-user',
+    resource: 'iam.sessions',
+    resourceId: userId,
+    details: result.success
+      ? { count: result.data }
+      : {},
+  }))
+}
+
+/**
  * 会话本身随机令牌不进入审计；记录主体、会话版本与撤销/刷新结果。
  * @example 模块内部上下文
  * ```ts
@@ -265,14 +289,7 @@ export function observeSessions(operations: SessionOperations): SessionOperation
       resourceId: result.success ? result.data.version : options.userId,
     })),
     delete: token => observe(() => operations.delete(token), { action: 'session.delete', resource: 'iam.sessions' }),
-    deleteByUserId: id => observe(() => operations.deleteByUserId(id), result => ({
-      action: 'session.revoke-user',
-      resource: 'iam.sessions',
-      resourceId: id,
-      details: result.success
-        ? { count: result.data }
-        : {},
-    })),
+    deleteByUserId: id => observeUserSessionRevocation(id, () => operations.deleteByUserId(id)),
     refresh: token => observe(() => operations.refresh(token), { action: 'session.refresh', resource: 'iam.sessions' }),
     revokeRefresh: token => observe(() => operations.revokeRefresh(token), { action: 'session.revoke-refresh', resource: 'iam.sessions' }),
   }

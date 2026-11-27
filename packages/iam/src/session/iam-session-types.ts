@@ -195,7 +195,7 @@ export interface SessionOperations {
   /**
    * 创建会话
    *
-   * 单设备模式在同一次原子提交内替换用户已有会话；提交失败保留旧会话。
+   * 单设备模式在同一次原子提交内替换用户同一凭据代的已有会话；提交失败保留旧会话。
    *
    * @param options - 会话创建选项（用户 ID、角色、来源等）
    * @returns 成功返回完整的 Session 对象（含生成的访问令牌和过期时间）
@@ -291,7 +291,7 @@ export interface SessionOperations {
    * 批量更新用户所有活跃会话的 roles / permissions 字段
    *
    * 遍历用户缓存中的所有 session token，合并更新指定字段，
-   * 同时清理已失效的会话令牌。用于角色/权限变更后的会话同步。
+   * 提交更新时一并清理已失效的会话令牌。角色/权限同步保留最近活动时间和会话到期时间。
    *
    * @param userId - 用户 ID
    * @param updates - 要更新的字段（roles / permissions）

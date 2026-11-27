@@ -16,8 +16,9 @@ import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
+import { lockIamUser, updateIamUserProfile } from '../../user/iam-user-repository-user.js'
 import { isUserActive, toUser } from '../../user/iam-user-utils.js'
-import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
+import { checkAccountLock, ensureCredentialType, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
 import { getLdapUserId, insertLdapIdentity, ldapEntryId } from './iam-authn-ldap-repository.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'ldap-strategy' })
@@ -369,19 +370,16 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
             )
           }
 
-          if (isAccountLocked(storedUser, failurePolicy)) {
-            return core.err(
-              HaiIamError.USER_LOCKED,
-              iamM('iam_accountLocked'),
-            )
-          }
+          const lock = await checkAccountLock(storedUser, failurePolicy)
+          if (!lock.success)
+            return lock
         }
 
         // 用用户的 DN 进行绑定验证密码
         const userBindResult = await client.bind(entry.dn, password)
         if (!userBindResult.success) {
           if (storedUser) {
-            const failureResult = await recordLoginFailure(userRepository, storedUser, failurePolicy)
+            const failureResult = await recordLoginFailure(storedUser, failurePolicy)
             if (!failureResult.success)
               return failureResult
           }
@@ -406,22 +404,29 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           }
         }
         else if (syncUser) {
-          // 更新本地用户信息
-          const updateResult = await userRepository.updateById(storedUser.id, {
-            email: ldapEmail || storedUser.email,
-            displayName: ldapDisplayName || storedUser.displayName,
-            metadata: {
-              ...storedUser.metadata,
-              ldapDn: entry.dn,
-              authSource: 'ldap',
-            },
+          const authenticated = storedUser
+          const synced = await reldb.tx.wrapResult(async (tx) => {
+            const locked = await lockIamUser(tx, authenticated.id)
+            if (!locked.success)
+              return locked
+            const current = await userRepository.findById(authenticated.id, tx)
+            if (!current.success)
+              return current
+            if (!current.data || current.data.credentialVersion !== authenticated.credentialVersion)
+              return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+
+            const updated = await updateIamUserProfile(userRepository, tx, current.data, {
+              email: ldapEmail || current.data.email,
+              displayName: ldapDisplayName || current.data.displayName,
+              metadata: { ...current.data.metadata, ldapDn: entry.dn, authSource: 'ldap' },
+            })
+            if (!updated.success)
+              return updated
+            return userRepository.findById(authenticated.id, tx)
           })
-          if (updateResult.success) {
-            const refreshed = await userRepository.findById(storedUser.id)
-            if (refreshed.success) {
-              storedUser = refreshed.data ?? storedUser
-            }
-          }
+          if (!synced.success)
+            return synced
+          storedUser = synced.data
         }
 
         if (!storedUser)

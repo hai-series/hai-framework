@@ -2,7 +2,7 @@
 import type { LdapClientFactory } from '../src/index.js'
 import { core } from '@h-ai/core'
 import { expect, it, vi } from 'vitest'
-import { HaiIamError, iam } from '../src/index.js'
+import { HaiIamError, iam, IamConfigSchema } from '../src/index.js'
 import { defineIamSuite, initIam, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 // 模拟未安装可选包；若 IAM 在基础认证路径导入它们，此文件会直接失败。
@@ -41,6 +41,31 @@ defineIamSuite('optional integrations', sqliteMemoryEnv(), () => {
     expect(await iam.auth.loginWithLdap({ username: 'directory', password: TEST_PASSWORD })).toMatchObject({
       success: false,
       error: { code: HaiIamError.LOGIN_DISABLED.code },
+    })
+  })
+
+  it('只有启用 LDAP 时 Schema 和初始化才要求目录标识', async () => {
+    const { directoryId: _directoryId, ...connection } = ldap
+    expect(IamConfigSchema.safeParse({ ldap: connection }).success).toBe(true)
+    const config = {
+      login: { ldap: true },
+      ldap: connection,
+    }
+    const parsed = IamConfigSchema.safeParse(config)
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues).toContainEqual(expect.objectContaining({
+        path: ['ldap', 'directoryId'],
+      }))
+    }
+    expect(await iam.init(config)).toMatchObject({
+      success: false,
+      error: {
+        code: HaiIamError.CONFIG_ERROR.code,
+        ext: {
+          fields: ['ldap.directoryId'],
+        },
+      },
     })
   })
 

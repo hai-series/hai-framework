@@ -169,14 +169,8 @@ export interface StoredUser extends User {
   passwordHash?: string
   /** 密码更新时间 */
   passwordUpdatedAt?: Date
-  /** 登录失败次数 */
-  loginFailedCount?: number
-  /** 当前固定失败计数窗口的起点。 */
-  firstLoginFailedAt?: Date
-  /** 最后登录失败时间 */
-  lastLoginFailedAt?: Date
-  /** 锁定截止时间 */
-  lockedUntil?: Date
+  /** Redis 登录锁定状态的代际；确认密码重置时随新密码提交。 */
+  loginLockoutVersion: string
 }
 
 // ─── 注册类型 ───
@@ -282,14 +276,21 @@ export interface UserOperations {
    * initialCredentials.enabled、passwordReset 与通知通道必须就绪；接收人使用现有重置页面设密。
    * 投递未知时保留已创建账号并返回失败；核对后可通过重置通知流程恢复。
    * @param options - 可信管理端输入，必须包含通知通道对应的邮箱/手机号。
+   * @param management - 可选角色分配参数。
+   * @param management.roleIds - 与账号同一事务提交的角色 ID；省略沿用默认角色，空数组表示不分配。
    * @returns 创建结果或失败；不能把通知结果未知当作未创建账号。
    */
-  inviteUser: (options: Omit<RegisterOptions, 'password'>) => Promise<HaiResult<RegisterResult>>
+  inviteUser: (options: Omit<RegisterOptions, 'password'>, management?: { roleIds?: string[] }) => Promise<HaiResult<RegisterResult>>
 
   /** 批量查询最多 1000 个用户 ID，去重并保持输入顺序，忽略不存在的 ID；可批量包含角色。 */
   getUsers: (userIds: readonly string[], options?: { include?: ('roles')[] }) => Promise<HaiResult<User[]>>
-  /** 管理端创建账户，不受自助注册开关限制；调用端必须执行管理员授权。 */
-  createUser: (options: RegisterOptions) => Promise<HaiResult<RegisterResult>>
+  /**
+   * 管理端创建账户，不受自助注册开关限制；调用端必须执行管理员授权。
+   * @param options - 新账号资料和初始密码。
+   * @param management - 可选角色分配参数。
+   * @param management.roleIds - 与账号同一事务提交的角色 ID；省略沿用默认角色，空数组表示不分配。
+   */
+  createUser: (options: RegisterOptions, management?: { roleIds?: string[] }) => Promise<HaiResult<RegisterResult>>
   /**
    * 注册用户
    *

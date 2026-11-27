@@ -8,7 +8,7 @@
 import type { HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { IamConfig, RbacConfig } from '../iam-config.js'
-import type { SessionFieldUpdates, SessionOperations } from '../session/iam-session-types.js'
+import type { SessionOperations } from '../session/iam-session-types.js'
 import type { PermissionRepository } from './iam-authz-repository-permission.js'
 import type { RolePermissionRepository, UserRoleRepository } from './iam-authz-repository-relation.js'
 
@@ -22,7 +22,7 @@ import type {
 import { core } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
-import { guardIamMutation, readIamCache } from '../iam-cache.js'
+import { protectIamTransaction, readIamCache } from '../iam-cache.js'
 import { RbacConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -32,6 +32,29 @@ import { createDbRolePermissionRepository, createDbUserRoleRepository } from './
 import { createDbRoleRepository } from './iam-authz-repository-role.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'authz' })
+const sessionSyncBatchSize = 200
+const sessionSyncConcurrency = 8
+const waitingSessionSyncs: Array<() => void> = []
+let activeSessionSyncs = 0
+
+/** 各授权写入口共用额度。完成的任务直接将额度交给队首。 */
+async function limitSessionSync<T>(run: () => Promise<T>): Promise<T> {
+  if (activeSessionSyncs < sessionSyncConcurrency)
+    activeSessionSyncs++
+  else
+    await new Promise<void>(resolve => waitingSessionSyncs.push(resolve))
+
+  try {
+    return await run()
+  }
+  finally {
+    const next = waitingSessionSyncs.shift()
+    if (next)
+      next()
+    else
+      activeSessionSyncs--
+  }
+}
 
 // ─── 子功能依赖 ───
 
@@ -40,8 +63,8 @@ const logger = core.logger.child({ module: 'iam', scope: 'authz' })
  * @internal
  * @example 模块内部上下文
  * ```ts
- * async function assemble(config: IamConfig, session: SessionOperations) {
- *   const deps: AuthzOperationsDeps = { config, session }
+ * async function assemble(config: IamConfig, session: SessionOperations, getUserAuthorization: AuthzOperations['getUserAuthorization']) {
+ *   const deps: AuthzOperationsDeps = { config, session, getUserAuthorization }
  *   return createAuthzOperations(deps)
  * }
  * ```
@@ -49,6 +72,8 @@ const logger = core.logger.child({ module: 'iam', scope: 'authz' })
 export interface AuthzOperationsDeps {
   config: IamConfig
   session: SessionOperations
+  /** 使用与验签共享的记录读取角色码和权限码。 */
+  getUserAuthorization: AuthzOperations['getUserAuthorization']
 }
 
 /**
@@ -70,7 +95,7 @@ export interface AuthzOperationsDeps {
  */
 export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<HaiResult<AuthzOperations>> {
   try {
-    const { config, session } = deps
+    const { config, session, getUserAuthorization } = deps
 
     const roleRepository = await createDbRoleRepository()
     const permissionRepository = await createDbPermissionRepository()
@@ -92,23 +117,11 @@ export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<
       rolePermissionRepository: rolePermResult.data,
       userRoleRepository: userRoleResult.data,
       session,
+      getUserAuthorization,
     })
 
     logger.info('Authz sub-feature initialized')
-    return core.ok({
-      ...manager,
-      assignRole: guardIamMutation(manager.assignRole, 2),
-      removeRole: guardIamMutation(manager.removeRole, 2),
-      syncRoles: guardIamMutation(manager.syncRoles, 2),
-      createRole: guardIamMutation(manager.createRole, 1),
-      updateRole: guardIamMutation(manager.updateRole, 2),
-      deleteRole: guardIamMutation(manager.deleteRole, 1),
-      createPermission: guardIamMutation(manager.createPermission, 1),
-      deletePermission: guardIamMutation(manager.deletePermission, 1),
-      assignPermissionToRole: guardIamMutation(manager.assignPermissionToRole, 2),
-      removePermissionFromRole: guardIamMutation(manager.removePermissionFromRole, 2),
-      setPermissionSensitiveOperations: guardIamMutation(manager.setPermissionSensitiveOperations),
-    })
+    return core.ok(manager)
   }
   catch (error) {
     logger.error('Authz sub-feature initialization failed', { error })
@@ -128,10 +141,7 @@ export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<
  * @example 模块内部上下文
  * ```ts
  * async function authorization(config: RbacManagerConfig) {
- *   const roles = await config.userRoleRepository.getRoleIds('user-1')
- *   if (!roles.success)
- *     return roles
- *   return config.rolePermissionRepository.getPermissionCodesForRoles(roles.data)
+ *   return config.getUserAuthorization('user-1')
  * }
  * ```
  */
@@ -142,6 +152,7 @@ interface RbacManagerConfig {
   rolePermissionRepository: RolePermissionRepository
   userRoleRepository: UserRoleRepository
   session: SessionOperations
+  getUserAuthorization: AuthzOperations['getUserAuthorization']
 }
 
 /**
@@ -164,6 +175,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     rolePermissionRepository,
     userRoleRepository,
     session,
+    getUserAuthorization,
   } = config
 
   /**
@@ -179,6 +191,32 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         params: { message },
       }),
     )
+  }
+
+  /** 在真实事务登记缓存失效，数据库确认完成后才返回给会话同步逻辑。 */
+  async function writeAuthorization<T>(
+    tx: DmlWithTxOperations | undefined,
+    errorKey: Parameters<typeof iamM>[0],
+    write: (transaction: DmlWithTxOperations) => Promise<HaiResult<T>>,
+  ): Promise<HaiResult<T>> {
+    async function guarded(transaction: DmlWithTxOperations): Promise<HaiResult<T>> {
+      const protectedTx = await protectIamTransaction(transaction)
+      return protectedTx.success
+        ? write(transaction)
+        : protectedTx
+    }
+
+    try {
+      const result = tx
+        ? await guarded(tx)
+        : await reldb.tx.wrapResult(guarded)
+      return !result.success && result.error.code === HaiReldbError.TRANSACTION_FAILED.code
+        ? mapRepositoryError(errorKey, result.error.message)
+        : result
+    }
+    catch (error) {
+      return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionExpired'), error)
+    }
   }
 
   /**
@@ -231,101 +269,59 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     return core.ok(permissions)
   }
 
-  /**
-   * 解析用户所有权限 code（通过角色聚合）
-   *
-   * 用于会话权限同步：查用户角色 → 单次 JOIN 查询权限 code → 去重。
-   */
-  async function resolveUserPermissionCodes(userId: string): Promise<HaiResult<string[]>> {
-    const roleIdsResult = await userRoleRepository.getRoleIds(userId)
-    if (!roleIdsResult.success) {
-      return roleIdsResult as HaiResult<string[]>
-    }
-    if (roleIdsResult.data.length === 0) {
-      return core.ok([])
-    }
-
-    return rolePermissionRepository.getPermissionCodesForRoles(roleIdsResult.data)
-  }
-
-  /**
-   * 解析用户所有角色 code
-   *
-   * 用于会话角色同步：查用户角色 → 提取 code。
-   */
-  async function resolveUserRoleCodes(userId: string): Promise<HaiResult<string[]>> {
-    const rolesResult = await userRoleRepository.getRoles(userId)
-    if (!rolesResult.success) {
-      return rolesResult as HaiResult<string[]>
-    }
-    return core.ok(rolesResult.data.map(r => r.code))
-  }
-
-  /**
-   * 角色权限变更后，同步所有持有该角色用户的 session permissions
-   *
-   * 最大努力：单用户同步失败仅记录日志，不阻塞其他用户。
-   *
-   * @param roleId - 发生权限变更的角色 ID
-   */
-  async function syncSessionPermissionsForRole(roleId: string): Promise<void> {
-    const userIdsResult = await userRoleRepository.getUserIdsByRoleId(roleId)
-    if (!userIdsResult.success) {
-      logger.error('Failed to query users for permission sync', { roleId, error: userIdsResult.error.message })
-      return
-    }
-
-    // 并行同步所有受影响用户的会话权限，避免 await-in-loop
-    await Promise.allSettled(
-      userIdsResult.data.map(async (userId) => {
-        const permResult = await resolveUserPermissionCodes(userId)
-        if (!permResult.success) {
-          logger.error('Failed to resolve permissions for session sync', { userId, roleId, error: permResult.error.message })
-          return
+  /** 用同一份数据库授权结果更新会话快照。失败只影响所在批次或用户。 */
+  async function syncSessionAuthorization(userIds: string[], permissionsOnly = false): Promise<void> {
+    const ids = [
+      ...new Set(userIds),
+    ]
+    for (let offset = 0; offset < ids.length; offset += sessionSyncBatchSize) {
+      const batch = ids.slice(offset, offset + sessionSyncBatchSize)
+      try {
+        const authorization = await limitSessionSync(() => userRoleRepository.getAuthorizationForUsers(batch))
+        if (!authorization.success) {
+          logger.error('Failed to read authorization for session sync', { userCount: batch.length, code: authorization.error.code })
+          continue
         }
 
-        const syncResult = await session.patchUserSessions(userId, { permissions: permResult.data })
-        if (!syncResult.success) {
-          logger.error('Failed to sync session permissions', { userId, roleId, error: syncResult.error.message })
-        }
-      }),
-    )
-  }
-
-  /**
-   * 用户角色变更后，统一同步会话中的角色和权限
-   *
-   * 并行解析角色/权限 code，一次调用 patchUserSessions 写入。
-   * 最大努力：解析或写入失败仅记录日志。
-   *
-   * @param userId - 受影响的用户 ID
-   */
-  async function syncUserSessionAfterRoleChange(userId: string): Promise<void> {
-    const [roleCodesResult, permCodesResult] = await Promise.all([
-      resolveUserRoleCodes(userId),
-      resolveUserPermissionCodes(userId),
-    ])
-
-    const updates: SessionFieldUpdates = {}
-    if (roleCodesResult.success) {
-      updates.roles = roleCodesResult.data
-    }
-    else {
-      logger.error('Failed to resolve roles for session sync', { userId, error: roleCodesResult.error.message })
-    }
-    if (permCodesResult.success) {
-      updates.permissions = permCodesResult.data
-    }
-    else {
-      logger.error('Failed to resolve permissions for session sync', { userId, error: permCodesResult.error.message })
-    }
-
-    if (updates.roles !== undefined || updates.permissions !== undefined) {
-      const syncResult = await session.patchUserSessions(userId, updates)
-      if (!syncResult.success) {
-        logger.error('Failed to patch user sessions', { userId, error: syncResult.error.message })
+        await core.async.parallel([...authorization.data], async ([userId, grants]) => {
+          try {
+            const updates = permissionsOnly
+              ? { permissions: grants.permissions }
+              : grants
+            const synced = await limitSessionSync(() => session.patchUserSessions(userId, updates))
+            if (!synced.success)
+              logger.error('Failed to patch user sessions', { userId, code: synced.error.code })
+          }
+          catch (error) {
+            logger.error('Failed to patch user sessions', { userId, error })
+          }
+        }, sessionSyncConcurrency)
+      }
+      catch (error) {
+        logger.error('Failed to read authorization for session sync', { userCount: batch.length, error })
       }
     }
+  }
+
+  /** 提交后读取当前角色成员。一个用户经不同角色受到影响时只同步一次。 */
+  async function syncRoleSessions(roleIds: string[], permissionsOnly = false): Promise<void> {
+    const affected = new Set<string>()
+    for (let offset = 0; offset < roleIds.length; offset += sessionSyncBatchSize) {
+      const batch = roleIds.slice(offset, offset + sessionSyncBatchSize)
+      try {
+        const found = await limitSessionSync(() => userRoleRepository.getUserIdsByRoleIds(batch))
+        if (!found.success) {
+          logger.error('Failed to query users for session sync', { roleCount: batch.length, code: found.error.code })
+          continue
+        }
+        for (const userId of found.data)
+          affected.add(userId)
+      }
+      catch (error) {
+        logger.error('Failed to query users for session sync', { roleCount: batch.length, error })
+      }
+    }
+    await syncSessionAuthorization([...affected], permissionsOnly)
   }
 
   /** 在调用方事务中完整替换权限，任何一步失败由外层统一回滚。 */
@@ -355,9 +351,10 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     roleId: string,
     permissionId: string,
     write: RolePermissionRepository['assign'] | RolePermissionRepository['remove'],
-    tx?: DmlWithTxOperations,
+    tx: DmlWithTxOperations | undefined,
+    errorKey: 'iam_assignPermissionFailed' | 'iam_removePermissionFailed',
   ): Promise<HaiResult<void>> {
-    const run = async (transaction: DmlWithTxOperations): Promise<HaiResult<void>> => {
+    return writeAuthorization(tx, errorKey, async (transaction) => {
       const role = await roleRepository.lock(roleId, transaction)
       if (!role.success)
         return mapRepositoryError('iam_queryRoleFailed', role.error.message)
@@ -369,27 +366,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!permission.data)
         return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
       return write(roleId, permissionId, transaction)
-    }
-    return tx
-      ? run(tx)
-      : reldb.tx.wrapResult(run)
-  }
-
-  async function getUserAuthorization(userId: string): ReturnType<AuthzOperations['getUserAuthorization']> {
-    return readIamCache(`authorization:${userId}`, async () => {
-      const rows = await reldb.sql.query<{ role_code: string, permission_code: string | null }>('SELECT r.code AS role_code, p.code AS permission_code FROM hai_iam_user_roles ur JOIN hai_iam_roles r ON r.id = ur.role_id LEFT JOIN hai_iam_role_permissions rp ON rp.role_id = r.id LEFT JOIN hai_iam_permissions p ON p.id = rp.permission_id WHERE ur.user_id = ?', [userId])
-      return rows.success
-        ? core.ok({
-            roles: [
-              ...new Set(rows.data.map(row => row.role_code)),
-            ],
-            permissions: [
-              ...new Set(rows.data.flatMap(row => row.permission_code
-                ? [row.permission_code]
-                : [])),
-            ],
-          })
-        : rows
     })
   }
 
@@ -400,22 +376,24 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     async setPermissionSensitiveOperations(permissionId, operations) {
       if (!Array.isArray(operations) || operations.length > 1000 || operations.some(value => typeof value !== 'string' || !value.trim() || value.length > 128))
         return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
-      const updated = await permissionRepository.updateById(permissionId, {
-        sensitiveOperations: [
-          ...new Set(operations.map(value => value.trim())),
-        ],
+      return writeAuthorization(undefined, 'iam_queryPermissionFailed', async (tx) => {
+        const updated = await permissionRepository.updateById(permissionId, {
+          sensitiveOperations: [
+            ...new Set(operations.map(value => value.trim())),
+          ],
+        }, tx)
+        if (!updated.success)
+          return updated
+        // MySQL 对相同值的幂等更新可能返回 0，需区分记录不存在与内容未变化。
+        if (updated.data.changes === 0) {
+          const existing = await permissionRepository.findById(permissionId, tx)
+          if (!existing.success)
+            return existing
+          if (!existing.data)
+            return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
+        }
+        return core.ok(undefined)
       })
-      if (!updated.success)
-        return updated
-      // MySQL 对相同值的幂等更新可能返回 0，需区分记录不存在与内容未变化。
-      if (updated.data.changes === 0) {
-        const existing = await permissionRepository.findById(permissionId)
-        if (!existing.success)
-          return existing
-        if (!existing.data)
-          return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
-      }
-      return core.ok(undefined)
     },
     async checkPermission(userId: string, permission: string): Promise<HaiResult<boolean>> {
       // RBAC 未启用时，所有权限检查直接放行
@@ -438,40 +416,35 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       return userRoleRepository.getRoles(userId)
     },
 
-    async assignRole(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      const roleExistsResult = await roleRepository.existsById(roleId, tx)
-      if (!roleExistsResult.success) {
-        return mapRepositoryError('iam_queryRoleFailed', roleExistsResult.error.message) as HaiResult<void>
-      }
-      if (!roleExistsResult.data) {
-        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-      }
-
-      const result = await userRoleRepository.assign(userId, roleId, tx)
+    async assignRole(userId, roleId, tx): Promise<HaiResult<void>> {
+      const result = await writeAuthorization(tx, 'iam_assignRoleFailed', async (transaction) => {
+        const roleExists = await roleRepository.existsById(roleId, transaction)
+        if (!roleExists.success)
+          return mapRepositoryError('iam_queryRoleFailed', roleExists.error.message)
+        if (!roleExists.data)
+          return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+        return userRoleRepository.assign(userId, roleId, transaction)
+      })
       if (result.success) {
         logger.info('Role assigned to user', { userId, roleId })
-        // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）
-        if (!tx) {
-          await syncUserSessionAfterRoleChange(userId)
-        }
+        if (!tx)
+          await syncSessionAuthorization([userId])
       }
       return result
     },
 
-    async removeRole(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      const result = await userRoleRepository.remove(userId, roleId, tx)
+    async removeRole(userId, roleId, tx): Promise<HaiResult<void>> {
+      const result = await writeAuthorization(tx, 'iam_removeRoleFailed', transaction => userRoleRepository.remove(userId, roleId, transaction))
       if (result.success) {
         logger.info('Role removed from user', { userId, roleId })
-        // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）
-        if (!tx) {
-          await syncUserSessionAfterRoleChange(userId)
-        }
+        if (!tx)
+          await syncSessionAuthorization([userId])
       }
       return result
     },
 
     async syncRoles(userId: string, roleIds: string[], tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      const write = async (transaction: DmlWithTxOperations): Promise<HaiResult<boolean>> => {
+      const changed = await writeAuthorization(tx, 'iam_syncRolesFailed', async (transaction) => {
         // 独立替换角色和资料加角色的组合更新使用同一个账号锁，避免并发从同一旧集合计算差集。
         const locked = await lockIamUser(transaction, userId)
         if (!locked.success)
@@ -506,92 +479,43 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
             return result
         }
         return core.ok(true)
-      }
-      const changed = tx
-        ? await write(tx)
-        : await reldb.tx.wrapResult(write)
-      if (!changed.success) {
-        return changed.error.code === HaiReldbError.TRANSACTION_FAILED.code
-          ? mapRepositoryError('iam_syncRolesFailed', changed.error.message)
-          : changed
-      }
+      })
+      if (!changed.success)
+        return changed
       if (changed.data && !tx) {
         logger.info('Roles synced for user', { userId })
-        await syncUserSessionAfterRoleChange(userId)
+        await syncSessionAuthorization([userId])
       }
       return core.ok(undefined)
     },
 
     // ─── 角色管理 ───
 
-    async createRole(role, tx?: DmlWithTxOperations): Promise<HaiResult<Role>> {
+    async createRole(role, tx): Promise<HaiResult<Role>> {
       const { permissionIds, ...metadata } = role
-      // 使用调用方事务或创建新事务，保证 create+findByCode 原子性
-      const ownTx = !tx
-      if (!tx) {
-        const txResult = await reldb.tx.begin()
-        if (!txResult.success) {
-          return mapRepositoryError('iam_createRoleFailed', txResult.error.message) as HaiResult<Role>
-        }
-        tx = txResult.data
-      }
-
-      try {
-        const createResult = await roleRepository.create(metadata, tx)
-        if (!createResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          if (createResult.error.code === HaiReldbError.DUPLICATE_ENTRY.code) {
+      const result = await writeAuthorization(tx, 'iam_createRoleFailed', async (transaction) => {
+        const created = await roleRepository.create(metadata, transaction)
+        if (!created.success) {
+          if (created.error.code === HaiReldbError.DUPLICATE_ENTRY.code)
             return core.err(HaiIamError.ROLE_ALREADY_EXISTS, iamM('iam_roleAlreadyExist'))
-          }
-          return mapRepositoryError('iam_createRoleFailed', createResult.error.message) as HaiResult<Role>
+          return mapRepositoryError('iam_createRoleFailed', created.error.message)
         }
-
-        const createdResult = await roleRepository.findByCode(role.code, tx)
-        if (!createdResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          return mapRepositoryError('iam_queryRoleFailed', createdResult.error.message) as HaiResult<Role>
-        }
-        if (!createdResult.data) {
-          if (ownTx)
-            await tx.rollback()
+        const found = await roleRepository.findByCode(role.code, transaction)
+        if (!found.success)
+          return mapRepositoryError('iam_queryRoleFailed', found.error.message)
+        if (!found.data)
           return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-        }
 
         if (permissionIds !== undefined) {
-          const replaced = await replaceRolePermissions(createdResult.data.id, permissionIds, tx)
-          if (!replaced.success) {
-            if (ownTx)
-              await tx.rollback()
+          const replaced = await replaceRolePermissions(found.data.id, permissionIds, transaction)
+          if (!replaced.success)
             return replaced
-          }
         }
-
-        if (ownTx) {
-          const commitResult = await tx.commit()
-          if (!commitResult.success) {
-            return mapRepositoryError('iam_createRoleFailed', commitResult.error.message) as HaiResult<Role>
-          }
-        }
-
-        logger.info('Role created', { roleId: createdResult.data.id, code: role.code })
-
-        return core.ok(createdResult.data)
-      }
-      catch (error) {
-        if (ownTx)
-          await tx.rollback()
-        return core.err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_createRoleFailed', {
-            params: {
-              message: String(error),
-            },
-          }),
-          error,
-        )
-      }
+        return core.ok(found.data)
+      })
+      if (result.success)
+        logger.info('Role created', { roleId: result.data.id, code: role.code })
+      return result
     },
 
     async getRole(roleId): Promise<HaiResult<Role | null>> {
@@ -625,268 +549,111 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       return userRoleRepository.getUserCounts(roleIds)
     },
 
-    async updateRole(roleId, data, tx?: DmlWithTxOperations): Promise<HaiResult<Role>> {
+    async updateRole(roleId, data, tx): Promise<HaiResult<Role>> {
       const { permissionIds, expectedPermissionIds, ...metadata } = data
-      // 使用调用方事务或创建新事务，保证 update+findById 原子性
-      const ownTx = !tx
-      if (!tx) {
-        const txResult = await reldb.tx.begin()
-        if (!txResult.success) {
-          return mapRepositoryError('iam_updateRoleFailed', txResult.error.message) as HaiResult<Role>
-        }
-        tx = txResult.data
-      }
-
-      try {
+      const result = await writeAuthorization(tx, 'iam_updateRoleFailed', async (transaction) => {
         if (permissionIds !== undefined && expectedPermissionIds !== undefined) {
-          const locked = await roleRepository.lock(roleId, tx)
-          if (!locked.success || !locked.data) {
-            if (ownTx)
-              await tx.rollback()
-            return locked.success
-              ? core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-              : mapRepositoryError('iam_queryRoleFailed', locked.error.message)
-          }
-          if (locked.data.isSystem || locked.data.code === rbacConfig.superAdminRole) {
-            if (ownTx)
-              await tx.rollback()
+          const locked = await roleRepository.lock(roleId, transaction)
+          if (!locked.success)
+            return mapRepositoryError('iam_queryRoleFailed', locked.error.message)
+          if (!locked.data)
+            return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+          if (locked.data.isSystem || locked.data.code === rbacConfig.superAdminRole)
             return core.err(HaiIamError.FORBIDDEN, core.i18n.coreM('core_errorForbidden'))
-          }
-          const current = await rolePermissionRepository.getPermissionIds(roleId, tx)
-          if (!current.success) {
-            if (ownTx)
-              await tx.rollback()
+
+          const current = await rolePermissionRepository.getPermissionIds(roleId, transaction)
+          if (!current.success)
             return current
-          }
           const expected = new Set(expectedPermissionIds)
-          if (current.data.length !== expected.size || current.data.some(id => !expected.has(id))) {
-            if (ownTx)
-              await tx.rollback()
+          if (current.data.length !== expected.size || current.data.some(id => !expected.has(id)))
             return core.err(HaiIamError.CONFLICT, iamM('iam_rolePermissionsChanged'))
-          }
         }
-        const updateResult = Object.values(metadata).some(value => value !== undefined)
-          ? await roleRepository.updateById(roleId, metadata, tx)
-          : await roleRepository.touch(roleId, tx)
-        if (!updateResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          return mapRepositoryError('iam_updateRoleFailed', updateResult.error.message) as HaiResult<Role>
-        }
-        if (updateResult.data.changes === 0) {
-          if (ownTx)
-            await tx.rollback()
+
+        const updated = Object.values(metadata).some(value => value !== undefined)
+          ? await roleRepository.updateById(roleId, metadata, transaction)
+          : await roleRepository.touch(roleId, transaction)
+        if (!updated.success)
+          return mapRepositoryError('iam_updateRoleFailed', updated.error.message)
+        if (updated.data.changes === 0)
           return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-        }
 
         if (permissionIds !== undefined) {
-          const replaced = await replaceRolePermissions(roleId, permissionIds, tx)
-          if (!replaced.success) {
-            if (ownTx)
-              await tx.rollback()
+          const replaced = await replaceRolePermissions(roleId, permissionIds, transaction)
+          if (!replaced.success)
             return replaced
-          }
         }
 
-        const updatedResult = await roleRepository.findById(roleId, tx)
-        if (!updatedResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          return mapRepositoryError('iam_queryRoleFailed', updatedResult.error.message) as HaiResult<Role>
-        }
-        if (!updatedResult.data) {
-          if (ownTx)
-            await tx.rollback()
+        const found = await roleRepository.findById(roleId, transaction)
+        if (!found.success)
+          return mapRepositoryError('iam_queryRoleFailed', found.error.message)
+        if (!found.data)
           return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-        }
-
-        if (ownTx) {
-          const commitResult = await tx.commit()
-          if (!commitResult.success) {
-            return mapRepositoryError('iam_updateRoleFailed', commitResult.error.message) as HaiResult<Role>
-          }
-        }
-
-        // 角色代码变更后同步受影响用户的会话（仅在自管事务时，外部事务由调用方在 commit 后同步）
-        if (ownTx) {
-          const affectedUsersResult = await userRoleRepository.getUserIdsByRoleId(roleId)
-          if (affectedUsersResult.success) {
-            await Promise.allSettled(
-              affectedUsersResult.data.map(userId => syncUserSessionAfterRoleChange(userId)),
-            )
-          }
-          else {
-            logger.error('Failed to query affected users after updateRole', { roleId, error: affectedUsersResult.error.message })
-          }
-        }
-
-        return core.ok(updatedResult.data)
-      }
-      catch (error) {
-        if (ownTx)
-          await tx.rollback()
-        return core.err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_updateRoleFailed', {
-            params: {
-              message: String(error),
-            },
-          }),
-          error,
-        )
-      }
+        return core.ok(found.data)
+      })
+      if (result.success && !tx)
+        await syncRoleSessions([roleId])
+      return result
     },
 
-    async deleteRole(roleId, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      // 校验角色存在且非系统角色
-      const roleResult = await roleRepository.findById(roleId, tx)
-      if (!roleResult.success) {
-        return mapRepositoryError('iam_queryRoleFailed', roleResult.error.message) as HaiResult<void>
-      }
-      if (!roleResult.data) {
-        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-      }
-      if (roleResult.data.isSystem) {
-        return core.err(HaiIamError.PERMISSION_DENIED, iamM('iam_cannotDeleteSystemRole'))
-      }
+    async deleteRole(roleId, tx): Promise<HaiResult<void>> {
+      const result = await writeAuthorization(tx, 'iam_deleteRoleFailed', async (transaction) => {
+        const role = await roleRepository.findById(roleId, transaction)
+        if (!role.success)
+          return mapRepositoryError('iam_queryRoleFailed', role.error.message)
+        if (!role.data)
+          return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+        if (role.data.isSystem)
+          return core.err(HaiIamError.PERMISSION_DENIED, iamM('iam_cannotDeleteSystemRole'))
 
-      // 使用调用方事务或创建新事务，保证级联删除原子执行
-      const ownTx = !tx
-      if (!tx) {
-        const txResult = await reldb.tx.begin()
-        if (!txResult.success) {
-          return mapRepositoryError('iam_deleteRoleFailed', txResult.error.message) as HaiResult<void>
-        }
-        tx = txResult.data
-      }
-
-      let affectedUserIds: string[] = []
-      try {
-        // 级联删除：用户-角色关联
-        const userIdsResult = await userRoleRepository.removeByRoleId(roleId, tx)
-        if (!userIdsResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          return userIdsResult as HaiResult<void>
-        }
-        affectedUserIds = userIdsResult.data
-
-        // 级联删除：角色-权限关联
-        const rpResult = await rolePermissionRepository.removeByRoleId(roleId, tx)
-        if (!rpResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          return rpResult
-        }
-
-        // 删除角色本身
-        const delResult = await roleRepository.deleteById(roleId, tx)
-        if (!delResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          return mapRepositoryError('iam_deleteRoleFailed', delResult.error.message) as HaiResult<void>
-        }
-
-        if (ownTx) {
-          const commitResult = await tx.commit()
-          if (!commitResult.success) {
-            return mapRepositoryError('iam_deleteRoleFailed', commitResult.error.message) as HaiResult<void>
-          }
-        }
-      }
-      catch (error) {
-        if (ownTx)
-          await tx.rollback()
-        return core.err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_deleteRoleFailed', {
-            params: {
-              message: String(error),
-            },
-          }),
-          error,
-        )
-      }
-
-      // 事务提交后：会话同步（仅在自管事务时，外部事务由调用方在 commit 后同步）
-      if (ownTx) {
-        await Promise.allSettled(
-          affectedUserIds.map(userId => syncUserSessionAfterRoleChange(userId)),
-        )
-      }
-
+        const affectedUsers = await userRoleRepository.removeByRoleId(roleId, transaction)
+        if (!affectedUsers.success)
+          return affectedUsers
+        const permissionsRemoved = await rolePermissionRepository.removeByRoleId(roleId, transaction)
+        if (!permissionsRemoved.success)
+          return permissionsRemoved
+        const deleted = await roleRepository.deleteById(roleId, transaction)
+        if (!deleted.success)
+          return mapRepositoryError('iam_deleteRoleFailed', deleted.error.message)
+        return affectedUsers
+      })
+      if (!result.success)
+        return result
+      if (!tx)
+        await syncSessionAuthorization(result.data)
       logger.info('Role deleted', { roleId })
       return core.ok(undefined)
     },
 
     // ─── 权限管理 ───
 
-    async createPermission(permission, tx?: DmlWithTxOperations): Promise<HaiResult<Permission>> {
+    async createPermission(permission, tx): Promise<HaiResult<Permission>> {
       const operations = permission.sensitiveOperations ?? []
       if (!Array.isArray(operations) || operations.length > 1000 || operations.some(value => typeof value !== 'string' || !value.trim() || value.length > 128))
         return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
-      permission = {
+      const input = {
         ...permission,
         sensitiveOperations: [
           ...new Set(operations.map(value => value.trim())),
         ],
       }
-      // 使用调用方事务或创建新事务，保证 create+findByCode 原子性
-      const ownTx = !tx
-      if (!tx) {
-        const txResult = await reldb.tx.begin()
-        if (!txResult.success) {
-          return mapRepositoryError('iam_createPermissionFailed', txResult.error.message) as HaiResult<Permission>
-        }
-        tx = txResult.data
-      }
-
-      try {
-        const createResult = await permissionRepository.create(permission, tx)
-        if (!createResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          if (createResult.error.code === HaiReldbError.DUPLICATE_ENTRY.code) {
+      const result = await writeAuthorization(tx, 'iam_createPermissionFailed', async (transaction) => {
+        const created = await permissionRepository.create(input, transaction)
+        if (!created.success) {
+          if (created.error.code === HaiReldbError.DUPLICATE_ENTRY.code)
             return core.err(HaiIamError.PERMISSION_ALREADY_EXISTS, iamM('iam_permissionAlreadyExist'))
-          }
-          return mapRepositoryError('iam_createPermissionFailed', createResult.error.message) as HaiResult<Permission>
+          return mapRepositoryError('iam_createPermissionFailed', created.error.message)
         }
 
-        const createdResult = await permissionRepository.findByCode(permission.code, tx)
-        if (!createdResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          return mapRepositoryError('iam_queryPermissionFailed', createdResult.error.message) as HaiResult<Permission>
-        }
-        if (!createdResult.data) {
-          if (ownTx)
-            await tx.rollback()
+        const found = await permissionRepository.findByCode(permission.code, transaction)
+        if (!found.success)
+          return mapRepositoryError('iam_queryPermissionFailed', found.error.message)
+        if (!found.data)
           return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
-        }
-
-        if (ownTx) {
-          const commitResult = await tx.commit()
-          if (!commitResult.success) {
-            return mapRepositoryError('iam_createPermissionFailed', commitResult.error.message) as HaiResult<Permission>
-          }
-        }
-
-        logger.info('Permission created', { permissionId: createdResult.data.id, code: permission.code })
-        return core.ok(createdResult.data)
-      }
-      catch (error) {
-        if (ownTx)
-          await tx.rollback()
-        return core.err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_createPermissionFailed', {
-            params: {
-              message: String(error),
-            },
-          }),
-          error,
-        )
-      }
+        return core.ok(found.data)
+      })
+      if (result.success)
+        logger.info('Permission created', { permissionId: result.data.id, code: permission.code })
+      return result
     },
 
     async getPermission(permissionId): Promise<HaiResult<Permission | null>> {
@@ -937,105 +704,62 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       return core.ok(result.data)
     },
 
-    async deletePermission(permissionId, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      const permissionResult = await permissionRepository.findById(permissionId, tx)
-      if (!permissionResult.success) {
-        return mapRepositoryError('iam_queryPermissionFailed', permissionResult.error.message) as HaiResult<void>
-      }
-      if (!permissionResult.data) {
-        return core.err(
-          HaiIamError.PERMISSION_NOT_FOUND,
-          iamM('iam_permissionNotExist'),
-        )
-      }
-
-      // 事务前：从 DB 查询哪些角色关联此权限（事务中会删除关联行）
-      const affectedRoleIdsResult = await rolePermissionRepository.getRoleIdsByPermissionId(permissionId)
-      const affectedRoleIds = affectedRoleIdsResult.success
-        ? affectedRoleIdsResult.data
-        : []
-
-      // 使用调用方事务或创建新事务，保证级联删除原子执行
-      const ownTx = !tx
+    async deletePermission(permissionId, tx): Promise<HaiResult<void>> {
+      // 删除关联前定位受影响的角色，提交后再读取这些角色的当前成员。
+      let affectedRoleIds: string[] = []
       if (!tx) {
-        const txResult = await reldb.tx.begin()
-        if (!txResult.success) {
-          return mapRepositoryError('iam_deletePermissionFailed', txResult.error.message) as HaiResult<void>
+        try {
+          const found = await rolePermissionRepository.getRoleIdsByPermissionId(permissionId)
+          if (found.success)
+            affectedRoleIds = found.data
+          else
+            logger.error('Failed to query roles for permission sync', { permissionId, code: found.error.code })
         }
-        tx = txResult.data
-      }
-
-      try {
-        // 级联删除：角色-权限关联
-        const cascadeResult = await rolePermissionRepository.removeByPermissionId(permissionId, tx)
-        if (!cascadeResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          return cascadeResult
-        }
-
-        // 删除权限本身
-        const delResult = await permissionRepository.deleteById(permissionId, tx)
-        if (!delResult.success) {
-          if (ownTx)
-            await tx.rollback()
-          return mapRepositoryError('iam_deletePermissionFailed', delResult.error.message) as HaiResult<void>
-        }
-
-        if (ownTx) {
-          const commitResult = await tx.commit()
-          if (!commitResult.success) {
-            return mapRepositoryError('iam_deletePermissionFailed', commitResult.error.message) as HaiResult<void>
-          }
+        catch (error) {
+          logger.error('Failed to query roles for permission sync', { permissionId, error })
         }
       }
-      catch (error) {
-        if (ownTx)
-          await tx.rollback()
-        return core.err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_deletePermissionFailed', {
-            params: {
-              message: String(error),
-            },
-          }),
-          error,
-        )
-      }
 
-      // 事务提交后：会话同步（仅在自管事务时，外部事务由调用方在 commit 后同步）
-      if (ownTx) {
-        await Promise.allSettled(
-          affectedRoleIds.map(roleId => syncSessionPermissionsForRole(roleId)),
-        )
-      }
-
+      const result = await writeAuthorization(tx, 'iam_deletePermissionFailed', async (transaction) => {
+        const found = await permissionRepository.findById(permissionId, transaction)
+        if (!found.success)
+          return mapRepositoryError('iam_queryPermissionFailed', found.error.message)
+        if (!found.data)
+          return core.err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
+        const relations = await rolePermissionRepository.removeByPermissionId(permissionId, transaction)
+        if (!relations.success)
+          return relations
+        const deleted = await permissionRepository.deleteById(permissionId, transaction)
+        return deleted.success
+          ? core.ok(undefined)
+          : mapRepositoryError('iam_deletePermissionFailed', deleted.error.message)
+      })
+      if (!result.success)
+        return result
+      if (!tx)
+        await syncRoleSessions(affectedRoleIds, true)
       logger.info('Permission deleted', { permissionId })
       return core.ok(undefined)
     },
 
-    async assignPermissionToRole(roleId, permissionId, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      const assignResult = await updateRolePermission(roleId, permissionId, rolePermissionRepository.assign, tx)
-      if (assignResult.success) {
+    async assignPermissionToRole(roleId, permissionId, tx): Promise<HaiResult<void>> {
+      const result = await updateRolePermission(roleId, permissionId, rolePermissionRepository.assign, tx, 'iam_assignPermissionFailed')
+      if (result.success) {
         logger.info('Permission assigned to role', { roleId, permissionId })
-        // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）
-        if (!tx) {
-          await syncSessionPermissionsForRole(roleId)
-        }
+        if (!tx)
+          await syncRoleSessions([roleId], true)
       }
-      return assignResult
+      return result
     },
 
-    async removePermissionFromRole(roleId, permissionId, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-      const removeResult = await updateRolePermission(roleId, permissionId, rolePermissionRepository.remove, tx)
-      if (removeResult.success) {
+    async removePermissionFromRole(roleId, permissionId, tx): Promise<HaiResult<void>> {
+      const result = await updateRolePermission(roleId, permissionId, rolePermissionRepository.remove, tx, 'iam_removePermissionFailed')
+      if (result.success) {
         logger.info('Permission removed from role', { roleId, permissionId })
-        // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）
-        if (!tx) {
-          await syncSessionPermissionsForRole(roleId)
-        }
+        if (!tx)
+          await syncRoleSessions([roleId], true)
       }
-      return removeResult
+      return result
     },
 
     async getRolePermissions(roleId): Promise<HaiResult<Permission[]>> {

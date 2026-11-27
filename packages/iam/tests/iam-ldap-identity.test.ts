@@ -8,7 +8,7 @@ import { mysqlEnv, postgresEnv, sqliteMemoryEnv } from '../../reldb/tests/helper
 import { migrateLdapIdentities } from '../src/authn/ldap/iam-authn-ldap-repository.js'
 import { HaiIamError, iam } from '../src/index.js'
 import { createDbUserRepository } from '../src/user/iam-user-repository-user.js'
-import { initIam, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { initIam, readLoginFailures, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 const ldap = {
   url: 'ldap://fixture.invalid',
@@ -149,8 +149,7 @@ for (const [backend, environment] of [
         error: { code: HaiIamError.INVALID_CREDENTIALS.code },
       })
       expect(data(await iam.user.getUser(local.id))).toMatchObject({ displayName: 'Local account' })
-      const row = data(await reldb.sql.get<{ login_failed_count: number }>('SELECT login_failed_count FROM hai_iam_users WHERE id = ?', [local.id]))
-      expect(row?.login_failed_count ?? 0).toBe(0)
+      expect(await readLoginFailures(local.id)).toBeNull()
       expect(data(await reldb.sql.query(`SELECT user_id FROM ${table}`))).toEqual([])
       expect(data(await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).user.id).toBe(local.id)
     }, 30_000)

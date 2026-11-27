@@ -7,6 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
+import type { Session } from '../session/iam-session-types.js'
 import type { PermissionRepository } from './iam-authz-repository-permission.js'
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type { Permission, Role } from './iam-authz-types.js'
@@ -23,7 +24,7 @@ import { HaiIamError } from '../iam-types.js'
  * @example 模块内部上下文
  * ```ts
  * async function read(repository: RolePermissionRepository) {
- *   const result = await repository.getPermissionCodesForRoles(['role-1', 'role-2'])
+ *   const result = await repository.getPermissions('role-1')
  *   if (!result.success)
  *     return result
  *   return result.data
@@ -50,16 +51,6 @@ export interface RolePermissionRepository {
   getPermissionIds: (roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<string[]>>
 
   /**
-   * 批量获取多个角色的权限代码（去重）
-   *
-   * 单次 JOIN 查询替代 N 次逐角色查询。
-   *
-   * @param roleIds - 角色 ID 列表
-   * @returns 去重后的权限代码数组
-   */
-  getPermissionCodesForRoles: (roleIds: string[]) => Promise<HaiResult<string[]>>
-
-  /**
    * 删除角色的所有权限关联
    */
   removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
@@ -69,12 +60,7 @@ export interface RolePermissionRepository {
    */
   removeByPermissionId: (permissionId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
-  /**
-   * 查询拥有指定权限的所有角色 ID
-   *
-   * @param permissionId - 权限 ID
-   * @returns 角色 ID 数组
-   */
+  /** 删除权限关联前读取受影响角色 ID。 */
   getRoleIdsByPermissionId: (permissionId: string) => Promise<HaiResult<string[]>>
 
   /**
@@ -112,6 +98,8 @@ export interface UserRoleRepository {
   getRoleSummaries: (userId: string) => Promise<HaiResult<Array<Pick<Role, 'id' | 'code'>>>>
   /** 一次聚合查询多个角色的成员数 */
   getUserCounts: (roleIds: string[]) => Promise<HaiResult<Map<string, number>>>
+  /** 使用一次查询读取一批用户的角色和权限代码，无角色的用户保留空数组。 */
+  getAuthorizationForUsers: (userIds: string[]) => Promise<HaiResult<Map<string, Pick<Session, 'roles' | 'permissions'>>>>
   /**
    * 分配角色给用户
    */
@@ -140,13 +128,8 @@ export interface UserRoleRepository {
    */
   removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<string[]>>
 
-  /**
-   * 查询拥有指定角色的所有用户 ID
-   *
-   * @param roleId - 角色 ID
-   * @returns 用户 ID 数组
-   */
-  getUserIdsByRoleId: (roleId: string) => Promise<HaiResult<string[]>>
+  /** 查询拥有任一指定角色的用户 ID，并对同一用户去重。 */
+  getUserIdsByRoleIds: (roleIds: string[]) => Promise<HaiResult<string[]>>
 
   /**
    * 批量获取多个用户的角色列表
@@ -183,7 +166,7 @@ const ROLE_PERMISSION_SCHEMA = {
  *   const repository = await createDbRolePermissionRepository(permissions)
  *   if (!repository.success)
  *     return repository
- *   return repository.data.getPermissionCodesForRoles(['role-1', 'role-2'])
+ *   return repository.data.getPermissions('role-1')
  * }
  * ```
  */
@@ -267,8 +250,11 @@ export async function createDbRolePermissionRepository(permissions: PermissionRe
 
     async assign(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
+      const onDuplicate = reldb.config?.type === 'mysql'
+        ? 'ON DUPLICATE KEY UPDATE role_id = role_id'
+        : 'ON CONFLICT DO NOTHING'
       const result = await runner.execute(
-        `INSERT INTO ${ROLE_PERMISSION_TABLE} (role_id, permission_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
+        `INSERT INTO ${ROLE_PERMISSION_TABLE} (role_id, permission_id) VALUES (?, ?) ${onDuplicate}`,
         [roleId, permissionId],
       )
 
@@ -329,29 +315,6 @@ export async function createDbRolePermissionRepository(permissions: PermissionRe
       return core.ok(result.data)
     },
 
-    async getPermissionCodesForRoles(roleIds: string[]): Promise<HaiResult<string[]>> {
-      if (roleIds.length === 0) {
-        return core.ok([])
-      }
-
-      const placeholders = roleIds.map(() => '?').join(', ')
-      const result = await reldb.sql.query<{ code: string }>(
-        `SELECT DISTINCT p.code FROM ${ROLE_PERMISSION_TABLE} rp JOIN ${PERMISSION_TABLE} p ON rp.permission_id = p.id WHERE rp.role_id IN (${placeholders})`,
-        roleIds,
-      )
-      if (!result.success) {
-        return core.err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_queryPermissionFailed', {
-            params: { message: result.error.message },
-          }),
-          result.error,
-        )
-      }
-
-      return core.ok(result.data.map(r => r.code))
-    },
-
     async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const result = await runner.execute(
@@ -388,21 +351,14 @@ export async function createDbRolePermissionRepository(permissions: PermissionRe
       return core.ok(undefined)
     },
 
-    async getRoleIdsByPermissionId(permissionId: string): Promise<HaiResult<string[]>> {
+    async getRoleIdsByPermissionId(permissionId) {
       const result = await reldb.sql.query<{ role_id: string }>(
         `SELECT role_id FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
         [permissionId],
       )
-      if (!result.success) {
-        return core.err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_queryPermissionFailed', {
-            params: { message: result.error.message },
-          }),
-          result.error,
-        )
-      }
-      return core.ok(result.data.map(r => r.role_id))
+      return result.success
+        ? core.ok(result.data.map(row => row.role_id))
+        : result
     },
 
     async getPermissionsForRoles(roleIds: string[]): Promise<HaiResult<Map<string, Permission[]>>> {
@@ -630,6 +586,45 @@ export async function createDbUserRoleRepository(
       )
     },
 
+    async getAuthorizationForUsers(userIds) {
+      if (userIds.length === 0)
+        return core.ok(new Map())
+      const byUser = new Map(userIds.map(userId => [
+        userId,
+        {
+          roles: new Set<string>(),
+          permissions: new Set<string>(),
+        },
+      ]))
+      const placeholders = userIds.map(() => '?').join(', ')
+      const result = await reldb.sql.query<{ user_id: string, role_code: string, permission_code: string | null }>(
+        `SELECT ur.user_id, r.code AS role_code, p.code AS permission_code
+         FROM ${USER_ROLE_TABLE} ur
+         JOIN ${ROLE_TABLE} r ON r.id = ur.role_id
+         LEFT JOIN ${ROLE_PERMISSION_TABLE} rp ON rp.role_id = r.id
+         LEFT JOIN ${PERMISSION_TABLE} p ON p.id = rp.permission_id
+         WHERE ur.user_id IN (${placeholders})`,
+        userIds,
+      )
+      if (!result.success)
+        return result
+      for (const row of result.data) {
+        const authorization = byUser.get(row.user_id)
+        if (!authorization)
+          continue
+        authorization.roles.add(row.role_code)
+        if (row.permission_code !== null)
+          authorization.permissions.add(row.permission_code)
+      }
+      return core.ok(new Map(Array.from(byUser, ([userId, authorization]) => [
+        userId,
+        {
+          roles: [...authorization.roles],
+          permissions: [...authorization.permissions],
+        },
+      ])))
+    },
+
     async getRoles(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<Role[]>> {
       const idsResult = await getRoleIdsInternal(userId, tx)
       if (!idsResult.success)
@@ -692,10 +687,13 @@ export async function createDbUserRoleRepository(
       return core.ok(usersResult.data.map(r => r.user_id))
     },
 
-    async getUserIdsByRoleId(roleId: string): Promise<HaiResult<string[]>> {
+    async getUserIdsByRoleIds(roleIds) {
+      if (roleIds.length === 0)
+        return core.ok([])
+      const placeholders = roleIds.map(() => '?').join(', ')
       const result = await reldb.sql.query<{ user_id: string }>(
-        `SELECT user_id FROM ${USER_ROLE_TABLE} WHERE role_id = ?`,
-        [roleId],
+        `SELECT DISTINCT user_id FROM ${USER_ROLE_TABLE} WHERE role_id IN (${placeholders})`,
+        roleIds,
       )
       if (!result.success) {
         return core.err(

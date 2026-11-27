@@ -1,4 +1,4 @@
-import { iam } from '@h-ai/iam'
+import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import * as m from '#lib/paraglide/messages.js'
 import { normalizeUniqueConstraintError, toIamProfileResponse } from '#lib/server/iam-admin.js'
@@ -25,11 +25,7 @@ export const GET = kit.handler(async ({ locals }) => {
 /**
  * 根据当前会话令牌更新用户资料字段。
  *
- * `username` / `email` 属于身份字段，不在 `updateCurrentUser` 白名单内，
- * 需通过 `iam.user.updateUser(userId, ...)` 进行更新。
- * 其余字段（displayName / avatarUrl / phone）走 `updateCurrentUser` 安全白名单。
- *
- * 更新完成后同步刷新缓存会话，使布局顶栏等立即读到最新值。
+ * 联系方式变更后，IAM 作废旧会话。响应直接使用本次事务提交的资料。
  *
  * @returns 更新结果，成功返回最新用户信息
  */
@@ -44,71 +40,22 @@ export const PUT = kit.handler(async ({ request, locals, cookies }) => {
     return kit.response.unauthorized(m.common_error({}, { locale }))
   }
 
-  // session 已由 guard 注入，直接使用 userId
-  const userId = locals.session!.userId
-
   const data = await kit.validate.body(request, UpdateProfileSchema)
-
-  const username = data?.username?.trim()
-  const displayName = data?.display_name?.trim()
-  const email = data?.email?.trim()
-  const phone = data?.phone?.trim()
-  const avatar = data?.avatar?.trim()
-
-  // ── 合并所有字段为单次 updateUser 调用，保证原子性 ──
-  const updatePatch: Partial<{ username: string, email: string, displayName: string, avatarUrl: string, phone: string }> = {}
-  if (username)
-    updatePatch.username = username
-  if (email)
-    updatePatch.email = email
-  if (displayName)
-    updatePatch.displayName = displayName
-  if (avatar)
-    updatePatch.avatarUrl = avatar
-  if (phone)
-    updatePatch.phone = phone
-
-  if (Object.keys(updatePatch).length > 0) {
-    const updateResult = await iam.user.updateUser(userId, updatePatch)
-    if (!updateResult.success) {
-      if ((updateResult.error.httpStatus ?? 500) >= 500)
-        return kit.response.fromError(updateResult.error)
-      const normalizedError = normalizeUniqueConstraintError(updateResult.error.message, m.common_error({}, { locale }))
-      return kit.response.badRequest(
-        normalizedError,
-        undefined,
-        {
-          fieldErrors: { general: normalizedError },
-        },
-      )
-    }
+  const updated = await iam.user.updateCurrentUser(locals.accessToken, {
+    username: data.username?.trim() || undefined,
+    displayName: data.display_name?.trim() || undefined,
+    email: data.email?.trim() || undefined,
+    phone: data.phone?.trim() || undefined,
+    avatarUrl: data.avatar?.trim() || undefined,
+  })
+  if (!updated.success) {
+    if (updated.error.code !== HaiIamError.USER_ALREADY_EXISTS.code)
+      return kit.response.fromError(updated.error)
+    const normalizedError = normalizeUniqueConstraintError(updated.error.message, m.common_error({}, { locale }))
+    return kit.response.badRequest(normalizedError, undefined, {
+      fieldErrors: { general: normalizedError },
+    })
   }
 
-  // ── 同步会话缓存，使布局顶栏等立即读到最新值 ──
-  const sessionPatch: Partial<{ username: string, displayName: string, avatarUrl: string }> = {}
-  if (username)
-    sessionPatch.username = username
-  if (displayName)
-    sessionPatch.displayName = displayName
-  if (avatar)
-    sessionPatch.avatarUrl = avatar
-
-  if (Object.keys(sessionPatch).length > 0) {
-    const snapshot = await iam.session.get(locals.accessToken)
-    if (!snapshot.success)
-      return kit.response.fromError(snapshot.error)
-    if (!snapshot.data)
-      return kit.response.unauthorized(m.common_error())
-    const synced = await iam.session.update(locals.accessToken, sessionPatch, snapshot.data.version)
-    if (!synced.success)
-      return kit.response.fromError(synced.error)
-  }
-
-  // ── 查询最新用户信息返回 ──
-  const updatedResult = await iam.user.getUser(userId)
-  if (!updatedResult.success || !updatedResult.data) {
-    return kit.response.internalError(m.common_error({}, { locale }))
-  }
-
-  return kit.response.ok({ user: await toIamProfileResponse(updatedResult.data) })
+  return kit.response.ok({ user: await toIamProfileResponse(updated.data) })
 })

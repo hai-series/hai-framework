@@ -6,13 +6,15 @@ import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/index.js'
-import { defineIamSuite, expectAccountLocked, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, expectAccountLocked, initIam, postgresRedisEnv, readLoginFailures, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 function tests() {
   it('密码计算饱和时存在与不存在的账号都返回繁忙，且不累计登录失败', async () => {
     const iam = await initIam()
     const identifier = 'password-work-busy'
-    expect((await iam.user.register({ username: identifier, password: TEST_PASSWORD })).success).toBe(true)
+    const registered = await iam.user.register({ username: identifier, password: TEST_PASSWORD })
+    if (!registered.success)
+      throw new Error(registered.error.message)
     const failure = core.err(HaiCryptoError.PASSWORD_BUSY, 'Password processing is busy')
     const hash = vi.spyOn(crypto.password, 'hashAsync').mockResolvedValue(failure)
     const verify = vi.spyOn(crypto.password, 'verifyAsync').mockResolvedValue(failure)
@@ -25,8 +27,7 @@ function tests() {
       }
       expect(hash).toHaveBeenCalledOnce()
       expect(verify).toHaveBeenCalledOnce()
-      const attempts = await reldb.sql.get<{ login_failed_count: number | string }>('SELECT login_failed_count FROM hai_iam_users WHERE username = ?', [identifier])
-      expect(attempts.success && Number(attempts.data?.login_failed_count)).toBe(0)
+      expect(await readLoginFailures(registered.data.user.id)).toBeNull()
     }
     finally {
       hash.mockRestore()
@@ -152,7 +153,7 @@ function tests() {
       await reach.close()
     }
   })
-  it('内置验证码、密码重置和初始设密邀请夜间立即发送并写入普通发送历史', async () => {
+  it('内置验证码、密码重置和初始设密邀请夜间立即发送，历史仅保存投递元数据', async () => {
     const quietNight = new Date()
     quietNight.setDate(quietNight.getDate() + 1)
     quietNight.setHours(23, 10, 0, 0)
@@ -226,21 +227,22 @@ function tests() {
         },
       ])
       await vi.waitFor(async () => {
-        const rows = await reldb.sql.query<{ to_addr: string, body: string, vars_json: string, status: string, queue_id: string | null }>(
-          'SELECT to_addr, body, vars_json, status, queue_id FROM hai_reach_send_log WHERE provider = ? ORDER BY id',
+        const rows = await reldb.sql.query(
+          'SELECT to_addr, subject, body, template, vars_json, extra_json, status, queue_id, message_id FROM hai_reach_send_log WHERE provider = ? ORDER BY id',
           ['notify'],
         )
         expect(rows.success).toBe(true)
         if (rows.success) {
-          expect(rows.data.map(row => ({
-            ...row,
-            vars_json: JSON.parse(row.vars_json),
-          }))).toEqual(delivered.map(message => ({
-            to_addr: message.to,
-            body: message.body,
-            vars_json: message.vars,
+          expect(rows.data).toEqual(delivered.map(message => ({
+            to_addr: '',
+            subject: null,
+            body: null,
+            template: message.template,
+            vars_json: null,
+            extra_json: null,
             status: 'sent',
             queue_id: null,
+            message_id: 'provider-accepted',
           })))
         }
       })

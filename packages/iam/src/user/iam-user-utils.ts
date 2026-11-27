@@ -13,6 +13,23 @@ import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 
 /**
+ * 规范化 OTP 身份和资料换绑判断；保存及展示仍使用用户提供的联系方式。
+ * @param channel - 联系方式渠道。
+ * @param value - 待核对的邮箱或手机号。
+ * @returns 邮箱去除首尾空白并转小写，手机号去除空白和连字符，没有值时返回空字符串。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const samePhone = normalizeIamContact('phone', '+86 138-0013-8000') === '+8613800138000'
+ * ```
+ */
+export function normalizeIamContact(channel: 'email' | 'phone', value: string | null | undefined): string {
+  return channel === 'email'
+    ? (value ?? '').trim().toLowerCase()
+    : (value ?? '').replace(/[\s-]/g, '')
+}
+
+/**
  * 首次/过期口令不能授权普通业务；验证旧密码后的 renewPassword 不使用此门禁。
  * @example 模块内部上下文
  * ```ts

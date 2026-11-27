@@ -49,6 +49,31 @@ function tests() {
     expect((await iam.auth.checkSensitiveOperation(token, 'user.delete', proof.data.ticket)).success).toBe(false)
   })
 
+  it('再次认证使用当前会话的用户 ID，与其他账号的显示标识无关', async () => {
+    const iam = await initIam({
+      reauthentication: {
+        enabled: true,
+        operations: ['user.delete'],
+      },
+    })
+    const username = 'reauth-subject@example.invalid'
+    expect((await iam.user.createUser({
+      username: 'reauth-archived-contact',
+      email: username,
+      password: TEST_PASSWORD,
+      accountStatus: 'dormant',
+    })).success).toBe(true)
+    const registered = await iam.auth.registerAndLogin({ username, password: TEST_PASSWORD })
+    if (!registered.success)
+      throw new Error(registered.error.message)
+
+    const { accessToken } = registered.data.tokens
+    const proof = await iam.auth.reauthenticate(accessToken, TEST_PASSWORD, 'user.delete')
+    if (!proof.success)
+      throw new Error(proof.error.message)
+    expect((await iam.auth.checkSensitiveOperation(accessToken, 'user.delete', proof.data.ticket)).success).toBe(true)
+  })
+
   it('证明不能跨操作、跨用户、跨会话使用，撤销会话后也失效', async () => {
     const iam = await initIam({
       reauthentication: {

@@ -9,8 +9,9 @@ import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { pbkdf2, solveChallenge } from 'altcha/lib'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { iam } from '../src/index.js'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { maintainIamReadCacheRevision } from '../src/iam-cache.js'
+import { HaiIamError, iam } from '../src/index.js'
 import { TEST_PASSWORD } from './helpers/iam-test-suite.js'
 import { acquirePostgresContainer } from './helpers/postgres-container.js'
 import { acquireRedisContainer } from './helpers/redis-container.js'
@@ -135,6 +136,7 @@ describe('生产 PG+Redis 独立策略节点', { concurrent: false }, () => {
     const sharedCache = { type: 'redis' as const, host: redis.host, port: redis.port }
     expect((await reldb.init(db)).success).toBe(true)
     expect((await cache.init(sharedCache)).success).toBe(true)
+    expect((await maintainIamReadCacheRevision('missing')).success).toBe(true)
     const configuration = {
       db,
       cache: sharedCache,
@@ -191,6 +193,62 @@ describe('生产 PG+Redis 独立策略节点', { concurrent: false }, () => {
     const admin = roles.data.items.find(role => role.code === 'admin')!
     const assigned = await iam.authz.getRolePermissions(admin.id)
     expect(assigned.success && assigned.data.length).toBe(permissions.data.total)
+  })
+
+  it('redis 已释放一个写入者但回执丢失，后续重试保留另一个真实事务的登记', async () => {
+    const first = await reldb.tx.begin()
+    if (!first.success)
+      throw new Error(first.error.message)
+    const second = await reldb.tx.begin()
+    if (!second.success) {
+      await first.data.rollback()
+      throw new Error(second.error.message)
+    }
+
+    const swap = cache.kv.compareAndSwap
+    let missedReply = false
+    const retried = Promise.withResolvers<void>()
+    const fault = vi.spyOn(cache.kv, 'compareAndSwap').mockImplementation(async (key, previous, next, options) => {
+      const result = await swap(key, previous, next, options)
+      if (!missedReply && key === 'hai:iam:read_cache:revision' && previous && typeof previous === 'object'
+        && 'writers' in previous && previous.writers === 2 && next && typeof next === 'object'
+        && 'writers' in next && next.writers === 1 && result.success && result.data) {
+        missedReply = true
+        return core.err(HaiIamError.REPOSITORY_ERROR, 'Redis reply lost in test')
+      }
+      return result
+    })
+    const get = cache.kv.get
+    const reads = vi.spyOn(cache.kv, 'get').mockImplementation(async (key) => {
+      const result = await get(key)
+      if (key === 'hai:iam:read_cache:revision' && missedReply)
+        retried.resolve()
+      return result
+    })
+
+    try {
+      expect((await iam.authz.createPermission({ code: 'first-writer', name: 'First writer' }, first.data)).success).toBe(true)
+      expect((await iam.authz.createPermission({ code: 'second-writer', name: 'Second writer' }, second.data)).success).toBe(true)
+      expect((await first.data.commit()).success).toBe(true)
+      expect(missedReply).toBe(true)
+      await retried.promise
+      const remaining = await maintainIamReadCacheRevision()
+      expect(remaining).toMatchObject({
+        success: true,
+        data: { writers: 1 },
+      })
+      expect((await second.data.rollback()).success).toBe(true)
+      expect(await maintainIamReadCacheRevision()).toMatchObject({
+        success: true,
+        data: { writers: 0, activeWriters: [] },
+      })
+    }
+    finally {
+      fault.mockRestore()
+      reads.mockRestore()
+      await first.data.rollback()
+      await second.data.rollback()
+    }
   })
 
   it('超管改名立即撤销另一进程的隐式权限，恢复代码后重新生效', async () => {

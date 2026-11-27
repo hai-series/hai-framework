@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { expect, test } from '@playwright/test'
-import { registerAndLogin, registerViaApi, uniqueUser, waitForHydration } from './helpers'
+import { loginOnPage, registerAndLogin, registerViaApi, uniqueUser, waitForHydration } from './helpers'
 
 test.describe('Profile UI', () => {
   test('rejects duplicate username without leaking sqlite details', async ({ page, request }) => {
@@ -42,8 +42,8 @@ test.describe('Profile UI', () => {
     await expect(page.locator('.user-menu-container').getByText(displayName, { exact: true })).toBeVisible()
   })
 
-  test('通过 UI 表单修改邮箱并保存', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'profile')
+  test('通过 UI 修改邮箱后要求重新登录，并保留新邮箱', async ({ page, request }) => {
+    const user = await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
     await page.waitForLoadState('domcontentloaded')
     await waitForHydration(page)
@@ -55,14 +55,17 @@ test.describe('Profile UI', () => {
     await emailInput.fill(newEmail)
 
     const saveBtn = page.getByRole('button', { name: /save|保存/i }).first()
-    await saveBtn.click()
+    const [saved] = await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/api/auth/profile') && response.request().method() === 'PUT'),
+      saveBtn.click(),
+    ])
+    expect(saved.ok()).toBe(true)
+    await expect(page).toHaveURL(/\/auth\/login\?/, { timeout: 10_000 })
+    expect(new URL(page.url()).searchParams.get('returnUrl')).toBe('/admin/profile')
 
-    // 保存成功
-    await expect(page.locator('.hai-toast-item[data-variant="success"]')).toBeVisible({ timeout: 10_000 })
-
-    // 刷新后邮箱已更新
-    await page.reload()
-    await expect(page.locator('[data-testid="profile-email"]')).toContainText(newEmail)
+    await loginOnPage(page, user.username, user.password)
+    await page.goto('/admin/profile')
+    await expect(page.getByTestId('profile-email')).toContainText(newEmail)
   })
 
   test('通过 UI 表单修改密码', async ({ page, request }) => {

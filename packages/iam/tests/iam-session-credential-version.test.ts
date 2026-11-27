@@ -92,6 +92,59 @@ it('旧密码已验证但尚未创建会话时改密，迟到策略不能用当�
     expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
 })
 
+it('单设备签发完成前复查凭据代，同时保留已签发的新代会话', async () => {
+  expect((await iam.init({
+    seedDefaultData: false,
+    rbac: { enabled: false },
+    session: { singleDevice: true },
+  })).success).toBe(true)
+  const username = 'single_device_generation'
+  const password = 'TestPass123'
+  const replacement = 'Replacement456!'
+  const registration = await iam.user.register({ username, password })
+  if (!registration.success)
+    throw new Error(registration.error.message)
+
+  const userId = registration.data.user.id
+  const partition = `hai:iam:sessions:{${getUserSessionScope(userId)}}`
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const cas = cache.kv.compareAndSwap.bind(cache.kv)
+  let first = true
+  const hold = vi.spyOn(cache.kv, 'compareAndSwap').mockImplementation(async (key, ...args) => {
+    if (key === partition && first) {
+      first = false
+      entered.resolve()
+      await release.promise
+    }
+    return cas(key, ...args)
+  })
+  const pending = iam.session.create({ userId })
+  try {
+    await Promise.race([
+      entered.promise,
+      pending.then(() => { throw new Error('Session creation finished before persistence') }),
+    ])
+    expect((await iam.user.changePassword(userId, password, replacement)).success).toBe(true)
+    const fresh = await iam.auth.login({ identifier: username, password: replacement })
+    if (!fresh.success)
+      throw new Error(fresh.error.message)
+
+    release.resolve()
+    expect(await pending).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.SESSION_INVALID.code },
+    })
+    expect((await iam.auth.verifyToken(fresh.data.tokens.accessToken)).success).toBe(true)
+    expect((await iam.session.refresh(fresh.data.tokens.refreshToken)).success).toBe(true)
+  }
+  finally {
+    release.resolve()
+    await pending
+    hold.mockRestore()
+  }
+})
+
 it('可信低层创建拒绝缺失/禁用/读取失败与不匹配代，刷新绝不升级旧代', async () => {
   let current: { version: string, available: boolean } | null = { version: 'v1', available: true }
   const read = vi.fn(async () => core.ok(current))
@@ -141,10 +194,10 @@ it('refresh提交窗口发生改密，返回失败且后继仍带旧代而不可
   })
   const result = await ops.refresh(session.data.data!._tokenPair!.refreshToken)
   expect(result.success).toBe(false)
-  const state = await cache.kv.get<{ sessions: Record<string, { session: { accessToken: string, credentialVersion: string } }> }>(`hai:iam:sessions:{${getUserSessionScope('race')}}`)
+  const state = await cache.kv.get<{ sessions: Record<string, { session: { credentialVersion: string } }> }>(`hai:iam:sessions:{${getUserSessionScope('race')}}`)
   if (!state.success || !state.data)
     throw new Error('Missing state')
-  const successor = Object.values(state.data.sessions)[0]!.session
-  expect(successor.credentialVersion).toBe('v1')
-  expect((await ops.verifyToken(successor.accessToken)).success).toBe(false)
+  const [accessToken, successor] = Object.entries(state.data.sessions)[0]!
+  expect(successor.session.credentialVersion).toBe('v1')
+  expect((await ops.verifyToken(accessToken)).success).toBe(false)
 })

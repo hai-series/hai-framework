@@ -21,12 +21,13 @@ import { resetOtpRepoSingleton } from './authn/otp/iam-authn-otp-repository-otp.
 import { createAuthzOperations } from './authz/iam-authz-functions.js'
 import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permission.js'
 import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
-import { observeApiKeys, observeAuth, observeAuthorization, observeSessions, observeUsers } from './iam-audit.js'
+import { observeApiKeys, observeAuth, observeAuthorization, observeCredentialSessionRevocation, observeSessions, observeUsers } from './iam-audit.js'
+import { startIamReadCacheMaintenance, stopIamReadCacheMaintenance } from './iam-cache.js'
 import { IamConfigSchema } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
 import { resolveIamNotifications } from './iam-notifications.js'
 import { buildIamPublicConfig, readIamPublicConfig } from './iam-public-config.js'
-import { readIamSessionCredential } from './iam-security-cache.js'
+import { readIamSessionCredential, readIamUserAccess } from './iam-security-cache.js'
 import { seedIamData } from './iam-seed.js'
 import {
 
@@ -44,8 +45,8 @@ const accountScan = createIamAccountScan(logger)
 
 // ─── 内部状态 ───
 
-/** init() 是否正在执行（并发防护） */
-let initInProgress = false
+let initInProgress: Promise<void> | undefined
+let closeInProgress: Promise<void> | undefined
 let currentConfig: IamConfig | null = null
 let currentPublicConfig: IamPublicConfig | null = null
 let currentAuth: AuthnOperations | null = null
@@ -84,6 +85,37 @@ const notInitializedUser: UserOperations = new Proxy({} as UserOperations, {
   },
 })
 
+/** 释放用于准备当前运行期的仓库引用，包含初始化失败后尚未发布的实例。 */
+function resetRepositorySingletons(): void {
+  resetApiKeyRepoSingleton()
+  resetOtpRepoSingleton()
+  resetUserRepoSingleton()
+  resetRoleRepoSingleton()
+  resetPermissionRepoSingleton()
+}
+
+/** 清理已发布运行期；仅由持有生命周期执行权的初始化或关闭流程调用。 */
+async function closeRuntime(): Promise<void> {
+  if (!currentConfig)
+    return
+
+  logger.info('Closing IAM module')
+  await accountScan.stop()
+  await stopIamReadCacheMaintenance()
+
+  currentAuth = null
+  currentUser = null
+  currentAuthz = null
+  currentSession = null
+  currentApiKey = null
+  currentTicket = null
+  currentConfig = null
+  currentPublicConfig = null
+  resetRepositorySingletons()
+
+  logger.info('IAM module closed')
+}
+
 // ─── 服务对象 ───
 
 /**
@@ -103,20 +135,22 @@ const notInitializedUser: UserOperations = new Proxy({} as UserOperations, {
  */
 export const iam: IamFunctions = {
   async init(config: IamConfigInput): Promise<HaiResult<void>> {
-    // 并发防护：防止多次同时调用导致子功能/连接泄漏
-    if (initInProgress) {
-      logger.warn('IAM init already in progress, skipping concurrent call')
+    if (initInProgress || closeInProgress) {
+      logger.warn('IAM lifecycle operation already in progress, skipping initialization')
       return core.err(
         HaiIamError.CONFIG_ERROR,
         iamM('iam_initInProgress'),
       )
     }
-    initInProgress = true
+    let resolveInit!: () => void
+    initInProgress = new Promise<void>((resolve) => {
+      resolveInit = resolve
+    })
 
     try {
       if (currentConfig !== null) {
         logger.warn('IAM module is already initialized, reinitializing')
-        await iam.close()
+        await closeRuntime()
       }
       const { ldapClientFactory, ldapSyncUser } = config
 
@@ -195,9 +229,19 @@ export const iam: IamFunctions = {
       if (!sessionResult.success) {
         return sessionResult
       }
-      const sessions = observeSessions(sessionResult.data)
+      const { revokeCredentialSessions, verifyCurrentSession, ...sessionOperations } = sessionResult.data
+      const sessions = observeSessions(sessionOperations)
 
-      const authzResult = await createAuthzOperations({ config: parsed, session: sessions })
+      const authzResult = await createAuthzOperations({
+        config: parsed,
+        session: sessions,
+        getUserAuthorization: async (userId) => {
+          const found = await readIamUserAccess(credentialUsers, userId)
+          return found.success
+            ? core.ok(found.data.authorization)
+            : found
+        },
+      })
       if (!authzResult.success) {
         return authzResult
       }
@@ -206,6 +250,7 @@ export const iam: IamFunctions = {
       const authnResult = await createAuthnOperations({
         config: parsed,
         sessionFunctions: sessions,
+        verifyCurrentSession,
         authzFunctions: authorization,
         ldapClientFactory,
         ldapSyncUser,
@@ -222,6 +267,7 @@ export const iam: IamFunctions = {
         sessionFunctions: sessions,
         authzFunctions: authorization,
         onPasswordResetRequest,
+        revokeCredentialSessions: observeCredentialSessionRevocation(revokeCredentialSessions),
       })
       if (!userResult.success) {
         return userResult
@@ -236,25 +282,31 @@ export const iam: IamFunctions = {
         }
       }
 
-      // 所有子功能创建成功，原子性赋值到模块状态
-      currentSession = sessions
-      currentAuthz = authorization
-      currentUser = users
-      currentConfig = parsed
-      currentPublicConfig = buildIamPublicConfig(parsed, {
+      const publicConfig = buildIamPublicConfig(parsed, {
         ...config,
         onPasswordResetRequest,
         onOtpSendEmail,
         onOtpSendSms,
       })
-      currentApiKey = authnResult.data.apiKeyFunctions
+      const apiKey = authnResult.data.apiKeyFunctions
         ? observeApiKeys(authnResult.data.apiKeyFunctions)
         : null
       // 一次性票据能力（仅依赖 cache + crypto，随 IAM 初始化即可用）
-      currentTicket = createTicketOperations()
+      const ticket = createTicketOperations()
 
-      currentAuth = observeAuth(withIamRegistration(authnResult.data, () => currentUser!))
+      const auth = observeAuth(withIamRegistration(authnResult.data, () => users))
       accountScan.start(users, parsed.accounts)
+      startIamReadCacheMaintenance()
+
+      // 所有子功能就绪后一次发布运行期。
+      currentSession = sessions
+      currentAuthz = authorization
+      currentUser = users
+      currentConfig = parsed
+      currentPublicConfig = publicConfig
+      currentApiKey = apiKey
+      currentTicket = ticket
+      currentAuth = auth
       logger.info('IAM module initialized')
       return core.ok(undefined)
     }
@@ -267,7 +319,12 @@ export const iam: IamFunctions = {
       )
     }
     finally {
-      initInProgress = false
+      if (!currentConfig) {
+        await stopIamReadCacheMaintenance()
+        resetRepositorySingletons()
+      }
+      initInProgress = undefined
+      resolveInit()
     }
   },
 
@@ -308,30 +365,18 @@ export const iam: IamFunctions = {
   },
 
   async close() {
-    if (currentConfig === null && currentAuth === null && currentUser === null && currentAuthz === null && currentSession === null) {
-      logger.info('IAM module already closed, skipping')
-      return
+    if (closeInProgress)
+      return closeInProgress
+    const initializing = initInProgress
+    closeInProgress = (async () => {
+      await initializing
+      await closeRuntime()
+    })()
+    try {
+      await closeInProgress
     }
-
-    logger.info('Closing IAM module')
-    await accountScan.stop()
-
-    currentAuth = null
-    currentUser = null
-    currentAuthz = null
-    currentSession = null
-    currentApiKey = null
-    currentTicket = null
-    currentConfig = null
-    currentPublicConfig = null
-
-    // 重置所有仓库单例，释放对旧 db 实例的引用
-    resetApiKeyRepoSingleton()
-    resetOtpRepoSingleton()
-    resetUserRepoSingleton()
-    resetRoleRepoSingleton()
-    resetPermissionRepoSingleton()
-
-    logger.info('IAM module closed')
+    finally {
+      closeInProgress = undefined
+    }
   },
 }

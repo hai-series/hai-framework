@@ -9,7 +9,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
 import type { IamConfigInput } from '../iam-types.js'
-import type { AuthResult, Session, SessionOperations } from '../session/iam-session-types.js'
+import type { AuthResult, SessionOperations } from '../session/iam-session-types.js'
 import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { User, UserOperations } from '../user/iam-user-types.js'
 import type { ApiKeyStrategyResult } from './apikey/iam-authn-apikey-strategy.js'
@@ -50,8 +50,8 @@ const logger = core.logger.child({ module: 'iam', scope: 'authn' })
  * @internal
  * @example 模块内部上下文
  * ```ts
- * async function assemble(config: IamConfig, sessionFunctions: SessionOperations, authzFunctions: AuthzOperations) {
- *   const deps: AuthnOperationsDeps = { config, sessionFunctions, authzFunctions }
+ * async function assemble(config: IamConfig, sessionFunctions: SessionOperations, authzFunctions: AuthzOperations, verifyCurrentSession: AuthnOperations['verifyToken']) {
+ *   const deps: AuthnOperationsDeps = { config, sessionFunctions, authzFunctions, verifyCurrentSession }
  *   return createAuthnOperations(deps)
  * }
  * ```
@@ -59,6 +59,8 @@ const logger = core.logger.child({ module: 'iam', scope: 'authn' })
 export interface AuthnOperationsDeps {
   config: IamConfig
   sessionFunctions: SessionOperations
+  /** 验证会话并返回从同一份账号记录读取的当前授权。 */
+  verifyCurrentSession: AuthnOperations['verifyToken']
   authzFunctions: AuthzOperations
   ldapClientFactory?: LdapClientFactory
   ldapSyncUser?: boolean
@@ -113,7 +115,7 @@ export interface AuthnOperationsResult {
  */
 export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<HaiResult<AuthnOperationsResult>> {
   try {
-    const { config, sessionFunctions, authzFunctions, ldapClientFactory, ldapSyncUser, onOtpSendEmail, onOtpSendSms } = deps
+    const { config, sessionFunctions, verifyCurrentSession, authzFunctions, ldapClientFactory, ldapSyncUser, onOtpSendEmail, onOtpSendSms } = deps
 
     const userRepository = await createDbUserRepository()
     const securityConfig = SecurityConfigSchema.parse(config.security ?? {})
@@ -131,15 +133,6 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
       if (!roleResult.data)
         return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
       return core.ok(roleResult.data.id)
-    }
-
-    async function onUserAutoRegistered(userId: string): Promise<HaiResult<void>> {
-      const role = await getRegistrationRole()
-      if (!role.success)
-        return role
-      return role.data
-        ? authzFunctions.assignRole(userId, role.data)
-        : core.ok(undefined)
     }
 
     // 密码策略
@@ -169,7 +162,8 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         lockoutEnabled: securityConfig.lockoutEnabled,
         failureWindow: securityConfig.failureWindow,
         lockoutDuration: securityConfig.lockoutDuration,
-        onUserAutoRegistered,
+        getRegistrationRole,
+        assignRegistrationRole: authzFunctions.assignRole,
         onOtpSendEmail,
         onOtpSendSms,
       })
@@ -221,12 +215,13 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
 
     // 组装认证操作
     const operations = buildAuthnOperations({
-      passwordStrategy: passwordResult.strategy,
+      passwordStrategy: passwordResult,
       otpStrategy: otpResult?.strategy,
       otpChallenge: otpResult?.challenge,
       ldapStrategy,
       apiKeyStrategy,
       sessionFunctions,
+      verifyCurrentSession,
       authzFunctions,
       userRepository,
       config,
@@ -258,18 +253,19 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
  * @example 模块内部上下文
  * ```ts
  * function passwordLogin(deps: BuildAuthnDeps, credentials: PasswordCredentials) {
- *   return deps.passwordStrategy.authenticate({ type: 'password', ...credentials })
+ *   return deps.passwordStrategy.strategy.authenticate({ type: 'password', ...credentials })
  * }
  * ```
  */
 interface BuildAuthnDeps {
   userRepository: UserRepository
-  passwordStrategy: AuthStrategy
+  passwordStrategy: PasswordStrategyResult
   otpStrategy?: AuthStrategy
   otpChallenge?: (identifier: string) => Promise<HaiResult<{ expiresAt: Date }>>
   ldapStrategy?: AuthStrategy
   apiKeyStrategy?: ApiKeyStrategyResult['strategy']
   sessionFunctions: SessionOperations
+  verifyCurrentSession: AuthnOperations['verifyToken']
   authzFunctions: AuthzOperations
   config: IamConfig
 }
@@ -287,6 +283,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     ldapStrategy,
     apiKeyStrategy,
     sessionFunctions,
+    verifyCurrentSession,
     authzFunctions,
     userRepository,
     config,
@@ -395,7 +392,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
 
     const session = sessionResult.data
 
-    // 从 session.data._tokenPair 提取 TokenPair（由 session.create 写入）
+    // 令牌对来自本次会话签发的返回值。
     const tokenPair = session.data?._tokenPair
     if (!tokenPair) {
       return core.err(HaiIamError.SESSION_CREATE_FAILED, iamM('iam_createSessionFailed'))
@@ -476,22 +473,6 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     return result
   }
 
-  async function verifyCurrentSession(accessToken: string): Promise<HaiResult<Session>> {
-    const session = await sessionFunctions.verifyToken(accessToken)
-    if (!session.success)
-      return session
-    const authorization = await authzFunctions.getUserAuthorization(session.data.userId)
-    if (!authorization.success)
-      return authorization
-    const current = {
-      ...session.data,
-      ...authorization.data,
-    }
-    return core.ok(current.apiKeyId
-      ? applyApiKeyScopes(current, current.apiKeyScopes ?? [])
-      : current)
-  }
-
   const tickets = createTicketOperations()
   const sensitive = config.reauthentication
   async function requiresProof(operation: string): Promise<HaiResult<boolean>> {
@@ -525,12 +506,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
         const current = await verifyCurrentSession(accessToken)
         if (!current.success)
           return current
-        const stored = await userRepository.findById(current.data.userId)
-        if (!stored.success)
-          return stored
-        if (!stored.data)
-          return core.err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
-        const verified = await passwordStrategy.authenticate({ type: 'password', identifier: stored.data.username, password })
+        const verified = await passwordStrategy.authenticateUser(current.data.userId, password)
         if (!verified.success)
           return verified
         if (verified.data.credentialVersion !== current.data.credentialVersion)
@@ -563,7 +539,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       },
 
       async login(credentials: PasswordCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
-        return loginWithStrategy('password', credentials, passwordStrategy, context)
+        return loginWithStrategy('password', credentials, passwordStrategy.strategy, context)
       },
 
       async loginWithOtp(credentials: OtpCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {

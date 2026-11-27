@@ -28,17 +28,17 @@ function defineAuthorizationTests() {
       return
     vi.spyOn(iam.session, 'patchUserSessions').mockResolvedValue(core.err(HaiIamError.REPOSITORY_ERROR, 'cache unavailable'))
     expect((await iam.authz.removeRole(user.data.user.id, role.data.id)).success).toBe(true)
+    const query = vi.spyOn(reldb.sql, 'query')
+    const get = vi.spyOn(reldb.sql, 'get')
     const cached = await iam.session.verifyToken(login.data.tokens.accessToken)
     expect(cached.success).toBe(true)
     if (cached.success)
       expect(cached.data.permissions).toContain('fresh:read')
-    const query = vi.spyOn(reldb.sql, 'query')
-    const get = vi.spyOn(reldb.sql, 'get')
-    const current = await iam.auth.verifyToken(login.data.tokens.accessToken)
-    // 低层会话已填充当前凭据缓存；认证层只冷读一次当前授权，不能复用旧会话权限。
+    // 低层会话填充账号和权限的同一条记录，返回的权限仍来自会话快照。
     expect(query).toHaveBeenCalledTimes(1)
     expect(query.mock.calls[0]?.[0]).toContain('JOIN')
-    expect(get).not.toHaveBeenCalled()
+    expect(get).toHaveBeenCalledTimes(1)
+    const current = await iam.auth.verifyToken(login.data.tokens.accessToken)
     expect(current.success).toBe(true)
     if (current.success) {
       expect(current.data.permissions).not.toContain('fresh:read')
@@ -46,7 +46,7 @@ function defineAuthorizationTests() {
     }
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
     expect(query).toHaveBeenCalledTimes(1)
-    expect(get).not.toHaveBeenCalled()
+    expect(get).toHaveBeenCalledTimes(1)
     vi.spyOn(iam.session, 'deleteByUserId').mockResolvedValue(core.err(HaiIamError.REPOSITORY_ERROR, 'cache unavailable'))
     expect((await iam.user.updateUser(user.data.user.id, { accountStatus: 'dormant' })).success).toBe(true)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
@@ -64,8 +64,6 @@ function defineAuthorizationTests() {
       return
     // 通过真实安全写入口推进共享代际，避免用热缓存冒充数据库故障覆盖。
     expect((await iam.authz.createPermission({ code: `invalidate:${failedRead}`, name: 'Invalidate current state' })).success).toBe(true)
-    if (failedRead === 'authorization')
-      expect((await iam.session.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
     const get = vi.spyOn(reldb.sql, 'get')
     const query = vi.spyOn(reldb.sql, 'query')
     if (failedRead === 'credential')
@@ -75,12 +73,8 @@ function defineAuthorizationTests() {
     expect(current.success).toBe(false)
     if (!current.success)
       expect(current.error.code).toBe(HaiIamError.REPOSITORY_ERROR.code)
-    expect(get).toHaveBeenCalledTimes(failedRead === 'credential'
-      ? 1
-      : 0)
-    expect(query).toHaveBeenCalledTimes(failedRead === 'authorization'
-      ? 1
-      : 0)
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(query).toHaveBeenCalledTimes(1)
     get.mockRestore()
     query.mockRestore()
     // 暂时的持久读取故障不能删除仍有效的会话；恢复后同一令牌仍可验证。
@@ -100,7 +94,6 @@ function defineAuthorizationTests() {
     expect(warm).not.toHaveBeenCalled()
     warm.mockRestore()
     expect((await iam.authz.createPermission({ code: 'invalidate:authorization-failure', name: 'Invalidate authorization' })).success).toBe(true)
-    expect((await iam.session.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
     const cold = vi.spyOn(reldb.sql, 'query').mockResolvedValue(core.err(HaiIamError.REPOSITORY_ERROR, 'database unavailable'))
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
     expect(cold).toHaveBeenCalledTimes(1)

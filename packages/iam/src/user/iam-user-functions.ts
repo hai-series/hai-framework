@@ -28,13 +28,13 @@ import { crypto, HaiCryptoError } from '@h-ai/crypto'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 import { verifyIamCaptcha } from '../authn/iam-authn-captcha.js'
-import { isAccountLocked, mapPasswordWorkError, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../authn/iam-authn-utils.js'
+import { checkAccountLock, mapPasswordWorkError, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../authn/iam-authn-utils.js'
 import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { generateToken } from '../session/iam-session-utils.js'
-import { createDbUserRepository, lockIamUser } from './iam-user-repository-user.js'
+import { createDbUserRepository, lockIamUser, updateIamUserProfile } from './iam-user-repository-user.js'
 import { isUserActive, toUser, validateAccountPolicy } from './iam-user-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'user' })
@@ -76,6 +76,7 @@ export interface UserOperationsDeps {
   config: IamConfig
   passwordStrategyResult: PasswordStrategyResult
   sessionFunctions: SessionOperations
+  revokeCredentialSessions: (userId: string, credentialVersion: string) => Promise<HaiResult<number>>
   authzFunctions: AuthzOperations
   /** 密码重置令牌回调（由业务层注入） */
   onPasswordResetRequest?: (user: User, token: string, context: IamNotificationContext) => Promise<void>
@@ -100,18 +101,8 @@ export interface UserOperationsDeps {
  */
 export async function createUserOperations(deps: UserOperationsDeps): Promise<HaiResult<UserOperations>> {
   try {
-    const { config, passwordStrategyResult, sessionFunctions, authzFunctions, onPasswordResetRequest } = deps
-
     const userRepository = await createDbUserRepository()
-
-    const functions = buildUserFunctions({
-      userRepository,
-      passwordStrategyResult,
-      sessionFunctions,
-      authzFunctions,
-      config,
-      onPasswordResetRequest,
-    })
+    const functions = buildUserFunctions({ ...deps, userRepository })
 
     logger.info('User sub-feature initialized')
     return core.ok(functions)
@@ -175,29 +166,18 @@ function mapUpdateErrorAsDomainError(error: HaiError): HaiResult<never> {
  * 更新用户前校验用户名和邮箱唯一性。
  *
  * @param userRepository - 用户仓库
- * @param userId - 用户 ID
+ * @param current - 在同一事务中加锁的用户
  * @param data - 待更新用户字段
  * @param tx - 组合更新时与资料、角色使用同一个事务快照
  * @returns 唯一性校验结果
  */
 async function validateUniqueFieldsForUpdate(
   userRepository: UserRepository,
-  userId: string,
+  current: StoredUser,
   data: Partial<User>,
-  tx?: DmlWithTxOperations,
+  tx: DmlWithTxOperations,
 ): Promise<HaiResult<void>> {
-  const currentResult = await userRepository.findById(userId, tx)
-  if (!currentResult.success) {
-    return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as HaiResult<void>
-  }
-  if (!currentResult.data) {
-    return core.err(
-      HaiIamError.USER_NOT_FOUND,
-      iamM('iam_userNotExist'),
-    )
-  }
-
-  if (data.username && data.username !== currentResult.data.username) {
+  if (data.username && data.username !== current.username) {
     const usernameExistsResult = await userRepository.existsByUsername(data.username, tx)
     if (!usernameExistsResult.success) {
       return mapRepositoryError('iam_queryUserFailed', usernameExistsResult.error.message) as HaiResult<void>
@@ -210,7 +190,7 @@ async function validateUniqueFieldsForUpdate(
     }
   }
 
-  if (data.email && data.email !== currentResult.data.email) {
+  if (data.email && data.email !== current.email) {
     const emailExistsResult = await userRepository.existsByEmail(data.email, tx)
     if (!emailExistsResult.success) {
       return mapRepositoryError('iam_queryUserFailed', emailExistsResult.error.message) as HaiResult<void>
@@ -241,35 +221,6 @@ function checkAccountUpdate(current: StoredUser, data: Partial<User>) {
   })
 }
 
-function changesAccountSecurity(current: StoredUser, data: Partial<User>): boolean {
-  return (data.accountStatus !== undefined && data.accountStatus !== current.accountStatus)
-    || (data.accountType !== undefined && data.accountType !== current.accountType)
-    || (data.accountExpiresAt !== undefined && (data.accountExpiresAt?.getTime() ?? null) !== (current.accountExpiresAt?.getTime() ?? null))
-}
-
-async function updateUserRow(repository: UserRepository, current: StoredUser, data: Partial<User>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-  const updated = await repository.updateById(current.id, data, tx)
-  if (!updated.success)
-    return mapUpdateErrorAsDomainError(updated.error)
-  if (updated.data.changes === 0)
-    return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
-  if (!tx || !changesAccountSecurity(current, data))
-    return core.ok(undefined)
-
-  // 账号生命周期与凭据代际在同一事务中推进，旧会话和旧重置令牌均不可复用。
-  const advanced = await tx.execute('UPDATE hai_iam_users SET credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE id = ? AND credential_version = ?', [
-    globalThis.crypto.randomUUID(),
-    globalThis.crypto.randomUUID(),
-    current.id,
-    current.credentialVersion ?? '',
-  ])
-  if (!advanced.success)
-    return advanced
-  return advanced.data.changes === 1
-    ? core.ok(undefined)
-    : core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
-}
-
 // ─── 内部实现 ───
 
 /**
@@ -290,6 +241,7 @@ interface UserFnContext {
   validatePassword: (password: string) => HaiResult<void>
   hashPassword: (password: string) => Promise<HaiResult<string>>
   sessionFunctions: SessionOperations
+  revokeCredentialSessions: UserOperationsDeps['revokeCredentialSessions']
   authzFunctions: AuthzOperations
   config: IamConfig
   registerConfig: RegisterConfig
@@ -362,21 +314,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
     return core.ok(undefined)
   }
 
-  /**
-   * 为新用户分配默认角色
-   */
-  async function assignDefaultRole(userId: string): Promise<HaiResult<void>> {
-    if (!config.rbac?.enabled || !config.rbac.defaultRole)
-      return core.ok(undefined)
-    const roleResult = await authzFunctions.getRoleByCode(config.rbac.defaultRole)
-    if (!roleResult.success)
-      return roleResult
-    if (!roleResult.data)
-      return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
-    return authzFunctions.assignRole(userId, roleResult.data.id)
-  }
-
-  async function createUser(options: RegisterOptions, managed = false): Promise<HaiResult<RegisterResult>> {
+  async function createUser(options: RegisterOptions, managed: boolean, roleIds?: string[]): Promise<HaiResult<RegisterResult>> {
     // 校验前置条件
     const preResult = await validateRegisterPreconditions(options)
     if (!preResult.success)
@@ -387,74 +325,76 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
     if (!hashResult.success)
       return hashResult as HaiResult<RegisterResult>
 
-    // 事务：创建用户
-    const txResult = await reldb.tx.begin()
-    if (!txResult.success) {
-      return mapRepositoryError('iam_createUserFailed', txResult.error.message) as HaiResult<RegisterResult>
-    }
-    const tx = txResult.data
-
-    const createResult = await userRepository.create({
-      username: options.username,
-      email: options.email,
-      phone: options.phone,
-      displayName: options.displayName,
-      accountType: options.accountType ?? 'permanent',
-      accountStatus: options.accountStatus ?? 'active',
-      accountExpiresAt: options.accountExpiresAt,
-      mustChangePassword: managed && config.password?.requireInitialChange === true,
-      emailVerified: false,
-      phoneVerified: false,
-      passwordHash: hashResult.data,
-      passwordUpdatedAt: new Date(),
-      metadata: options.metadata,
-    }, tx)
-
-    if (!createResult.success) {
-      await tx.rollback()
-      return mapUpdateErrorAsDomainError(createResult.error) as HaiResult<RegisterResult>
+    let defaultRoleId: string | undefined
+    if (roleIds === undefined && config.rbac?.enabled && config.rbac.defaultRole) {
+      const role = await authzFunctions.getRoleByCode(config.rbac.defaultRole)
+      if (!role.success)
+        return role
+      if (!role.data)
+        return core.err(HaiIamError.ROLE_NOT_FOUND, iamM('iam_roleNotExist'))
+      defaultRoleId = role.data.id
     }
 
-    const createdUserResult = await userRepository.findByUsername(options.username, tx)
-    if (!createdUserResult.success || !createdUserResult.data) {
-      await tx.rollback()
-      return core.err(
-        HaiIamError.USER_NOT_FOUND,
-        iamM('iam_userNotExist'),
-      )
+    const committed = await reldb.tx.wrapResult(async (tx) => {
+      const created = await userRepository.create({
+        username: options.username,
+        email: options.email,
+        phone: options.phone,
+        displayName: options.displayName,
+        accountType: options.accountType ?? 'permanent',
+        accountStatus: options.accountStatus ?? 'active',
+        accountExpiresAt: options.accountExpiresAt,
+        mustChangePassword: managed && config.password?.requireInitialChange === true,
+        emailVerified: false,
+        phoneVerified: false,
+        passwordHash: hashResult.data,
+        passwordUpdatedAt: new Date(),
+        metadata: options.metadata,
+      }, tx)
+      if (!created.success)
+        return mapUpdateErrorAsDomainError(created.error)
+
+      const user = await userRepository.findByUsername(options.username, tx)
+      if (!user.success)
+        return user
+      if (!user.data)
+        return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+
+      if (roleIds !== undefined) {
+        const assigned = await authzFunctions.syncRoles(user.data.id, roleIds, tx)
+        if (!assigned.success)
+          return assigned
+      }
+      else if (defaultRoleId !== undefined) {
+        const assigned = await authzFunctions.assignRole(user.data.id, defaultRoleId, tx)
+        if (!assigned.success)
+          return assigned
+      }
+
+      return core.ok(user.data)
+    })
+    if (!committed.success) {
+      return committed.error.code === HaiReldbError.TRANSACTION_FAILED.code
+        ? mapRepositoryError('iam_createUserFailed', committed.error.message)
+        : committed
     }
 
-    const commitResult = await tx.commit()
-    if (!commitResult.success) {
-      return mapRepositoryError('iam_createUserFailed', commitResult.error.message) as HaiResult<RegisterResult>
-    }
-
-    const createdUser = createdUserResult.data
-
-    // 角色配置失败时撤销新账户，避免注册成功但权限缺失。
-    const assigned = await assignDefaultRole(createdUser.id)
-    if (!assigned.success) {
-      await authzFunctions.syncRoles(createdUser.id, [])
-      await userRepository.deleteById(createdUser.id)
-      return assigned
-    }
-
-    logger.info('User registered', { userId: createdUser.id })
+    logger.info('User registered', { userId: committed.data.id })
     return core.ok({
-      user: toUser(createdUser),
+      user: toUser(committed.data),
       agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnRegister),
     })
   }
 
   return {
-    createUser: options => createUser(options, true),
+    createUser: (options, management) => createUser(options, true, management?.roleIds),
     async register(options) {
       const captcha = await verifyIamCaptcha(ctx.config.captcha, 'register', options.captcha)
       if (!captcha.success)
         return captcha
       if (!registerConfig.enabled)
         return Promise.resolve(core.err(HaiIamError.REGISTER_DISABLED, iamM('iam_registerDisabled')))
-      return createUser({ ...options, accountStatus: registerConfig.defaultAccountStatus })
+      return createUser({ ...options, accountStatus: registerConfig.defaultAccountStatus }, false)
     },
     validatePassword(password: string): HaiResult<void> {
       return validatePassword(password)
@@ -621,209 +561,105 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
  * 构建用户变更操作（更新、删除）
  */
 function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateCurrentUser' | 'updateUser' | 'updateUserWithRoles' | 'deleteUser'> {
-  const { userRepository, sessionFunctions, authzFunctions } = ctx
+  const { userRepository, sessionFunctions, authzFunctions, revokeCredentialSessions } = ctx
 
-  async function revokeAccountSessions(userId: string): Promise<void> {
-    const revoked = await sessionFunctions.deleteByUserId(userId)
-    if (!revoked.success)
-      logger.warn('Account credentials revoked; session cache cleanup failed', { userId, code: revoked.error.code })
+  async function updateAccount(
+    userId: string,
+    profile: Partial<User>,
+    roleIds?: string[],
+    expectedCredentialVersion?: string,
+  ): Promise<HaiResult<User>> {
+    const changesProfile = hasUpdateFields(profile)
+    const committed = await reldb.tx.wrapResult(async (tx): Promise<HaiResult<{ user: User, revokedVersion?: string }>> => {
+      const locked = await lockIamUser(tx, userId)
+      if (!locked.success)
+        return locked
+      const current = await userRepository.findById(userId, tx)
+      if (!current.success)
+        return current
+      if (!current.data)
+        return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+
+      const credentialVersion = current.data.credentialVersion ?? ''
+      if (expectedCredentialVersion !== undefined && expectedCredentialVersion !== credentialVersion)
+        return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+
+      const accountPolicy = checkAccountUpdate(current.data, profile)
+      if (!accountPolicy.success)
+        return accountPolicy
+      let revokedVersion: string | undefined
+      if (changesProfile) {
+        const unique = await validateUniqueFieldsForUpdate(userRepository, current.data, profile, tx)
+        if (!unique.success)
+          return unique
+        const updated = await updateIamUserProfile(userRepository, tx, current.data, profile)
+        if (!updated.success) {
+          return updated.error.code === HaiReldbError.DUPLICATE_ENTRY.code
+            ? mapUpdateErrorAsDomainError(updated.error)
+            : updated
+        }
+        if (updated.data)
+          revokedVersion = credentialVersion
+      }
+      if (roleIds !== undefined) {
+        // 角色失败时，事务会同时回滚资料和凭据变更。
+        const synced = await authzFunctions.syncRoles(userId, roleIds, tx)
+        if (!synced.success)
+          return synced
+      }
+
+      // 在提交前读取回复，避免已提交后因读失败向调用方报告写入失败。
+      const updated = changesProfile
+        ? await userRepository.findById(userId, tx)
+        : current
+      if (!updated.success)
+        return updated
+      if (!updated.data)
+        return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+      return core.ok({
+        user: toUser(updated.data),
+        revokedVersion,
+      })
+    })
+    if (!committed.success)
+      return committed
+
+    if (committed.data.revokedVersion !== undefined) {
+      const revoked = await revokeCredentialSessions(userId, committed.data.revokedVersion)
+      if (!revoked.success)
+        logger.warn('Account credentials revoked; session cache cleanup failed', { userId, code: revoked.error.code })
+    }
+    else if (roleIds !== undefined) {
+      const authorization = await authzFunctions.getUserAuthorization(userId)
+      const refreshed = authorization.success
+        ? await sessionFunctions.patchUserSessions(userId, authorization.data)
+        : authorization
+      if (!refreshed.success)
+        logger.warn('User roles committed; session authorization refresh failed', { userId, code: refreshed.error.code })
+    }
+    return core.ok(committed.data.user)
   }
 
   return {
     async updateCurrentUser(accessToken: string, data: UpdateCurrentUserInput): Promise<HaiResult<User>> {
-      const verifyResult = await sessionFunctions.verifyToken(accessToken)
-      if (!verifyResult.success) {
-        return verifyResult as HaiResult<User>
-      }
+      const verified = await sessionFunctions.verifyToken(accessToken)
+      if (!verified.success)
+        return verified
 
-      const userId = verifyResult.data.userId
-
-      // 提取白名单字段，防止修改安全字段
-      const safeData: Partial<User> = {}
-      if (data.username !== undefined)
-        safeData.username = data.username
-      if (data.email !== undefined)
-        safeData.email = data.email
-      if (data.displayName !== undefined)
-        safeData.displayName = data.displayName
-      if (data.avatarUrl !== undefined)
-        safeData.avatarUrl = data.avatarUrl
-      if (data.phone !== undefined)
-        safeData.phone = data.phone
-      if (data.metadata !== undefined)
-        safeData.metadata = data.metadata
-
-      if (!hasUpdateFields(safeData)) {
-        const currentResult = await userRepository.findById(userId)
-        if (!currentResult.success) {
-          return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as HaiResult<User>
-        }
-        if (!currentResult.data) {
-          return core.err(
-            HaiIamError.USER_NOT_FOUND,
-            iamM('iam_userNotExist'),
-          )
-        }
-        return core.ok(toUser(currentResult.data))
-      }
-
-      const uniqueResult = await validateUniqueFieldsForUpdate(userRepository, userId, safeData)
-      if (!uniqueResult.success) {
-        return uniqueResult as HaiResult<User>
-      }
-
-      const updateResult = await userRepository.updateById(userId, safeData)
-      if (!updateResult.success) {
-        return mapUpdateErrorAsDomainError(updateResult.error) as HaiResult<User>
-      }
-
-      if (updateResult.data.changes === 0) {
-        return core.err(
-          HaiIamError.USER_NOT_FOUND,
-          iamM('iam_userNotExist'),
-        )
-      }
-      const updatedResult = await userRepository.findById(userId)
-      if (!updatedResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as HaiResult<User>
-      }
-      if (!updatedResult.data) {
-        return core.err(
-          HaiIamError.USER_NOT_FOUND,
-          iamM('iam_userNotExist'),
-        )
-      }
-
-      return core.ok(toUser(updatedResult.data))
+      // 显式构造字段白名单，忽略调用方传入的账号状态、角色和验证标记。
+      const { username, email, displayName, avatarUrl, phone, metadata } = data
+      return updateAccount(verified.data.userId, {
+        username,
+        email,
+        displayName,
+        avatarUrl,
+        phone,
+        metadata,
+      }, undefined, verified.data.credentialVersion)
     },
 
-    async updateUser(userId: string, data: Partial<User>): Promise<HaiResult<User>> {
-      const currentAccount = await userRepository.findById(userId)
-      if (!currentAccount.success)
-        return currentAccount
-      if (!currentAccount.data)
-        return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
-      const accountPolicy = checkAccountUpdate(currentAccount.data, data)
-      if (!accountPolicy.success)
-        return accountPolicy
-      if (!hasUpdateFields(data)) {
-        const currentResult = await userRepository.findById(userId)
-        if (!currentResult.success) {
-          return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as HaiResult<User>
-        }
-        if (!currentResult.data) {
-          return core.err(
-            HaiIamError.USER_NOT_FOUND,
-            iamM('iam_userNotExist'),
-          )
-        }
-        return core.ok(toUser(currentResult.data))
-      }
-
-      const uniqueResult = await validateUniqueFieldsForUpdate(userRepository, userId, data)
-      if (!uniqueResult.success) {
-        return uniqueResult as HaiResult<User>
-      }
-
-      const changesSecurity = changesAccountSecurity(currentAccount.data, data)
-      // 状态变更与凭据代际同事务提交；重新激活也不能恢复旧会话，仅保存相同状态不撤销会话。
-      const transaction = changesSecurity
-        ? await reldb.tx.begin()
-        : undefined
-      if (transaction && !transaction.success)
-        return transaction
-      const tx = transaction?.success ? transaction.data : undefined
-      let transactionCommitted = false
-      try {
-        const updateResult = await updateUserRow(userRepository, currentAccount.data, data, tx)
-        if (!updateResult.success)
-          return updateResult
-        if (tx) {
-          const committed = await tx.commit()
-          if (!committed.success)
-            return committed
-          transactionCommitted = true
-        }
-      }
-      catch (cause) {
-        return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_accountUpdateFailed'), cause)
-      }
-      finally {
-        // 包括 SDK/编程异常，均释放未提交的事务，防止后续 SQLite 操作等待自身锁。
-        if (tx && !transactionCommitted)
-          await tx.rollback()
-      }
-      if (tx)
-        await revokeAccountSessions(userId)
-
-      const updatedResult = await userRepository.findById(userId)
-      if (!updatedResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as HaiResult<User>
-      }
-      if (!updatedResult.data) {
-        return core.err(
-          HaiIamError.USER_NOT_FOUND,
-          iamM('iam_userNotExist'),
-        )
-      }
-
-      return core.ok(toUser(updatedResult.data))
-    },
-
-    async updateUserWithRoles(userId, { profile = {}, roleIds }) {
-      const committed = await reldb.tx.wrapResult(async (tx) => {
-        const locked = await lockIamUser(tx, userId)
-        if (!locked.success)
-          return locked
-        const current = await userRepository.findById(userId, tx)
-        if (!current.success)
-          return current
-        if (!current.data)
-          return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
-        const accountPolicy = checkAccountUpdate(current.data, profile)
-        if (!accountPolicy.success)
-          return accountPolicy
-        if (hasUpdateFields(profile)) {
-          const unique = await validateUniqueFieldsForUpdate(userRepository, userId, profile, tx)
-          if (!unique.success)
-            return unique
-          const updated = await updateUserRow(userRepository, current.data, profile, tx)
-          if (!updated.success)
-            return updated
-        }
-        if (roleIds !== undefined) {
-          // 事务内角色写入不提前刷新会话，失败时同时撤销刚写的账户资料。
-          const synced = await authzFunctions.syncRoles(userId, roleIds, tx)
-          if (!synced.success)
-            return synced
-        }
-        // 在提交前读取回复，避免已提交后因读失败向调用方报告写入失败。
-        const updated = await userRepository.findById(userId, tx)
-        if (!updated.success)
-          return updated
-        if (!updated.data)
-          return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
-        return core.ok({
-          user: toUser(updated.data),
-          revokeSessions: changesAccountSecurity(current.data, profile),
-        })
-      })
-      if (!committed.success)
-        return committed
-
-      if (committed.data.revokeSessions) {
-        await revokeAccountSessions(userId)
-      }
-      else if (roleIds !== undefined) {
-        const authorization = await authzFunctions.getUserAuthorization(userId)
-        const refreshed = authorization.success
-          ? await sessionFunctions.patchUserSessions(userId, authorization.data)
-          : authorization
-        if (!refreshed.success)
-          logger.warn('User roles committed; session authorization refresh failed', { userId, code: refreshed.error.code })
-      }
-      return core.ok(committed.data.user)
-    },
+    updateUser: (userId, data) => updateAccount(userId, data),
+    updateUserWithRoles: (userId, { profile = {}, roleIds }) => updateAccount(userId, profile, roleIds),
 
     async deleteUser(userId: string): Promise<HaiResult<void>> {
       logger.debug('Deleting user', { userId })
@@ -893,7 +729,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
  * 构建密码变更操作（管理员重置、用户改密）
  */
 function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'adminResetPassword' | 'changePassword' | 'changeCurrentUserPassword'> {
-  const { userRepository, sessionFunctions } = ctx
+  const { userRepository, sessionFunctions, revokeCredentialSessions } = ctx
   const { hashPassword } = ctx
 
   return {
@@ -930,8 +766,8 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       if (!updateResult.data)
         return core.err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
 
-      // 密码重置后注销该用户所有活跃会话
-      const revoked = await sessionFunctions.deleteByUserId(userId)
+      // 只清理被此次重置撤销的旧代会话。
+      const revoked = await revokeCredentialSessions(userId, userResult.data.credentialVersion ?? '')
       if (!revoked.success)
         return revoked
 
@@ -954,13 +790,12 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
 
       const user = userResult.data
 
-      const active = isUserActive(user)
-      const locked = isAccountLocked(user, ctx.loginConfig)
       // 受限期间不比较口令；公开 renewPassword 会掩码，已有会话的操作保留具体错误。
-      if (!active)
+      if (!isUserActive(user))
         return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
-      if (locked)
-        return core.err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
+      const unlocked = await checkAccountLock(user, ctx.loginConfig)
+      if (!unlocked.success)
+        return unlocked
 
       // 验证旧密码
       if (!user.passwordHash)
@@ -971,7 +806,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         return mapPasswordWorkError(verifyResult.error)
       if (!verifyResult.data) {
         // 记录失败计数 / 触发锁定，防止通过 changePassword 端点暴力枚举旧密码
-        const failureResult = await recordLoginFailure(userRepository, user, ctx.loginConfig)
+        const failureResult = await recordLoginFailure(user, ctx.loginConfig)
         if (!failureResult.success)
           return failureResult
         return core.err(
@@ -1002,8 +837,8 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       if (!updateResult.data)
         return core.err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
 
-      // 密码修改后注销该用户所有活跃会话
-      const revoked = await sessionFunctions.deleteByUserId(userId)
+      // 新密码已可登录，清理不得撤销随后签发的新代会话。
+      const revoked = await revokeCredentialSessions(userId, user.credentialVersion ?? '')
       if (!revoked.success)
         return revoked
 
@@ -1069,7 +904,7 @@ async function issuePasswordReset(ctx: UserFnContext, stored: StoredUser): Promi
  * 构建密码重置操作（请求重置、确认重置）
  */
 function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'requestPasswordReset' | 'confirmPasswordReset'> {
-  const { userRepository, sessionFunctions, onPasswordResetRequest } = ctx
+  const { userRepository, revokeCredentialSessions, onPasswordResetRequest } = ctx
   const { hashPassword } = ctx
 
   return {
@@ -1129,7 +964,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       if (!committed.data)
         return core.err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
       // 凭据代际已在数据库推进；缓存清理失败不能重新授权旧会话。
-      const revoked = await sessionFunctions.deleteByUserId(claimed.data.id)
+      const revoked = await revokeCredentialSessions(claimed.data.id, claimed.data.credentialVersion ?? '')
       if (!revoked.success)
         return revoked
       logger.info('Password reset confirmed', { userId: claimed.data.id })
@@ -1166,7 +1001,7 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
     ...buildUserMutationOps(ctx),
     ...passwordChanges,
     ...buildPasswordResetOps(ctx),
-    async inviteUser(options) {
+    async inviteUser(options, management) {
       const destination = ctx.resetConfig.mode === 'phone'
         ? options.phone
         : options.email
@@ -1178,7 +1013,7 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
       const password = (`Aa1!${Array.from({
         length: Math.ceil(length / 32),
       }, () => generateToken()).join('')}`).slice(0, length)
-      const created = await registration.createUser({ ...options, password })
+      const created = await registration.createUser({ ...options, password }, management)
       if (!created.success)
         return created
       const stored = await deps.userRepository.findById(created.data.user.id)
@@ -1227,11 +1062,6 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
  * }
  * ```
  */
-interface UserBuilderDeps {
+interface UserBuilderDeps extends UserOperationsDeps {
   userRepository: UserRepository
-  passwordStrategyResult: PasswordStrategyResult
-  sessionFunctions: SessionOperations
-  authzFunctions: AuthzOperations
-  config: IamConfig
-  onPasswordResetRequest?: (user: User, token: string, context: IamNotificationContext) => Promise<void>
 }

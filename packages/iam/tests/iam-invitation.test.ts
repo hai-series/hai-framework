@@ -2,10 +2,52 @@
 import type { User } from '../src/index.js'
 import { reldb } from '@h-ai/reldb'
 import { expect, it } from 'vitest'
+import { HaiIamError } from '../src/index.js'
 import { createDbUserRepository } from '../src/user/iam-user-repository-user.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 function tests() {
+  it('角色写失败不创建账户或发送邀请，发送时可读取已提交的角色', async () => {
+    const deliveredFor: string[] = []
+    const iam = await initIam({
+      initialCredentials: { enabled: true },
+      onPasswordResetRequest: async (user) => {
+        const roles = await iam.authz.getUserRoles(user.id)
+        expect(roles).toMatchObject({
+          success: true,
+          data: [
+            { code: 'invited-assigned-role' },
+          ],
+        })
+        deliveredFor.push(user.id)
+      },
+    })
+    const username = `role-invite-${crypto.randomUUID()}`
+    const input = { username, email: `${username}@example.com` }
+    expect(await iam.user.inviteUser(input, {
+      roleIds: ['missing-role'],
+    })).toMatchObject({
+      success: false,
+      error: { code: HaiIamError.ROLE_NOT_FOUND.code },
+    })
+    expect(deliveredFor).toEqual([])
+    expect(await iam.user.listUsers({ search: username })).toMatchObject({
+      success: true,
+      data: { total: 0 },
+    })
+
+    const role = await iam.authz.createRole({ code: 'invited-assigned-role', name: 'Invited' })
+    expect(role.success).toBe(true)
+    if (!role.success)
+      return
+    const invited = await iam.user.inviteUser(input, {
+      roleIds: [role.data.id],
+    })
+    expect(invited.success).toBe(true)
+    if (invited.success)
+      expect(deliveredFor).toEqual([invited.data.user.id])
+  })
+
   it('关闭或缺少发送能力时不创建半成品账号', async () => {
     const iam = await initIam()
     const username = `off-${crypto.randomUUID()}`

@@ -111,6 +111,36 @@ describe('iam.apiKey（启用）', () => {
           expect(result.error.code).toBe(HaiIamError.INVALID_ARGUMENT.code)
         }
       })
+
+      it('并发签发只能占用一个剩余名额', async () => {
+        const user = await registerUser('apikey_parallel_limit_user')
+        expect((await getIam().apiKey.createApiKey(user.id, { name: 'existing' })).success).toBe(true)
+
+        const issuing = await Promise.all([
+          getIam().apiKey.createApiKey(user.id, { name: 'parallel-first' }),
+          getIam().apiKey.createApiKey(user.id, { name: 'parallel-second' }),
+        ])
+        expect(issuing.filter(result => result.success)).toHaveLength(1)
+        expect(issuing.find(result => !result.success)).toMatchObject({
+          success: false,
+          error: { code: HaiIamError.INVALID_ARGUMENT.code },
+        })
+        expect(await getIam().apiKey.listApiKeys(user.id)).toMatchObject({
+          success: true,
+          data: { total: 2 },
+        })
+      })
+
+      it('账号不存在时拒绝签发', async () => {
+        expect(await getIam().apiKey.createApiKey('missing-owner', { name: 'unissued' })).toMatchObject({
+          success: false,
+          error: { code: HaiIamError.USER_NOT_FOUND.code },
+        })
+        expect(await getIam().apiKey.listApiKeys('missing-owner')).toMatchObject({
+          success: true,
+          data: { total: 0 },
+        })
+      })
     })
 
     describe('listApiKeys', () => {

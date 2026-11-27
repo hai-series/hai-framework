@@ -95,15 +95,12 @@ async function main() {
       }
       return execute(sql, params)
     }
-    const begin = reldb.tx.begin
-    reldb.tx.begin = async () => {
-      const started = await begin()
-      if (started.success) {
-        const execute = started.data.execute
-        started.data.execute = (sql, params) => pause(sql, params, execute)
-      }
-      return started
-    }
+    const wrap = reldb.tx.wrapResult
+    reldb.tx.wrapResult = callback => wrap((tx) => {
+      const execute = tx.execute
+      tx.execute = (sql, params) => pause(sql, params, execute)
+      return callback(tx)
+    })
   }
   checked(await iam.init(settings))
   process.send?.({ phase: 'ready' })

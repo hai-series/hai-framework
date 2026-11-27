@@ -311,17 +311,56 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     }
   })
 
-  it('updates personal preferences and clears the email address', async () => {
+  it('updates personal preferences without invalidating the session', async () => {
     expect((await call('/profile/update', { displayName: 'Updated', locale: 'en-US', theme: '{{fullstack.theme.defaultTheme}}' }, userToken)).success).toBe(true)
     const current = await call<{ metadata: { locale: string, theme: string } }>('/auth/me', undefined, userToken, 'GET')
     expect(current.success).toBe(true)
     if (current.success)
       expect(current.data.metadata).toMatchObject({ locale: 'en-US', theme: '{{fullstack.theme.defaultTheme}}' })
-    expect((await call('/profile/update', { email: 'temporary@example.com' }, userToken)).success).toBe(true)
-    const cleared = await call<AdminUser>('/profile/update', { email: '' }, userToken)
-    expect(cleared.success).toBe(true)
-    if (cleared.success)
-      expect(cleared.data.email).toBe('')
+  })
+
+  it('requires a new login after changing or clearing the email address', async () => {
+    const username = 'email-rebind-member'
+    const created = await iam.user.createUser({ username, password: TEST_PASSWORD })
+    if (!created.success)
+      throw new Error(created.error.message)
+
+    async function signIn() {
+      const login = await call<LoginData>('/auth/login', { identifier: username, password: TEST_PASSWORD })
+      if (!login.success)
+        throw new Error(login.error.message)
+      return login.data.tokens.accessToken
+    }
+
+    try {
+      const originalToken = await signIn()
+      expect(await call<AdminUser>('/profile/update', { email: 'temporary@example.com' }, originalToken)).toMatchObject({
+        success: true,
+        data: { email: 'temporary@example.com' },
+      })
+      expect(await call('/auth/me', undefined, originalToken, 'GET')).toMatchObject({
+        success: false,
+        error: { httpStatus: 401 },
+      })
+
+      const rebindToken = await signIn()
+      expect(await call<AdminUser>('/profile/update', { email: '' }, rebindToken)).toMatchObject({
+        success: true,
+        data: { email: '' },
+      })
+      expect(await call('/auth/me', undefined, rebindToken, 'GET')).toMatchObject({
+        success: false,
+        error: { httpStatus: 401 },
+      })
+      const clearedToken = await signIn()
+      expect(await call('/auth/me', undefined, clearedToken, 'GET')).toMatchObject({
+        success: true,
+        data: { email: '' },
+      })
+    }
+    finally {
+      expect((await iam.user.deleteUser(created.data.user.id)).success).toBe(true)
+    }
   })
 
   it('rejects invalid images, oversized payloads and anonymous avatar uploads', async () => {
@@ -459,9 +498,13 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     expect(roles.success).toBe(true)
     if (roles.success)
       expect(roles.data.map(role => role.code)).toEqual(['user'])
-    expect((await call('/admin/users/update', { id: user.id, role: 'admin' }, adminToken)).success).toBe(true)
-    expect((await call('/admin/users/list', { page: 1, pageSize: 20 }, userToken)).success).toBe(true)
-    expect((await call('/admin/users/update', { id: user.id, role: 'user' }, adminToken)).success).toBe(true)
+    try {
+      expect((await call('/admin/users/update', { id: user.id, role: 'admin' }, adminToken)).success).toBe(true)
+      expect((await call('/admin/users/list', { page: 1, pageSize: 20 }, userToken)).success).toBe(true)
+    }
+    finally {
+      expect((await call('/admin/users/update', { id: user.id, role: 'user' }, adminToken)).success).toBe(true)
+    }
     const denied = await call('/admin/users/list', { page: 1, pageSize: 20 }, userToken)
     expect(denied.success).toBe(false)
     if (!denied.success)

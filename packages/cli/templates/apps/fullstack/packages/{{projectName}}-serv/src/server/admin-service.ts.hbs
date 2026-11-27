@@ -147,15 +147,12 @@ export async function createAdminUser(input: AdminCreateUser, context: ServConte
     accountExpiresAt: input.accountExpiresAt
       ? new Date(input.accountExpiresAt)
       : undefined,
+  }, {
+    roleIds: [role.data.id],
   })
   if (!registered.success)
     return registered
   const userId = registered.data.user.id
-  const assigned = await iam.authz.syncRoles(userId, [role.data.id])
-  if (!assigned.success) {
-    await rollbackCreatedUser(userId)
-    return assigned
-  }
   await recordAudit(context, 'create', 'users', userId, { role: input.role, accountStatus: input.accountStatus })
   return getAdminUser(userId)
 }
@@ -173,20 +170,13 @@ export async function inviteAdminUser(input: AdminInviteUser, context: ServConte
     accountExpiresAt: input.accountExpiresAt
       ? new Date(input.accountExpiresAt)
       : undefined,
+  }, {
+    roleIds: [role.data.id],
   })
   if (!created.success)
     return created
-  const assigned = await iam.authz.syncRoles(created.data.user.id, [role.data.id])
-  if (!assigned.success)
-    return assigned
   await recordAudit(context, 'invite', 'users', created.data.user.id, { role: input.role })
   return getAdminUser(created.data.user.id)
-}
-
-async function rollbackCreatedUser(id: string): Promise<void> {
-  const removed = await iam.user.deleteUser(id)
-  if (!removed.success)
-    core.logger.error('Failed to roll back user creation', { userId: id, error: removed.error.code })
 }
 
 export async function updateAdminUser(input: AdminUpdateUser, context: ServContext): Promise<HaiResult<AdminUser>> {

@@ -27,16 +27,40 @@ export const TEST_PASSWORD = 'TestPass123'
 /** 弱密码（不满足策略） */
 export const WEAK_PASSWORD = 'abc'
 
-/** 直接检查持久化锁，避免公开登录统一错误后丢失锁定行为的独有覆盖。 */
+interface LoginFailureState {
+  revision: string
+  count: number
+  firstFailedAt: number
+  lastFailedAt: number
+  lockedUntil: number | null
+}
+
+export async function readLoginLockoutVersion(userId: string): Promise<string> {
+  const result = await reldb.sql.get<{ login_lockout_version: string }>('SELECT login_lockout_version FROM hai_iam_users WHERE id = ?', [userId])
+  if (!result.success || !result.data)
+    throw new Error('Expected an existing account to read its lockout version')
+  return result.data.login_lockout_version
+}
+
+export function loginFailureKey(userId: string, version: string): string {
+  return `hai:iam:login_failures:${userId}:${version}`
+}
+
+export async function readLoginFailures(userId: string, version?: string): Promise<LoginFailureState | null> {
+  const key = loginFailureKey(userId, version ?? await readLoginLockoutVersion(userId))
+  const result = await cache.kv.get<LoginFailureState>(key)
+  if (!result.success)
+    throw new Error(result.error.message)
+  return result.data
+}
+
+/** 直接检查共享锁定状态，保留公开错误统一后的独有覆盖。 */
 export async function expectAccountLocked(username: string): Promise<void> {
-  // 仅锁定用例加载真实 Repository，环境清理用例的最小依赖 mock 不应被辅助断言扩大。
-  const { createDbUserRepository } = await import('../../src/user/iam-user-repository-user.js')
-  const repository = await createDbUserRepository()
-  const stored = await repository.findByUsername(username)
-  expect(stored.success).toBe(true)
-  if (!stored.success || !stored.data)
+  const result = await reldb.sql.get<{ id: string }>('SELECT id FROM hai_iam_users WHERE username = ?', [username])
+  if (!result.success || !result.data)
     throw new Error('Expected an existing account for the lock assertion')
-  expect(stored.data.lockedUntil?.getTime()).toBeGreaterThan(Date.now())
+  const state = await readLoginFailures(result.data.id)
+  expect(state?.lockedUntil).toBeGreaterThan(Date.now())
 }
 
 // =============================================================================

@@ -12,7 +12,7 @@
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ZodError } from 'zod'
 import { HaiIamError } from '../src/iam-types.js'
 import { iam } from '../src/index.js'
@@ -147,6 +147,52 @@ describe('iam.init', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
+      }
+    })
+
+    it.each([false, true])('关闭等待已开始的初始化（原有运行期：%s）', async (reinitialize) => {
+      await iam.close()
+      if (reinitialize)
+        expect((await iam.init({ seedDefaultData: false })).success).toBe(true)
+
+      const entered = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      const createTable = reldb.ddl.createTable.bind(reldb.ddl)
+      const ddl = vi.spyOn(reldb.ddl, 'createTable').mockImplementationOnce(async (...args) => {
+        entered.resolve()
+        await release.promise
+        return createTable(...args)
+      })
+      const startup = iam.init({
+        seedDefaultData: false,
+        accounts: { dormantAfterDays: 90 },
+      })
+      try {
+        await Promise.race([
+          entered.promise,
+          startup.then(() => { throw new Error('IAM finished before repository initialization') }),
+        ])
+        const closing = iam.close()
+        const closingAgain = iam.close()
+        expect(await iam.init({ seedDefaultData: false })).toMatchObject({
+          success: false,
+          error: { code: HaiIamError.CONFIG_ERROR.code },
+        })
+        release.resolve()
+        expect((await startup).success).toBe(true)
+        await Promise.all([closing, closingAgain])
+        expect(iam.isInitialized).toBe(false)
+        expect(await iam.session.get('unused-token')).toMatchObject({
+          success: false,
+          error: { code: HaiIamError.NOT_INITIALIZED.code },
+        })
+        expect((await iam.init({ seedDefaultData: false })).success).toBe(true)
+      }
+      finally {
+        release.resolve()
+        await startup
+        ddl.mockRestore()
+        await iam.close()
       }
     })
 

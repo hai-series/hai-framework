@@ -7,6 +7,7 @@
 
 import { AccessConditionSchema } from '@h-ai/core'
 import { z } from 'zod'
+import { iamM } from './iam-i18n.js'
 
 /** 浏览器可访问链接仅接受 HTTP(S)，避免配置被用于脚本协议。 */
 const WebUrlSchema = z.url().refine(value => ['http:', 'https:'].includes(new URL(value).protocol))
@@ -627,6 +628,9 @@ export const IamConfigSchema = z.object({
 
   /** 是否初始化默认角色和权限（默认 true） */
   seedDefaultData: z.boolean().default(true),
+}).refine(config => !config.login.ldap || config.ldap?.directoryId !== undefined, {
+  path: ['ldap', 'directoryId'],
+  error: () => iamM('iam_ldapDirectoryRequired'),
 })
 
 /**

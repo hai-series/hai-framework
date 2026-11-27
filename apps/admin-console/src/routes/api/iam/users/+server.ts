@@ -94,7 +94,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress, cook
     accountType,
     accountStatus,
     accountExpiresAt,
-  })
+  }, { roleIds: roles })
 
   if (!registerResult.success) {
     if (registerResult.error.code === HaiIamError.USER_NOT_FOUND.code || registerResult.error.code === HaiIamError.USER_ALREADY_EXISTS.code) {
@@ -104,16 +104,6 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress, cook
   }
 
   const { user } = registerResult.data
-
-  // 分配角色（iam.user.createUser 已分配 config.rbac.defaultRole）
-  // 管理员创建时额外分配指定角色
-  if (roles !== undefined) {
-    const assigned = await iam.authz.syncRoles(user.id, roles)
-    if (!assigned.success) {
-      await iam.user.deleteUser(user.id)
-      return kit.response.fromError(assigned.error)
-    }
-  }
 
   // 审计日志 + 用户信息并行获取
   const ip = getClientAddress()

@@ -187,7 +187,7 @@ export interface ApiKeyOperations {
    *
    * @param userId - 用户 ID
    * @param options - 创建选项
-   * @returns 成功返回 API Key 元数据和明文密钥
+   * @returns 成功返回 API Key 元数据和明文密钥；账号缺失或达到签发上限时返回失败。
    */
   createApiKey: (userId: string, options: CreateApiKeyOptions) => Promise<HaiResult<CreateApiKeyResult>>
 

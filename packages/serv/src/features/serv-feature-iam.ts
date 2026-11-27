@@ -18,8 +18,6 @@ import { mapHaiResult } from './serv-feature-helpers.js'
 
 const iamContract = apiContract.iam
 
-const iamFeatureLogger = core.logger.child({ module: 'serv', scope: 'feature-iam' })
-
 /**
  * IAM 默认 procedures 依赖。
  *
@@ -231,51 +229,19 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 }
 
 async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput | IamInviteUserInput): Promise<HaiResult<User>> {
-  const invited = !('password' in input)
-  const registerResult = 'password' in input
-    ? await iam.user.createUser(input)
-    : await iam.user.inviteUser(input)
+  const { roleIds, ...account } = input
+  const registerResult = 'password' in account
+    ? await iam.user.createUser(account, { roleIds })
+    : await iam.user.inviteUser(account, { roleIds })
   if (!registerResult.success)
     return registerResult
-
-  const userId = registerResult.data.user.id
-
-  // 任何后续步骤失败都需要回滚刚创建的用户，以避免重复用户名/邮箱错误阅存。
-  async function rollback(reason: string): Promise<void> {
-    if (invited) {
-      // 邀请可能已经送达，不能回滚外部已发布凭据；保留账号供管理员补齐配置。
-      iamFeatureLogger.error('Invited account requires configuration repair', { userId, reason })
-      return
-    }
-    const deleteResult = await iam.user.deleteUser(userId)
-    if (!deleteResult.success)
-      iamFeatureLogger.error('createUser rollback failed, orphan user may exist', { userId, reason, error: deleteResult.error })
-  }
-
-  if (input.roleIds !== undefined) {
-    const rolesResult = await iam.authz.syncRoles(userId, input.roleIds)
-    if (!rolesResult.success) {
-      await rollback('syncRoles failed')
-      return rolesResult
-    }
-  }
 
   return core.ok(registerResult.data.user)
 }
 
 async function updateUser(iam: IamFunctions, input: IamAdminUpdateUserInput): Promise<HaiResult<User>> {
-  const { id, roleIds, ...data } = input
-  const updateResult = await iam.user.updateUser(id, data)
-  if (!updateResult.success)
-    return updateResult
-
-  if (roleIds) {
-    const rolesResult = await iam.authz.syncRoles(id, roleIds)
-    if (!rolesResult.success)
-      return rolesResult
-  }
-
-  return updateResult
+  const { id, roleIds, ...profile } = input
+  return iam.user.updateUserWithRoles(id, { profile, roleIds })
 }
 
 // re-export 类型以便 IDE 跳转

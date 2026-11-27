@@ -180,7 +180,9 @@ class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepo
 
   async touch(roleId: string, tx: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     return tx.execute(`UPDATE ${TABLE_NAME} SET updated_at = ? WHERE id = ?`, [
-      new Date().toISOString(),
+      reldb.config?.type === 'sqlite'
+        ? Date.now()
+        : new Date(),
       roleId,
     ])
   }

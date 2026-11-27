@@ -15,11 +15,13 @@ import type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult,
 import { createHash, randomBytes } from 'node:crypto'
 import { core } from '@h-ai/core'
 import { crypto as haiCrypto, HaiCryptoError } from '@h-ai/crypto'
+import { reldb } from '@h-ai/reldb'
 
 import { readIamCache } from '../../iam-cache.js'
 import { ApiKeyConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
+import { lockIamUser } from '../../user/iam-user-repository-user.js'
 import { isUserActive, toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, mapPasswordWorkError } from '../iam-authn-utils.js'
 import { applyApiKeyScopes } from './iam-authn-apikey-scope.js'
@@ -251,18 +253,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
   const apiKeyFunctions: ApiKeyOperations = {
     async createApiKey(userId: string, options: CreateApiKeyOptions): Promise<HaiResult<CreateApiKeyResult>> {
       try {
-        // 检查用户 API Key 数量限制
-        const countResult = await apiKeyRepository.countByUserId(userId)
-        if (!countResult.success)
-          return countResult as HaiResult<CreateApiKeyResult>
-
-        if (countResult.data >= apikeyConfig.maxKeysPerUser) {
-          return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_apikeyMaxKeysReached', {
-            params: { max: apikeyConfig.maxKeysPerUser },
-          }))
-        }
-
-        // 生成明文密钥和哈希
+        // 哈希在事务外完成，避免等待密码工作线程时持有用户锁。
         const rawKey = generateRawKey(apikeyConfig.prefix)
         const hashResult = await haiCrypto.password.hashAsync(rawKey)
         if (!hashResult.success) {
@@ -291,9 +282,29 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
           scopes: options.scopes ?? [],
         }
 
-        const insertResult = await apiKeyRepository.insert(storedApiKey)
+        const insertResult = await reldb.tx.wrapResult(async (tx) => {
+          const locked = await lockIamUser(tx, userId)
+          if (!locked.success)
+            return locked
+          const user = await userRepository.findById(userId, tx)
+          if (!user.success)
+            return user
+          if (!user.data)
+            return core.err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+
+          const count = await apiKeyRepository.countByUserId(userId, tx)
+          if (!count.success)
+            return count
+          if (count.data >= apikeyConfig.maxKeysPerUser) {
+            return core.err(HaiIamError.INVALID_ARGUMENT, iamM('iam_apikeyMaxKeysReached', {
+              params: { max: apikeyConfig.maxKeysPerUser },
+            }))
+          }
+
+          return apiKeyRepository.insert(storedApiKey, tx)
+        })
         if (!insertResult.success)
-          return insertResult as HaiResult<CreateApiKeyResult>
+          return insertResult
 
         logger.info('API Key created', { userId, keyId: id, name: options.name })
         return core.ok({

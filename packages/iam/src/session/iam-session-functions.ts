@@ -43,6 +43,25 @@ const logger = core.logger.child({ module: 'iam', scope: 'session' })
 // ─── 子功能依赖 ───
 
 /**
+ * 验签使用的账号状态与当前授权。
+ * @example 模块内部上下文
+ * ```ts
+ * const credential: SessionCredential = {
+ *   version: 'credential-1',
+ *   available: true,
+ *   authorization: { roles: ['reader'], permissions: ['orders:read'] },
+ * }
+ * ```
+ */
+interface SessionCredential {
+  version: string
+  available: boolean
+  profile?: Pick<Session, 'username' | 'displayName' | 'avatarUrl'>
+  /** 只验证会话的调用可提供账号状态；标准鉴权须提供同次读取的授权。 */
+  authorization?: Pick<Session, 'roles' | 'permissions'>
+}
+
+/**
  * 会话子功能依赖
  * @internal
  * @example 模块内部上下文
@@ -56,7 +75,22 @@ const logger = core.logger.child({ module: 'iam', scope: 'session' })
 export interface SessionOperationsDeps {
   config: IamConfig
   /** 可信用户状态读取口；共享代际缓存与安全回源，缺失/禁用/读失败均拒绝签发和认证。 */
-  readCredential: (userId: string) => Promise<HaiResult<{ version: string, available: boolean, profile?: Pick<Session, 'username' | 'displayName' | 'avatarUrl'> } | null>>
+  readCredential: (userId: string) => Promise<HaiResult<SessionCredential | null>>
+}
+
+/**
+ * 会话运行期内部接口，为账号安全操作提供按凭据代清理。
+ * @example 模块内部上下文
+ * ```ts
+ * async function revokePrevious(runtime: SessionRuntimeOperations, userId: string, previousVersion: string) {
+ *   return runtime.revokeCredentialSessions(userId, previousVersion)
+ * }
+ * ```
+ */
+interface SessionRuntimeOperations extends SessionOperations {
+  revokeCredentialSessions: (userId: string, credentialVersion: string) => Promise<HaiResult<number>>
+  /** 标准鉴权在验证会话的同一次账号读取中取得当前角色和权限。 */
+  verifyCurrentSession: SessionOperations['verifyToken']
 }
 
 /**
@@ -76,7 +110,7 @@ export interface SessionOperationsDeps {
  * }
  * ```
  */
-export async function createSessionOperations(deps: SessionOperationsDeps): Promise<HaiResult<SessionOperations>> {
+export async function createSessionOperations(deps: SessionOperationsDeps): Promise<HaiResult<SessionRuntimeOperations>> {
   try {
     const { config } = deps
     const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
@@ -140,7 +174,7 @@ interface SessionBuilderConfig {
 /**
  * 组装会话操作
  */
-function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations {
+function buildSessionFunctions(config: SessionBuilderConfig): SessionRuntimeOperations {
   const maxAge = config.maxAge ?? 86400
   const sliding = config.sliding ?? true
   const singleDevice = config.singleDevice ?? false
@@ -170,7 +204,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
    * 凭据代只能来自可信数据库；读取和签发跨库不能同事务，因此会话始终保留旧代，后续认证再次核对。
    * @example await credential('user-1', authenticated.credentialVersion)
    */
-  async function credential(userId: string, expected?: string): Promise<HaiResult<{ version: string, profile?: Pick<Session, 'username' | 'displayName' | 'avatarUrl'> }>> {
+  async function credential(userId: string, expected?: string): Promise<HaiResult<SessionCredential>> {
     try {
       const current = await config.readCredential(userId)
       if (!current.success)
@@ -217,6 +251,67 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
     return core.ok(applyApiKeyScopes({ ...session, apiKeyScopes: key.scopes }, key.scopes))
   }
 
+  async function getSession(accessToken: string, includeAuthorization = false): Promise<HaiResult<Session | null>> {
+    const sessionResult = await repo.getByAccessToken(accessToken)
+    if (!sessionResult.success) {
+      return sessionResult
+    }
+
+    const session = sessionResult.data
+    if (!session) {
+      return core.ok(null)
+    }
+
+    if (new Date() > session.expiresAt) {
+      const removeResult = await repo.removeByAccessToken(accessToken)
+      if (!removeResult.success)
+        return removeResult
+      return core.ok(null)
+    }
+
+    if (typeof session.credentialVersion !== 'string')
+      return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+    const bound = await credential(session.userId, session.credentialVersion)
+    if (!bound.success)
+      return bound
+    const authorization = includeAuthorization ? bound.data.authorization : undefined
+    if (includeAuthorization && !authorization)
+      return core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionExpired'))
+    const validated = await validateApiKey({
+      ...session,
+      ...bound.data.profile,
+      ...authorization,
+    })
+    if (!validated.success)
+      return validated
+    let output = validated.data
+
+    if (sliding || (config.idleTimeout ?? 0) > 0) {
+      const updateResult = await repo.touchByAccessToken(accessToken, session.version, new Date())
+      if (!updateResult.success)
+        return updateResult
+      // 保留 API Key 已收敛的权限，只使用成功提交后的时间字段。
+      output = { ...output, lastActiveAt: updateResult.data.lastActiveAt, expiresAt: updateResult.data.expiresAt }
+    }
+
+    return core.ok(stripInternalSessionFields(output))
+  }
+
+  async function verifySession(accessToken: string, includeAuthorization = false): Promise<HaiResult<Session>> {
+    const sessionResult = await getSession(accessToken, includeAuthorization)
+    if (!sessionResult.success)
+      return sessionResult
+
+    if (!sessionResult.data) {
+      return core.err(
+        HaiIamError.SESSION_INVALID,
+        iamM('iam_sessionExpired'),
+      )
+    }
+
+    return core.ok(sessionResult.data)
+  }
+
   return {
     async create(options: CreateSessionOptions): Promise<HaiResult<Session>> {
       try {
@@ -228,8 +323,15 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           return built
         const { session, tokens } = built.data
         const saveResult = await repo.save(session, tokens, singleDevice)
-        if (!saveResult.success) {
-          return saveResult as HaiResult<Session>
+        if (!saveResult.success)
+          return saveResult
+
+        const current = await credential(options.userId, bound.data.version)
+        if (!current.success) {
+          const revoked = await repo.removeByAccessToken(session.accessToken)
+          if (!revoked.success)
+            logger.warn('Failed to remove session after credential recheck', { userId: options.userId, code: revoked.error.code })
+          return current
         }
 
         logger.debug('Session created', { userId: options.userId })
@@ -244,67 +346,9 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       }
     },
 
-    async get(accessToken: string): Promise<HaiResult<Session | null>> {
-      const sessionResult = await repo.getByAccessToken(accessToken)
-      if (!sessionResult.success) {
-        return sessionResult
-      }
-
-      const session = sessionResult.data
-      if (!session) {
-        return core.ok(null)
-      }
-
-      if (new Date() > session.expiresAt) {
-        const removeResult = await repo.removeByAccessToken(accessToken)
-        if (!removeResult.success) {
-          return removeResult as HaiResult<Session | null>
-        }
-        return core.ok(null)
-      }
-
-      if (typeof session.credentialVersion !== 'string')
-        return core.err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
-      const bound = await credential(session.userId, session.credentialVersion)
-      if (!bound.success)
-        return bound
-      const validated = await validateApiKey({
-        ...session,
-        ...bound.data.profile,
-      })
-      if (!validated.success)
-        return validated
-      let output = validated.data
-
-      if (sliding || (config.idleTimeout ?? 0) > 0) {
-        const updateResult = await repo.touchByAccessToken(accessToken, session.version, new Date())
-        if (!updateResult.success) {
-          return updateResult as HaiResult<Session | null>
-        }
-        // 保留 API Key 已收敛的权限，只使用成功提交后的时间字段。
-        output = { ...output, lastActiveAt: updateResult.data.lastActiveAt, expiresAt: updateResult.data.expiresAt }
-      }
-
-      // 对外不暴露内部保留的 _tokenPair（含 refreshToken），
-      // 防止调用方（包括 event.locals.session 等上下文）意外泄漏刷新令牌。
-      return core.ok(stripInternalSessionFields(output))
-    },
-
-    async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
-      const sessionResult = await this.get(accessToken)
-      if (!sessionResult.success) {
-        return sessionResult as HaiResult<Session>
-      }
-
-      if (!sessionResult.data) {
-        return core.err(
-          HaiIamError.SESSION_INVALID,
-          iamM('iam_sessionExpired'),
-        )
-      }
-
-      return core.ok(sessionResult.data)
-    },
+    get: accessToken => getSession(accessToken),
+    verifyToken: accessToken => verifySession(accessToken),
+    verifyCurrentSession: accessToken => verifySession(accessToken, true),
 
     async update(accessToken: string, data: Partial<Session>, expectedVersion: string): Promise<HaiResult<void>> {
       return repo.updateByAccessToken(accessToken, data, expectedVersion)
@@ -323,6 +367,8 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       }
       return core.ok(result.data)
     },
+
+    revokeCredentialSessions: (userId, credentialVersion) => repo.removeByUserId(userId, credentialVersion),
 
     async refresh(refreshToken: string): Promise<HaiResult<TokenPair>> {
       try {

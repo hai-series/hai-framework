@@ -11,16 +11,27 @@ import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 
 /**
+ * 发码时确定的主体；null 明确表示仅允许首次注册，缺失字段的旧挑战不能使用。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const subject: OtpSubject = { userId: 'user-1', credentialVersion: 'version-1' }
+ * ```
+ */
+export type OtpSubject = { userId: string, credentialVersion: string } | null
+
+/**
  * 单次发布的状态；消费保留冷却期，旧版本不能修改后续发布。
  * @internal
  * @example 模块内部上下文
  * ```ts
- * const state: OtpState = { version: crypto.randomUUID(), code: null, attempts: 0, expiresAt: 0, cooldownUntil: 0 }
+ * const state: OtpState = { version: crypto.randomUUID(), subject: null, code: null, attempts: 0, expiresAt: 0, cooldownUntil: 0 }
  * const hasChallenge = state.code !== null
  * ```
  */
 interface OtpState {
   version: string
+  subject: OtpSubject
   code: string | null
   attempts: number
   expiresAt: number
@@ -34,7 +45,7 @@ interface OtpState {
  * ```ts
  * // Cache 已初始化；示例消费用户提交的验证码，不回传或记录保存值。
  * const repository = createCacheOtpRepository()
- * const result = await repository.consumeOtp('alice@example.com', '123456', 3)
+ * const result = await repository.consumeOtp({ identifier: 'alice@example.com', code: '123456', maxAttempts: 3, subject: null })
  * if (!result.success)
  *   return result
  * return result.data
@@ -42,27 +53,9 @@ interface OtpState {
  */
 export interface OtpRepository {
   /** 发布成功才允许通知；CAS 冲突拒绝，不能覆盖新代。 */
-  issueOtp: (input: { identifier: string, code: string, expiresIn: number, resendInterval: number }) => Promise<HaiResult<IamNotificationContext>>
-  /** 比较验证码并原子消费；错误次数的 CAS 只重试同一代。 */
-  consumeOtp: (identifier: string, code: string, maxAttempts: number) => Promise<HaiResult<void>>
-}
-
-/**
- * 邮箱转小写，电话移除分隔符；同一身份共用发送与消费状态。
- * @param identifier - 用户提交的邮箱或手机号。
- * @returns 去除首尾空白后的邮箱小写值，或移除空白与连字符的手机号。
- * @internal
- * @example 模块内部上下文
- * ```ts
- * const email = normalizeOtpIdentifier(' Alice@Example.com ')
- * const sameIdentity = email === normalizeOtpIdentifier('alice@example.com')
- * ```
- */
-export function normalizeOtpIdentifier(identifier: string): string {
-  const trimmed = identifier.trim()
-  return trimmed.includes('@')
-    ? trimmed.toLowerCase()
-    : trimmed.replace(/[\s-]/g, '')
+  issueOtp: (input: { identifier: string, code: string, subject: OtpSubject, expiresIn: number, resendInterval: number }) => Promise<HaiResult<IamNotificationContext>>
+  /** 原子消费匹配同一主体的验证码；false 表示已计次的错误尝试，旧代或缺少挑战返回失败。 */
+  consumeOtp: (input: { identifier: string, code: string, subject: OtpSubject, maxAttempts: number }) => Promise<HaiResult<boolean>>
 }
 
 let otpRepoInstance: OtpRepository | null = null
@@ -89,7 +82,7 @@ export function resetOtpRepoSingleton(): void {
  * ```ts
  * // Cache 已初始化；示例消费用户提交的验证码，不回传或记录保存值。
  * const repository = createCacheOtpRepository()
- * const result = await repository.consumeOtp('alice@example.com', '123456', 3)
+ * const result = await repository.consumeOtp({ identifier: 'alice@example.com', code: '123456', maxAttempts: 3, subject: null })
  * if (!result.success)
  *   return result
  * return result.data
@@ -99,7 +92,7 @@ export function createCacheOtpRepository(): OtpRepository {
   if (otpRepoInstance)
     return otpRepoInstance
 
-  const keyFor = (identifier: string) => `hai:iam:otp:${normalizeOtpIdentifier(identifier)}`
+  const keyFor = (identifier: string) => `hai:iam:otp:${identifier}`
   const failure = () => core.err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'))
   const invalid = () => core.err(HaiIamError.OTP_INVALID, iamM('iam_otpNotExistOrExpired'))
   otpRepoInstance = {
@@ -107,6 +100,7 @@ export function createCacheOtpRepository(): OtpRepository {
       const now = Date.now()
       const state: OtpState = {
         version: crypto.randomUUID(),
+        subject: input.subject,
         code: input.code,
         attempts: 0,
         expiresAt: now + input.expiresIn * 1000,
@@ -138,7 +132,7 @@ export function createCacheOtpRepository(): OtpRepository {
       })
     },
 
-    async consumeOtp(identifier, code, maxAttempts) {
+    async consumeOtp({ identifier, code, maxAttempts, subject }) {
       const key = keyFor(identifier)
       let version: string | undefined
       for (let attempt = 0; attempt < 16; attempt++) {
@@ -148,6 +142,11 @@ export function createCacheOtpRepository(): OtpRepository {
         const state = current.data
         if (!state || state.code === null || state.expiresAt <= Date.now() || state.attempts >= maxAttempts || (version && state.version !== version))
           return invalid()
+        if ((state.subject === null) !== (subject === null)
+          || state.subject?.userId !== subject?.userId
+          || state.subject?.credentialVersion !== subject?.credentialVersion) {
+          return invalid()
+        }
         version = state.version
         const correct = core.string.constantTimeEqual(state.code, code)
         const attempts = state.attempts + 1
@@ -164,9 +163,9 @@ export function createCacheOtpRepository(): OtpRepository {
           return failure()
         if (!committed.data)
           continue
-        if (!correct || state.expiresAt <= Date.now())
-          return core.err(HaiIamError.OTP_INVALID, iamM('iam_otpWrong'))
-        return core.ok(undefined)
+        if (state.expiresAt <= Date.now())
+          return invalid()
+        return core.ok(correct)
       }
       return core.err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'))
     },

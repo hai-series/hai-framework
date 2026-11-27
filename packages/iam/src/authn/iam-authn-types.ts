@@ -244,6 +244,7 @@ export interface AuthnOperations {
   /**
    * 使用验证码登录
    *
+   * 按发码时唯一匹配的邮箱或手机号核对用户与凭据代际；首次注册挑战只允许创建新账号。
    * @param credentials - OTP 凭证（identifier + code）
    * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
    * @returns 成功返回 AuthResult；验证码无效/过期返回 OTP_INVALID
@@ -285,7 +286,7 @@ export interface AuthnOperations {
   /**
    * 验证令牌
    *
-   * 验证会话并读取当前用户状态、角色与权限；重新应用 API Key scopes，依赖失败即拒绝。
+   * 验证会话，从同一查询结果读取当前账号状态、角色和权限。API Key 派生会话按 scopes 限定授权。
    * 会话同步仅是缓存快照，受保护请求使用此入口而非低层 session.verifyToken。
    *
    * @param accessToken - 访问令牌
@@ -296,6 +297,7 @@ export interface AuthnOperations {
   /**
    * 发送验证码
    *
+   * 使用规范化联系方式选择渠道并绑定唯一账号；历史联系方式歧义时拒绝发送。
    * @param identifier - 用户标识（邮箱/手机号）
    * @returns 成功返回验证码过期时间；频率限制返回 OTP_RESEND_TOO_FAST
    */

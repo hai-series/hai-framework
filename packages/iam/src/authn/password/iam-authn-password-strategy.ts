@@ -17,7 +17,7 @@ import { PasswordConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 import { checkPasswordState, isUserActive, toUser } from '../../user/iam-user-utils.js'
-import { ensureCredentialType, isAccountLocked, mapPasswordWorkError, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../iam-authn-utils.js'
+import { checkAccountLock, ensureCredentialType, mapPasswordWorkError, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../iam-authn-utils.js'
 
 /**
  * 密码认证策略配置
@@ -59,6 +59,8 @@ export interface PasswordStrategyConfig {
 export interface PasswordStrategyResult {
   /** 认证策略（用于通用登录流程） */
   strategy: AuthStrategy
+  /** 按当前会话已经确定的用户 ID 验证密码。 */
+  authenticateUser: (userId: string, password: string) => Promise<HaiResult<AuthenticatedUser>>
   /** 验证密码强度 */
   validatePassword: (password: string) => HaiResult<void>
   /** 密码哈希 */
@@ -165,19 +167,6 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
   }
 
   /**
-   * 先拒绝非激活、到期或锁定账号；公开登录边界统一掩码，不能在受限期间继续猜测密码。
-   */
-  function checkAccountStatus(user: StoredUser): HaiResult<void> {
-    if (!isUserActive(user)) {
-      return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
-    }
-    if (isAccountLocked(user, failurePolicy)) {
-      return core.err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
-    }
-    return core.ok(undefined)
-  }
-
-  /**
    * 验证用户密码
    */
   async function verifyUserPassword(user: StoredUser, password: string): Promise<HaiResult<void>> {
@@ -189,7 +178,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     }
 
     if (!verifyResult.data) {
-      const failureResult = await recordLoginFailure(config.userRepository, user, failurePolicy)
+      const failureResult = await recordLoginFailure(user, failurePolicy)
       if (!failureResult.success)
         return failureResult
       logger.warn('Password verification failed', { userId: user.id })
@@ -197,6 +186,34 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     }
 
     return core.ok(undefined)
+  }
+
+  /** 登录和再认证共用同一份凭据快照及失败锁定规则。 */
+  async function authenticateStoredUser(storedUser: StoredUser | null, password: string): Promise<HaiResult<AuthenticatedUser>> {
+    if (!storedUser)
+      return rejectMissingPasswordCredentials()
+
+    // 受限账号或共享锁定状态不可用时，不继续鉴别密码。
+    if (!isUserActive(storedUser))
+      return core.err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
+    const lock = await checkAccountLock(storedUser, failurePolicy)
+    if (!lock.success)
+      return lock
+    const verified = await verifyUserPassword(storedUser, password)
+    if (!verified.success)
+      return verified
+    const passwordState = checkPasswordState(storedUser, passwordConfig)
+    if (!passwordState.success)
+      return passwordState
+    const reset = await resetLoginFailures(config.userRepository, storedUser, failurePolicy)
+    if (!reset.success)
+      return reset
+
+    logger.debug('Password authentication succeeded', { userId: storedUser.id })
+    return core.ok({
+      ...toUser(storedUser),
+      credentialVersion: storedUser.credentialVersion ?? '',
+    })
   }
 
   const strategy: AuthStrategy = {
@@ -211,38 +228,10 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
 
       const { identifier, password } = credentialResult.data
 
-      // 查找用户
       const userResult = await config.userRepository.findByIdentifier(identifier)
       if (!userResult.success)
         return userResult
-
-      const storedUser = userResult.data
-      if (!storedUser)
-        return rejectMissingPasswordCredentials()
-
-      // 受限账号不继续验证密码；公开登录边界执行计算填充并隐藏具体状态。
-      const statusResult = checkAccountStatus(storedUser)
-      if (!statusResult.success)
-        return statusResult as HaiResult<AuthenticatedUser>
-      const pwResult = await verifyUserPassword(storedUser, password)
-      if (!pwResult.success)
-        return pwResult as HaiResult<AuthenticatedUser>
-
-      // 检查密码是否过期
-      const passwordState = checkPasswordState(storedUser, passwordConfig)
-      if (!passwordState.success)
-        return passwordState
-
-      // 登录成功，重置失败计数
-      const resetResult = await resetLoginFailures(config.userRepository, storedUser, failurePolicy)
-      if (!resetResult.success)
-        return resetResult
-      logger.debug('Password authentication succeeded', { userId: storedUser.id })
-
-      return core.ok({
-        ...toUser(storedUser),
-        credentialVersion: storedUser.credentialVersion ?? '',
-      })
+      return authenticateStoredUser(userResult.data, password)
     },
   }
 
@@ -256,6 +245,12 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
 
   return {
     strategy,
+    async authenticateUser(userId, password) {
+      const user = await config.userRepository.findById(userId)
+      return user.success
+        ? authenticateStoredUser(user.data, password)
+        : user
+    },
     validatePassword: validatePasswordStrength,
     hashPassword,
     passwordConfig,

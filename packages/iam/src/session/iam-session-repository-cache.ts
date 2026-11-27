@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { SessionConfig } from '../iam-config.js'
-import type { Session, TokenPair } from './iam-session-types.js'
+import type { Session, SessionFieldUpdates, TokenPair } from './iam-session-types.js'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { iamM } from '../iam-i18n.js'
@@ -96,7 +96,7 @@ function repositoryFailure(cause: unknown): HaiResult<never> {
  * ```
  */
 export interface SessionRepository {
-  /** 原子保存；singleDevice 同一次提交替换该用户全部旧会话。 */
+  /** 原子保存；singleDevice 在同一次提交替换同一凭据代的旧会话。 */
   save: (session: Session, tokens: TokenPair, singleDevice?: boolean) => Promise<HaiResult<void>>
   /** 比较旧版本与 refresh 凭据，原子撤销旧会话并发布唯一后继。 */
   rotate: (previous: Session, refreshToken: string, session: Session, tokens: TokenPair) => Promise<HaiResult<void>>
@@ -110,12 +110,12 @@ export interface SessionRepository {
   touchByAccessToken: (token: string, expectedVersion: string, now: Date) => Promise<HaiResult<Session>>
   /** 原子撤销 access 与 refresh，重复操作成功。 */
   removeByAccessToken: (token: string) => Promise<HaiResult<void>>
-  /** 原子撤销用户全部会话，返回记录数。 */
-  removeByUserId: (userId: string) => Promise<HaiResult<number>>
+  /** 原子撤销用户会话，指定凭据代时只撤销该代。 */
+  removeByUserId: (userId: string, credentialVersion?: string) => Promise<HaiResult<number>>
   /** 原子移除 refresh 凭据，保留 access。 */
   removeRefreshToken: (token: string) => Promise<HaiResult<void>>
   /** 在同一最新文档更新会话，缓存故障返回失败并保留整个分区；损坏数据同样失败关闭，不当作不存在。 */
-  patchUserSessions: (userId: string, patch: Record<string, unknown>) => Promise<HaiResult<void>>
+  patchUserSessions: (userId: string, patch: SessionFieldUpdates) => Promise<HaiResult<void>>
 }
 
 /**
@@ -244,7 +244,7 @@ export function createCacheSessionRepository(
         if (policy.singleDeviceMode === 'reject' && active.length)
           return core.err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
         if (policy.singleDeviceMode !== 'reject')
-          Object.keys(state.sessions).forEach(token => removed.add(token))
+          active.forEach(([token]) => removed.add(token))
       }
       else if (cap) {
         const same = active.filter(([, entry]) => entry.session.terminalType === terminal)
@@ -359,10 +359,12 @@ export function createCacheSessionRepository(
         return core.ok(undefined)
       })
     },
-    removeByUserId: userId => mutate(getUserSessionScope(userId), (state) => {
-      const count = Object.keys(state.sessions).length
-      state.sessions = {}
-      return core.ok(count)
+    removeByUserId: (userId, credentialVersion) => mutate(getUserSessionScope(userId), (state) => {
+      const matching = Object.entries(state.sessions).filter(([, entry]) =>
+        credentialVersion === undefined || entry.session.credentialVersion === credentialVersion)
+      for (const [token] of matching)
+        delete state.sessions[token]
+      return core.ok(matching.length)
     }),
     async removeRefreshToken(token) {
       const scope = getTokenSessionScope(token)
@@ -376,7 +378,7 @@ export function createCacheSessionRepository(
         return core.ok(undefined)
       })
     },
-    patchUserSessions(userId, patch) {
+    patchUserSessions(userId, { roles, permissions }) {
       // 重试绑定最初读取的会话代际；不能把迟到授权覆盖到后续登录或新内容版本。
       let targets: Map<string, string> | undefined
       return mutate(getUserSessionScope(userId), (state) => {
@@ -388,7 +390,9 @@ export function createCacheSessionRepository(
           if (entry.session.version !== version)
             return core.err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
           entry.session = {
-            ...applySessionPatch(restoreSession(entry.session), patch),
+            ...entry.session,
+            roles: roles ?? entry.session.roles,
+            permissions: permissions ?? entry.session.permissions,
             version: crypto.randomUUID(),
           }
         }

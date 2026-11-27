@@ -4,7 +4,7 @@ import { crypto as haiCrypto, HaiCryptoError } from '@h-ai/crypto'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/index.js'
-import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, initIam, postgresRedisEnv, readLoginFailures, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 function tests() {
   afterEach(() => {
@@ -64,9 +64,12 @@ function tests() {
       })
       vi.setSystemTime(Date.now() + 60_001)
     }
-    const query = () => reldb.sql.get('SELECT login_failed_count, locked_until FROM hai_iam_users WHERE id = ?', [created.data.user.id])
+    const query = () => readLoginFailures(created.data.user.id)
     const before = await query()
-    expect(before.success).toBe(true)
+    if (state === 'locked')
+      expect(before?.lockedUntil).toBeGreaterThan(Date.now())
+    else
+      expect(before).toBeNull()
     const unknown = await iam.auth.login({ identifier: missing, password: 'WrongPassword123!' })
     const login = await iam.auth.login({ identifier: username, password: 'WrongPassword123!' })
     expect(unknown).toMatchObject({
@@ -96,9 +99,9 @@ function tests() {
     const created = await iam.user.createUser({ username, password: TEST_PASSWORD })
     if (!created.success)
       throw new Error(created.error.message)
-    const query = () => reldb.sql.get('SELECT login_failed_count, locked_until FROM hai_iam_users WHERE id = ?', [created.data.user.id])
+    const query = () => readLoginFailures(created.data.user.id)
     const before = await query()
-    expect(before.success).toBe(true)
+    expect(before).toBeNull()
     const verify = vi.spyOn(haiCrypto.password, 'verifyAsync').mockResolvedValueOnce(core.err(HaiCryptoError.VERIFY_FAILED, 'Simulated password computation failure'))
     const changed = await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'NewPassword456!' })
     expect(verify).toHaveBeenCalledOnce()
@@ -291,19 +294,16 @@ function tests() {
     const created = await iam.user.register({ username, password: TEST_PASSWORD })
     if (!created.success)
       throw new Error(created.error.message)
-    const begin = reldb.tx.begin.bind(reldb.tx)
-    vi.spyOn(reldb.tx, 'begin').mockImplementationOnce(async () => {
-      const result = await begin()
-      if (result.success) {
-        const execute = result.data.execute.bind(result.data)
-        result.data.execute = (sql, params) => {
-          if (sql.includes('SET credential_version'))
-            throw new Error('Synthetic transaction write failure')
-          return execute(sql, params)
-        }
+    const wrapResult = reldb.tx.wrapResult.bind(reldb.tx)
+    vi.spyOn(reldb.tx, 'wrapResult').mockImplementationOnce(callback => wrapResult((tx) => {
+      const execute = tx.execute.bind(tx)
+      tx.execute = (sql, params) => {
+        if (sql.includes('SET credential_version'))
+          throw new Error('Synthetic transaction write failure')
+        return execute(sql, params)
       }
-      return result
-    })
+      return callback(tx)
+    }))
     expect((await iam.user.updateUser(created.data.user.id, { accountStatus: 'dormant' })).success).toBe(false)
     expect(await iam.user.getUser(created.data.user.id)).toMatchObject({
       success: true,

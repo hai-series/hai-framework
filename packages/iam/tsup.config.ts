@@ -7,6 +7,7 @@ export default defineConfig({
     'index': 'src/index.ts',
     'browser': 'src/iam-index.browser.ts',
     'ldap-bindings': 'src/authn/ldap/iam-authn-ldap-migrate.ts',
+    'read-cache-maintenance': 'src/iam-cache-maintenance.ts',
   },
   external: [
     '@h-ai/core',

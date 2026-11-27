@@ -86,8 +86,8 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   if (accountExpiresAt !== undefined)
     updateData.accountExpiresAt = accountExpiresAt
 
-  if (Object.keys(updateData).length > 0) {
-    const updateResult = await iam.user.updateUser(userId, updateData)
+  if (Object.keys(updateData).length > 0 || roles !== undefined) {
+    const updateResult = await iam.user.updateUserWithRoles(userId, { profile: updateData, roleIds: roles })
     if (!updateResult.success) {
       return kit.response.fromError(updateResult.error)
     }
@@ -98,14 +98,6 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     const resetResult = await iam.user.adminResetPassword(userId, password)
     if (!resetResult.success) {
       return kit.response.fromError(resetResult.error)
-    }
-  }
-
-  // 更新角色（如果提供）
-  if (roles !== undefined) {
-    const syncResult = await iam.authz.syncRoles(userId, roles)
-    if (!syncResult.success) {
-      return kit.response.fromError(syncResult.error)
     }
   }
 
