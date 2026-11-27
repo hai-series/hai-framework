@@ -14,7 +14,7 @@
 
 ## 应用能力
 
-[iam](iam.md) · [ai](ai.md) · [tools](tools.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.md)
+[iam](iam.md) · [ai](ai.md) · [tools](tools.md) · [tools-runner](tools-runner.md) · [audit](audit.md) · [feedback](feedback.md) · [payment](payment.md) · [reach](reach.md) · [scheduler](scheduler.md) · [ui](ui.md) · [capacitor](capacitor.md)
 
 ## 构建与执行
 
