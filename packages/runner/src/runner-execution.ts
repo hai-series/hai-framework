@@ -204,6 +204,7 @@ export function createRunnerExecution(runtime: RunnerRuntime) {
         parentId: claim.parentId,
         scope: claim.request.scope,
         ...(claim.request.locale !== undefined && { locale: claim.request.locale }),
+        maxResultBytes: MAX_PAYLOAD_BYTES,
         owner: holder,
         signal: abort.signal,
         start,

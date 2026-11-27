@@ -14,6 +14,8 @@
 
 アプリは独自の設定からオプションを取得し、通常の読み込み手順で反映できます。永続実行、データベース、コンテナーの対応付けはホストで構成します。
 
+成果物ファクトリーに正の整数 `maxArtifactBytes` を渡すと、作成・編集・読み取り時の UTF-8 本文の上限を設定できます。既定値は 1,048,576 バイトです。 [設定とページ単位の読み取り](../function/tools.ja.md#artifact-byte-limit)
+
 <a id="local-service"></a>
 <a id="job-environments"></a>
 

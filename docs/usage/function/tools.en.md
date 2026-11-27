@@ -261,7 +261,7 @@ The factory returns the built-in tools in `set.tools`. `registry.registerMany(se
 
 | API | Purpose | Parameters and defaults | Return value or failure | Call example |
 | --- | --- | --- | --- | --- |
-| `tools.createArtifactTools(options)` | Obtain artifact and analysis tools for the current principal | `options: ArtifactToolOptions`. Supply the authenticated `context` and the host's `files` callbacks | `ToolSet` containing tools and groups. Validation and file access errors occur when a tool runs | `tools.createArtifactTools({ context, files })` |
+| `tools.createArtifactTools(options)` | Obtain artifact and analysis tools for the current principal | `options: ArtifactToolOptions`. Supply the authenticated `context` and the host's `files` callbacks. `maxArtifactBytes` is optional | `ToolSet` containing tools and groups. Validation and file access errors occur when a tool runs | `tools.createArtifactTools({ context, files })` |
 
 ##### Host options and file callbacks
 
@@ -274,14 +274,18 @@ The factory returns the built-in tools in `set.tools`. `registry.registerMany(se
 
 | Tool | Input | Successful data |
 | --- | --- | --- |
-| `artifact_create` | A trimmed `title` of 1–160 characters, `kind`, and string `content` of up to 1,048,576 characters. Kinds are `markdown`, `html`, `table` and `chart`. Table and chart text must represent JSON objects | An artifact reference with `id`, `title`, `kind`, numeric `version`, and `mediaType` |
-| `artifact_read` | The artifact `id` of 1–200 characters. Supports UTF-8 Markdown, HTML, plain text and JSON files up to 1 MiB | `{ id, version?, content }` with decoded text |
+| `artifact_create` | A trimmed `title` of 1–160 characters, `kind`, and string `content` bounded by `maxArtifactBytes`. Kinds are `markdown`, `html`, `table` and `chart`. Table and chart text must represent JSON objects | An artifact reference with `id`, `title`, `kind`, numeric `version`, and `mediaType` |
+| `artifact_read` | The artifact `id` of 1–200 characters and optional `cursor`. Supports UTF-8 Markdown, HTML, plain text and JSON | `{ id, version?, content, nextCursor? }` with decoded text |
 | `artifact_save` | `id`, positive integer `baseVersion`, and replacement `content` | The saved artifact reference |
 | `data_analyze` | `title`, 1–2,000 `rows` with up to 50 distinct columns, and the `x` and `y` column names. The `y` column holds numbers. Choose `bar`, `line`, `area`, `pie`, or `scatter` for `chartType`, which defaults to `bar` | `{ statistics, artifacts }` containing count, sum, mean, minimum and maximum and the table and chart references |
 
 See the [artifact data contract](../data/tools.en.md#artifact-access) for storage ownership and reference fields.
 
 `createArtifactTools()` constructs the tools. `artifact_create`, `artifact_read`, and `artifact_save` each handle one file per call. With a direct registry, use `registry.executeAll()` to run one call per file in sequence. A failed call returns an error for the batch. Files saved earlier remain available. With Tools Runner, submit a separate task for each new file so it has its own execution ID and artifact ID. A single `data_analyze` call produces two fixed outputs from the same data.
+
+<a id="artifact-byte-limit"></a>
+
+`maxArtifactBytes` limits artifact bodies in UTF-8 bytes. It defaults to 1,048,576. Pass a positive integer such as `tools.createArtifactTools({ context, files, maxArtifactBytes: 256 * 1024 })` to set the same bound for creating, editing, and reading. Tools Runner also applies a 512 KiB JSON budget to each result. When a read returns `nextCursor`, call again with the same `id` and `cursor: nextCursor`, and join the `content` values in order until a response omits `nextCursor`. Every call rechecks authorization. If the file version or content changes during pagination, start again from the first page.
 
 <a id="artifact-setup"></a>
 

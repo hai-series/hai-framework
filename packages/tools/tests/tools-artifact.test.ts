@@ -1,6 +1,7 @@
 import type { ToolArtifactAccess } from '../src/tools-node-main.js'
 import { core } from '@h-ai/core'
 import { expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { tools } from '../src/tools-node-main.js'
 
 const context = {
@@ -46,6 +47,78 @@ it('creates and reads editable artifacts through the bound resource owner', asyn
     for (const example of definition.examples ?? [])
       expect((await tool.parameters.safeParseAsync(example.input)).success).toBe(true)
   }
+})
+
+it('uses one configurable UTF-8 byte limit for create, edit, and read', async () => {
+  let body = '中🙂'
+  const publish = vi.fn(files.publish)
+  const save = vi.fn(files.save!)
+  const read = async () => core.ok({
+    id: 'report',
+    name: 'report.md',
+    mediaType: 'text/markdown',
+    data: new TextEncoder().encode(body),
+  })
+  const registry = tools.createRegistry()
+  expect(registry.registerMany(tools.createArtifactTools({
+    context,
+    files: { read, publish, save },
+    maxArtifactBytes: 7,
+  }).tools).success).toBe(true)
+  const create = (content: string) => registry.execute('artifact_create', { title: 'Report', kind: 'markdown', content })
+  const edit = (content: string) => registry.execute('artifact_save', { id: 'report', baseVersion: 1, content })
+  expect((await create(body)).success).toBe(true)
+  expect((await edit(body)).success).toBe(true)
+  expect(await registry.execute('artifact_read', { id: 'report' })).toMatchObject({
+    success: true,
+    data: { content: body },
+  })
+  body += '中'
+  expect((await create(body)).success).toBe(false)
+  expect((await edit(body)).success).toBe(false)
+  expect((await registry.execute('artifact_read', { id: 'report' })).success).toBe(false)
+  expect(publish).toHaveBeenCalledOnce()
+  expect(save).toHaveBeenCalledOnce()
+  expect(() => tools.createArtifactTools({ context, files, maxArtifactBytes: 0 })).toThrow(RangeError)
+  const defaults = tools.createArtifactTools({ context, files })
+  expect((await defaults.tools.find(tool => tool.name === 'artifact_create')!.execute({
+    title: 'Report',
+    kind: 'markdown',
+    content: '中'.repeat(400_000),
+  })).success).toBe(false)
+})
+
+it('reauthorizes each page and rejects a cursor after a change to the host bytes', async () => {
+  let body = '\uFEFF中🙂\n"'.repeat(100)
+  const read = vi.fn<ToolArtifactAccess['read']>(async () => core.ok({
+    id: 'report',
+    name: 'report.md',
+    mediaType: 'text/markdown',
+    data: new TextEncoder().encode(body),
+  }))
+  const execution = {
+    id: 'task',
+    emit: async () => core.ok(undefined),
+    maxResultBytes: 173,
+  }
+  const reader = tools.createArtifactTools({
+    context: { ...context, execution },
+    files: { ...files, read },
+  }).tools.find(tool => tool.name === 'artifact_read')!
+  const result = await reader.execute({ id: 'report' })
+  expect(result.success).toBe(true)
+  if (!result.success)
+    throw new Error(result.error.message)
+  const first = z.object({
+    nextCursor: z.string(),
+  }).parse(result.data)
+  body += ' changed'
+  expect((await reader.execute({ id: 'report', cursor: first.nextCursor })).success).toBe(false)
+  expect(read).toHaveBeenCalledTimes(2)
+  expect(read.mock.calls.map(args => args[1])).toEqual([
+    { id: 'report' },
+    { id: 'report' },
+  ])
 })
 
 it('creates interoperable table/chart artifacts and computes finite numeric summaries', async () => {

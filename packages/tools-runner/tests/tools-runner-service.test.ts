@@ -7,6 +7,7 @@ import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { runner as frameworkRunner, HaiRunnerError } from '@h-ai/runner'
 import { HaiToolsError, tools } from '@h-ai/tools'
+import { tools as artifactTools } from '@h-ai/tools/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { toolsRunner } from '../src/index.js'
@@ -80,6 +81,51 @@ function pauseRunnerSubmit() {
 }
 
 describe('toolsRunner.createService', () => {
+  it('reads large authorized artifacts through the real Runner result budget', async () => {
+    const content = '中🙂\n"'.repeat(80_000)
+    const read = vi.fn(async () => core.ok({
+      id: 'report',
+      name: 'report.md',
+      mediaType: 'text/markdown',
+      version: 1,
+      data: new TextEncoder().encode(content),
+    }))
+    const service = createService(['artifact_read'], {
+      createTools: context => artifactTools.createArtifactTools({
+        context,
+        files: {
+          read,
+          publish: async () => core.err(HaiToolsError.FORBIDDEN, 'Read-only fixture'),
+        },
+      }),
+    })
+    const value = z.object({
+      content: z.string(),
+      version: z.literal(1),
+      nextCursor: z.string().optional(),
+    })
+    const first = await service.invoke({
+      name: 'artifact_read',
+      input: { id: 'report' },
+    }, { scope })
+    expect(first.success).toBe(true)
+    if (!first.success)
+      throw new Error(first.error.message)
+    const page = value.parse(first.data)
+    expect(page.nextCursor).toBeDefined()
+    const last = await service.invoke({
+      name: 'artifact_read',
+      input: { id: 'report', cursor: page.nextCursor },
+    }, { scope })
+    expect(last.success).toBe(true)
+    if (!last.success)
+      throw new Error(last.error.message)
+    const final = value.parse(last.data)
+    expect(final.nextCursor).toBeUndefined()
+    expect(page.content + final.content).toBe(content)
+    expect(read).toHaveBeenCalledTimes(2)
+  })
+
   it('preserves queued jobs and receipts across the adapter cutover in both directions', async () => {
     const api = frameworkRunner.create()
     let closeFacade: (() => void) | undefined

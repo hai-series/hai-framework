@@ -25,7 +25,12 @@ export interface ToolServiceContext {
   sessionId?: string
   signal?: AbortSignal
   /** 可信执行器提供稳定的执行编号及记录进度的方法。 */
-  execution?: { id: string, emit: (data: ToolJson) => Promise<HaiResult<void>> }
+  execution?: {
+    id: string
+    emit: (data: ToolJson) => Promise<HaiResult<void>>
+    /** 宿主可提供持久任务结果的 JSON UTF-8 字节预算。 */
+    maxResultBytes?: number
+  }
 }
 
 /**

@@ -257,9 +257,9 @@ Agent ワークスペースでは、プロジェクトのメモをファイル�
 
 | API | 用途 | 引数と既定値 | 戻り値・失敗 | 呼び出し例 |
 | --- | --- | --- | --- | --- |
-| `tools.createArtifactTools(options)` | 成果物と分析のツールを用意 | `options: ArtifactToolOptions`。`context` と `files` が必須 | `ToolSet` | `tools.createArtifactTools({ context, files })` |
+| `tools.createArtifactTools(options)` | 成果物と分析のツールを用意 | `options: ArtifactToolOptions`。`context` と `files` が必須。 `maxArtifactBytes` は任意 | `ToolSet` | `tools.createArtifactTools({ context, files })` |
 | `registry.execute('artifact_create', input)` | ファイル本文を保存 | `{ title, kind, content }`。すべて必須 | `HaiResult` の成功値は `ToolArtifactReference`。検証や公開に失敗するとエラー | `await registry.execute('artifact_create', { title: 'Project notes', kind: 'markdown', content: '# Project notes' })` |
-| `registry.execute('artifact_read', input)` | 保存したテキストを ID で取得 | `{ id }`。作成時の参照の ID | `HaiResult` の成功値は `{ id, content, version? }`。権限、ファイル形式、デコードのエラーを返す | `await registry.execute('artifact_read', { id })` |
+| `registry.execute('artifact_read', input)` | 保存したテキストを ID で取得 | `id` は必須、`cursor` は任意 | `HaiResult` の成功値は `{ id, content, version?, nextCursor? }`。権限、ファイル形式、デコードのエラーを返す | `await registry.execute('artifact_read', { id })` |
 | `registry.execute('artifact_save', input)` | 指定した版を更新 | `{ id, baseVersion, content }`。すべて必須。ホストが `files.save` を提供する場合に有効 | `HaiResult` の成功値は新しい `ToolArtifactReference`。版の競合や権限エラーはホストが返す | `await registry.execute('artifact_save', { id, baseVersion: 1, content })` |
 | `registry.execute('data_analyze', input)` | データ行の集計と表・グラフの保存 | `{ title, rows, x, y, chartType? }`。`chartType` の既定値は `bar` | `HaiResult` の成功値は `{ statistics, artifacts }`。列が不足する場合や公開に失敗した場合はエラー | `await registry.execute('data_analyze', { title, rows, x: 'month', y: 'sales' })` |
 
@@ -272,9 +272,13 @@ Agent ワークスペースでは、プロジェクトのメモをファイル�
 | `files.publish` | `context`、`{ name, kind, mediaType, data, id? }` | 必須。書き込みを認可してバイト列を保存し、`{ id, title, kind, mediaType, version }` を返す |
 | `files.save` | `context`、`{ id, baseVersion, content }` | 任意。主体、版、最終書き込み条件を確認し、更新した参照を返す |
 
-`artifact_create` の `kind` は `markdown`、`html`、`table`、`chart` です。表とグラフの本文は JSON オブジェクトを表す文字列です。`artifact_read` で読み取れるのは最大 1 MiB の UTF-8 Markdown、HTML、プレーンテキスト、JSON です。`data_analyze` には 1～2000 行を渡します。各行に `x` 列と有限の数値をもつ `y` 列が必要です。使えるグラフは `bar`、`line`、`area`、`pie`、`scatter` です。
+`artifact_create` の `kind` は `markdown`、`html`、`table`、`chart` です。表とグラフの本文は JSON オブジェクトを表す文字列です。`artifact_read` で読み取れるのはUTF-8 Markdown、HTML、プレーンテキスト、JSON です。`data_analyze` には 1～2000 行を渡します。各行に `x` 列と有限の数値をもつ `y` 列が必要です。使えるグラフは `bar`、`line`、`area`、`pie`、`scatter` です。
 
 `createArtifactTools()` はツールを用意します。`artifact_create`、`artifact_read`、`artifact_save` を実行すると、1 回の呼び出しでファイル 1 件を処理します。レジストリを直接使う場合は、ファイルごとの呼び出しを `registry.executeAll()` で順番に実行できます。途中で失敗すると一括処理はエラーを返し、それまでに保存したファイルは残ります。Tools Runner では、新しいファイルごとにジョブを送信すると実行 ID と成果物 ID が別々になります。`data_analyze` は 1 回の呼び出しで同じデータから 2 種類の出力を作ります。
+
+<a id="artifact-byte-limit"></a>
+
+`maxArtifactBytes` は成果物本文の UTF-8 バイト数の上限で、既定値は 1,048,576 バイトです。`tools.createArtifactTools({ context, files, maxArtifactBytes: 256 * 1024 })` のように正の整数を指定すると、作成・編集・読み取りに同じ上限が適用されます。Tools Runner では結果の JSON 1 件に 512 KiB の上限もあります。`nextCursor` が返ったら、同じ `id` と `cursor: nextCursor` を指定して再度呼び出し、`nextCursor` がなくなるまで `content` を順に連結します。呼び出すたびに権限を確認します。読み取り途中で版や内容が変わった場合は最初のページからやり直します。
 
 <a id="artifact-setup"></a>
 

@@ -14,6 +14,8 @@
 
 应用可按业务需要从自己的配置中读取工具选项，修改后按应用的加载方式更新工厂。持久队列的启用范围、数据库和容器映射由宿主装配。
 
+产物工厂的 `maxArtifactBytes` 可设置为正整数，默认 1,048,576 字节。它限制创建、编辑和读取的 UTF-8 正文体积。 [配置和分页读取示例](../function/tools.md#artifact-byte-limit)
+
 <a id="local-service"></a>
 <a id="job-environments"></a>
 

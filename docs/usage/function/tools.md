@@ -257,9 +257,9 @@ async function manageSum() {
 
 | API | 用途 | 参数与默认值 | 返回值或失败 | 调用示例 |
 | --- | --- | --- | --- | --- |
-| `tools.createArtifactTools(options)` | 创建文件读写和数据分析工具 | `options: ArtifactToolOptions`，必填 `context: ToolServiceContext` 和 `files: ToolArtifactAccess` | `ToolSet`。`tools` 中包含可以登记和执行的工具 | `tools.createArtifactTools({ context, files })` |
+| `tools.createArtifactTools(options)` | 创建文件读写和数据分析工具 | `options: ArtifactToolOptions`，必填 `context: ToolServiceContext` 和 `files: ToolArtifactAccess`，可选 `maxArtifactBytes` | `ToolSet`。`tools` 中包含可以登记和执行的工具 | `tools.createArtifactTools({ context, files })` |
 | `registry.execute('artifact_create', input)` | 保存正文 | `title`、`kind`、`content` 必填。`kind` 为 `markdown`、`html`、`table` 或 `chart`；表格与图表的正文是 JSON 对象字符串 | 成功返回 `ToolArtifactReference`，参数校验或宿主保存失败时返回错误 | `await registry.execute('artifact_create', { title: 'Notes', kind: 'markdown', content: '# Notes' })` |
-| `registry.execute('artifact_read', { id })` | 按 ID 读回正文 | `id` 必填。支持最多 1 MiB 的 UTF-8 Markdown、HTML、纯文本或 JSON | 成功返回 `{ id, content, version? }`。权限、格式或解码失败时返回错误 | `await registry.execute('artifact_read', { id })` |
+| `registry.execute('artifact_read', { id })` | 按 ID 读回正文 | `id` 必填，可选 `cursor`。支持 UTF-8 Markdown、HTML、纯文本或 JSON | 成功返回 `{ id, content, version?, nextCursor? }`。权限、游标、格式或解码失败时返回错误 | `await registry.execute('artifact_read', { id })` |
 | `registry.execute('artifact_save', input)` | 按基础版本保存编辑 | `id`、正整数 `baseVersion`、替换后的 `content` 必填。宿主提供 `files.save` 时才定义本工具 | 成功返回更新后的 `ToolArtifactReference`。权限或版本冲突由宿主返回错误 | `await registry.execute('artifact_save', { id, baseVersion: 1, content })` |
 | `registry.execute('data_analyze', input)` | 汇总数据并发布表格和图表 | `title`、1–2000 行 `rows`、列名 `x` 和 `y` 必填。`y` 列为有限数字。`chartType` 可选 `bar`、`line`、`area`、`pie` 或 `scatter`，默认 `bar` | 成功返回 `{ statistics, artifacts }`。数据校验或发布失败时返回错误 | `await registry.execute('data_analyze', { title, rows, x: 'month', y: 'sales' })` |
 
@@ -272,6 +272,10 @@ async function manageSum() {
 | `files.save(context, { id, baseVersion, content })` | 文件 ID、编辑所基于的版本及新文本 | 可选。核对归属、权限与版本后返回新引用。省略时工具集合不包含 `artifact_save` |
 
 `createArtifactTools()` 只构造工具。执行 `artifact_create`、`artifact_read` 或 `artifact_save` 时，每次各处理一个文件。多份文件各传一次调用，直接使用注册器时可用 `registry.executeAll()` 顺序执行。任何一项失败时，本批返回错误，之前已保存的文件仍在。接入 Tools Runner 时，每份新文件单独提交一条任务，让它取得独立的执行 ID 和产物 ID。一次 `data_analyze` 则为同一份数据生成固定的两种结果。
+
+<a id="artifact-byte-limit"></a>
+
+`maxArtifactBytes` 是产物正文的 UTF-8 字节上限，默认为 1,048,576 字节。应用可传入自己的正整数值，如 `tools.createArtifactTools({ context, files, maxArtifactBytes: 256 * 1024 })`，创建、编辑和读取使用同一个上限。Tools Runner 的单条结果另受 512 KiB JSON 预算限制。读到 `nextCursor` 时，用同一 `id` 和 `cursor: nextCursor` 继续读取，依次拼接 `content`，直到返回值省略 `nextCursor`。每次调用重新授权。期间文件内容或版本改变时，重新从第一页读取。
 
 <a id="artifact-setup"></a>
 

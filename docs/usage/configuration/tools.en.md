@@ -14,6 +14,8 @@ The application passes options directly to Tools factories. Use `tools.define()`
 
 Applications can read tool options from their own configuration and refresh factories through their normal loading flow. The host configures durable execution, database access, and container mappings.
 
+Set a positive integer `maxArtifactBytes` on the artifact factory to bound UTF-8 bodies when creating, editing, and reading. It defaults to 1,048,576 bytes. [Configuration and paginated reads](../function/tools.en.md#artifact-byte-limit)
+
 <a id="local-service"></a>
 <a id="job-environments"></a>
 
