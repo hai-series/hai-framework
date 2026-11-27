@@ -718,6 +718,8 @@ Production requires shared Redis or Redis Cluster. Redis failures are returned t
 
 Cache operations return `HaiResult<T>`. Check `success` before reading `data` or `error`. When logging a failure, keep the error code and trace ID.
 
+Redis connection, operation, and cleanup failures return localized messages. When the driver error is recognized, `error.cause` provides the available `causeName` and `causeCode` fields. Use `error.traceId` to correlate logs when request context is available. Framework errors and diagnostic logs filter out raw driver messages, command arguments, and exception chains.
+
 | `HaiCacheError` entry | Code | When it occurs |
 | --- | --- | --- |
 | `CONNECTION_FAILED` | `hai:cache:001` | Connection or resource cleanup failed |

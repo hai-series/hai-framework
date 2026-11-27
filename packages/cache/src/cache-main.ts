@@ -15,7 +15,7 @@ import { CacheConfigSchema } from './cache-config.js'
 import { cacheM } from './cache-i18n.js'
 import { HaiCacheError } from './cache-types.js'
 import { createMemoryProvider } from './providers/cache-provider-memory.js'
-import { createRedisProvider } from './providers/cache-provider-redis.js'
+import { createRedisProvider, redisErrorDiagnostics } from './providers/cache-provider-redis.js'
 
 const logger = core.logger.child({ module: 'cache', scope: 'main' })
 
@@ -50,14 +50,26 @@ async function closeOwnedProvider(): Promise<HaiResult<void>> {
     pendingProvider = currentCache.provider
     currentCache = null
   }
-  if (!pendingProvider)
+  const provider = pendingProvider
+  if (!provider)
     return core.ok(undefined)
   try {
-    await pendingProvider.close()
+    await provider.close()
     pendingProvider = null
     return core.ok(undefined)
   }
   catch (error) {
+    if (provider.name === 'redis') {
+      const { traceId, ...cause } = redisErrorDiagnostics(error)
+      logger.error('Provider cleanup failed; retaining resource for retry', { ...cause, traceId, errorCode: HaiCacheError.CONNECTION_FAILED.code })
+      return core.err({
+        ...HaiCacheError.CONNECTION_FAILED,
+        message: cacheM('cache_redisCleanupFailed'),
+        cause,
+        traceId,
+        ext: { cleanupPending: true },
+      })
+    }
     logger.error('Provider cleanup failed; retaining resource for retry', { error })
     return core.err({
       ...HaiCacheError.CONNECTION_FAILED,
@@ -263,6 +275,16 @@ export const cache: CacheFunctions = {
         return core.ok(undefined)
       }
       catch (error) {
+        if (parsed.type === 'redis') {
+          const { traceId, ...cause } = redisErrorDiagnostics(error)
+          logger.error('Cache module initialization failed', { ...cause, traceId, errorCode: HaiCacheError.CONNECTION_FAILED.code })
+          return await failInitialization(core.err({
+            ...HaiCacheError.CONNECTION_FAILED,
+            message: cacheM('cache_redisConnectionFailed'),
+            cause,
+            traceId,
+          }))
+        }
         logger.error('Cache module initialization failed', { error })
         return await failInitialization(core.err(
           HaiCacheError.CONNECTION_FAILED,

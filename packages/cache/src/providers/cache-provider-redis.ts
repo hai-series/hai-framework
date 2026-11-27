@@ -5,7 +5,7 @@
  * @module cache-provider-redis
  */
 
-import type { HaiResult } from '@h-ai/core'
+import type { HaiError, HaiErrorDef, HaiResult } from '@h-ai/core'
 import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis'
 import type { CacheConfig } from '../cache-config.js'
 import type { CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
@@ -22,24 +22,106 @@ import { CacheSerializationError, serializeCacheValue } from './cache-value.js'
 
 const logger = core.logger.child({ module: 'cache', scope: 'redis' })
 
-/** 连接错误只记录诊断代码，避免 Redis 响应或连接参数进入日志。 */
-function redisErrorDiagnostics(error: unknown) {
+const diagnosticNames = new Set([
+  'Error',
+  'TypeError',
+  'RangeError',
+  'ReplyError',
+  'AbortError',
+  'ParserError',
+  'AggregateError',
+  'ClusterAllFailedError',
+  'MaxRetriesPerRequestError',
+  'CacheSerializationError',
+  'RedisScanError',
+])
+
+const diagnosticCodes = new Set([
+  'ASK',
+  'BUSY',
+  'CLUSTERDOWN',
+  'CROSSSLOT',
+  'ERR',
+  'EXECABORT',
+  'LOADING',
+  'MASTERDOWN',
+  'MISCONF',
+  'MOVED',
+  'NOAUTH',
+  'NOPERM',
+  'NOREPLICAS',
+  'NOSCRIPT',
+  'OOM',
+  'READONLY',
+  'TRYAGAIN',
+  'WRONGPASS',
+  'WRONGTYPE',
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'EPIPE',
+  'ETIMEDOUT',
+  'CERT_HAS_EXPIRED',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+])
+
+/**
+ * 把 Redis 异常投影到允许的诊断名和诊断码，供错误链与日志共用。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const diagnostic = redisErrorDiagnostics(new Error('LOADING'))
+ * void diagnostic.causeCode
+ * ```
+ */
+export function redisErrorDiagnostics(error: unknown): { causeName?: string, causeCode?: string, traceId?: string } {
   const cause = error && typeof error === 'object' && 'lastNodeError' in error
     ? error.lastNodeError ?? error
     : error
   const code = cause && typeof cause === 'object' && 'code' in cause
     ? cause.code
     : undefined
-  return {
-    causeName: cause instanceof Error
-      ? cause.name
-      : undefined,
-    causeCode: typeof code === 'string' && /^[A-Z0-9_]{1,64}$/.test(code)
-      ? code
+  const prefix = cause instanceof Error
+    ? /^[A-Z][A-Z0-9_]{0,63}\b/.exec(cause.message)?.[0]
+    : undefined
+  const name = cause instanceof CacheSerializationError
+    ? 'CacheSerializationError'
+    : cause instanceof RedisScanError
+      ? 'RedisScanError'
       : cause instanceof Error
-        ? /^(NOAUTH|WRONGPASS|NOPERM|LOADING|CLUSTERDOWN)\b/.exec(cause.message)?.[1]
-        : undefined,
-  }
+        ? cause.name
+        : undefined
+  const causeName = name !== undefined && diagnosticNames.has(name)
+    ? name
+    : undefined
+  const causeCode = [code, prefix].find((entry): entry is string => typeof entry === 'string' && diagnosticCodes.has(entry))
+  const context = core.context.get()
+  const candidate = context.traceId ?? context.requestId
+  const traceId = candidate && /^[\w.:-]{1,128}$/.test(candidate)
+    ? candidate
+    : undefined
+  return { causeName, causeCode, traceId }
+}
+
+function redisFailure(
+  definition: HaiErrorDef,
+  message: string,
+  { traceId, ...cause }: ReturnType<typeof redisErrorDiagnostics>,
+  ext?: HaiError['ext'],
+): HaiResult<never> {
+  return core.err({
+    ...definition,
+    message,
+    cause,
+    traceId,
+    ext,
+  })
 }
 
 /** Redis 用 inf/-inf 表示有序集合的无穷分数。 */
@@ -275,7 +357,7 @@ export function createRedisProvider(): CacheProvider {
    *
    * 统一处理未初始化检查和异常捕获：
    * - client 为 null → NOT_INITIALIZED
-   * - 操作抛异常 → OPERATION_FAILED
+   * - 操作失败时仅返回允许的诊断字段，保留可识别的领域错误码。
    *
    * @param operation - 实际的 Redis 命令执行函数
    * @returns HaiResult 包装的操作结果
@@ -292,26 +374,17 @@ export function createRedisProvider(): CacheProvider {
       return core.ok(result)
     }
     catch (error) {
+      const diagnostics = redisErrorDiagnostics(error)
       if (error instanceof CacheSerializationError)
-        return core.err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_serializationFailed'), error)
+        return redisFailure(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_serializationFailed'), diagnostics)
       if (error instanceof RedisScanError) {
         return error.reason === 'topology'
-          ? core.err(HaiCacheError.SCAN_TOPOLOGY_CHANGED, cacheM('cache_scanTopologyChanged'), error)
-          : core.err(HaiCacheError.INVALID_SCAN, cacheM('cache_invalidScan'), error)
+          ? redisFailure(HaiCacheError.SCAN_TOPOLOGY_CHANGED, cacheM('cache_scanTopologyChanged'), diagnostics)
+          : redisFailure(HaiCacheError.INVALID_SCAN, cacheM('cache_invalidScan'), diagnostics)
       }
-      if (error instanceof Error && error.message.startsWith('CROSSSLOT'))
-        return core.err(HaiCacheError.CROSS_SLOT, cacheM('cache_crossSlot'), error)
-      return core.err(
-        HaiCacheError.OPERATION_FAILED,
-        cacheM('cache_operationFailed', {
-          params: {
-            error: error instanceof Error
-              ? error.message
-              : String(error),
-          },
-        }),
-        error,
-      )
+      if (diagnostics.causeCode === 'CROSSSLOT')
+        return redisFailure(HaiCacheError.CROSS_SLOT, cacheM('cache_crossSlot'), diagnostics)
+      return redisFailure(HaiCacheError.OPERATION_FAILED, cacheM('cache_redisOperationFailed'), diagnostics)
     }
   }
 
@@ -1074,42 +1147,34 @@ export function createRedisProvider(): CacheProvider {
         return core.ok(undefined)
       }
       catch (error) {
-        const diagnostics = redisErrorDiagnostics(error)
+        const failure = redisErrorDiagnostics(error)
+        const diagnostics = failure.causeCode || connectionError === undefined
+          ? failure
+          : redisErrorDiagnostics(connectionError)
         logger.error('Redis connection failed', {
           errorCode: HaiCacheError.CONNECTION_FAILED.code,
           status: client?.status,
-          ...(diagnostics.causeCode || connectionError === undefined
-            ? diagnostics
-            : redisErrorDiagnostics(connectionError)),
+          ...diagnostics,
         })
         ready = false
-        let cleanupError: unknown
+        let cleanupExt: HaiError['ext']
         try {
           // 连接/健康检查失败时不能向离线队列发送 QUIT；直接停止重连并释放套接字。
           client?.disconnect()
           client = null
         }
-        catch (failure) {
-          cleanupError = failure
+        catch (error) {
+          cleanupExt = {
+            cleanupPending: true,
+            cleanupError: redisErrorDiagnostics(error),
+          }
         }
-        const result = core.err(
+        return redisFailure(
           HaiCacheError.CONNECTION_FAILED,
-          cacheM('cache_redisConnectionFailed', {
-            params: {
-              error: error instanceof Error
-                ? error.message
-                : String(error),
-            },
-          }),
-          error,
+          cacheM('cache_redisConnectionFailed'),
+          diagnostics,
+          cleanupExt,
         )
-        if (cleanupError !== undefined && !result.success) {
-          return core.err({
-            ...result.error,
-            ext: { cleanupPending: true, cleanupError },
-          })
-        }
-        return result
       }
     },
 

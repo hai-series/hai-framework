@@ -726,6 +726,8 @@ Redis 原子处理获取、重入、续期和释放。Memory 只在本进程内�
 
 收到 `HaiResult<T>` 时先检查 `result.success`。成功时读取 `result.data`，失败时查看 `result.error`。记录故障时保留错误码和追踪编号，便于从日志找到对应请求。
 
+Redis 连接、操作和清理失败返回本地化消息。识别到驱动错误时，`error.cause` 提供 `causeName`、`causeCode` 中可用的诊断字段。有请求上下文时可通过 `error.traceId` 关联日志。框架错误和诊断日志会过滤驱动原始消息、命令参数和异常链。
+
 缓存读写和锁操作返回 `HaiResult<T>`，配置和就绪状态等属性可直接读取。常用错误码如下。
 
 | 错误码                                 | code            | 说明             |
