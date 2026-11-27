@@ -92,7 +92,7 @@ These fields go inside a `providers[]` entry with `type: api`.
 | `queue.retryDelayMs` | Integer, 1000–86400000 milliseconds | `60000` | Wait after the first retryable failure |
 | `queue.maxRetryDelayMs` | Integer, 1000–86400000 milliseconds | `3600000` | Cap on doubling delays. Must be at least `retryDelayMs` |
 
-To try sending immediately during quiet hours, pass `ignoreDnd: true` to `reach.send()`. It applies to that send. IAM does this for its built-in verification codes, password resets and initial password setup invitations. See [the quiet-hours scenario](../function/reach.en.md#reach-quiet-hours).
+To try sending immediately during quiet hours, pass `ignoreDnd: true` to `reach.send()`. Pass `sensitive: true` to keep delivery metadata only in send history. Both options apply to that send. IAM sets both for its built-in verification codes, password resets and initial password setup invitations. See [the quiet-hours scenario](../function/reach.en.md#reach-quiet-hours).
 
 ## Configuration examples
 

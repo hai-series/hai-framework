@@ -70,7 +70,7 @@ Reach は `@h-ai/reldb` で接続したアプリのデータベースに **2 つ
 
 #### 受け付けた確認コードの SMS を履歴へ記録する
 
-ユーザーがコードを要求したら、[SMS の例](../function/reach.ja.md#reach-sms-code)のように `reach.send()` を呼びます。`otp_sms` の `{code}` に発行したコードが入り、`ignoreDnd: true` で今回の送信を夜間にも試みます。発行と照合はアプリまたは [IAM](iam.ja.md) が担当します。
+ユーザーがコードを要求したら、[SMS の例](../function/reach.ja.md#reach-sms-code)のように `reach.send()` を呼びます。`otp_sms` の `{code}` に発行したコードが入り、`ignoreDnd: true` で今回の送信を夜間にも試み、`sensitive: true` で配信メタデータだけを保存します。発行と照合はアプリまたは [IAM](iam.ja.md) が担当します。
 
 SMS チャネルが受け付け、`BizId` に `aliyun-42` を返したときの `data` は `{"success":true,"messageId":"aliyun-42"}` です。データベースがあれば Reach は非同期で一行の書き込みを試みます。以下は書き込み後の抜粋です。
 
@@ -79,19 +79,19 @@ SMS チャネルが受け付け、`BizId` に `aliyun-42` を返したときの 
   "id": 41,
   "queue_id": null,
   "provider": "sms",
-  "to_addr": "13900000000",
-  "body": "Your verification code is 123456.",
+  "to_addr": "",
+  "body": null,
   "template": "otp_sms",
-  "vars_json": "{\"code\":\"123456\"}",
+  "vars_json": null,
   "status": "sent",
   "message_id": "aliyun-42"
 }
 ```
 
-SMS チャネルと `message_id` で照会すると、宛先と送信内容が分かります。`body` は置換後の本文、`vars_json` はテンプレートに渡したコードです。
+チャネルと `message_id` で受理記録を確認します。機密通知の新しい履歴では `to_addr` は空文字、件名、本文、変数、チャネル固有の追加項目は null です。機密情報を含む可能性のある旧履歴とバックアップは既存の保存方針に従って扱います。
 
 ```sql
-SELECT to_addr, body, vars_json
+SELECT template, status, message_id, created_at
 FROM hai_reach_send_log
 WHERE provider = 'sms' AND template = 'otp_sms' AND message_id = 'aliyun-42';
 ```

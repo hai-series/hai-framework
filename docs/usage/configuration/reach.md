@@ -92,7 +92,7 @@
 | `queue.retryDelayMs` | 整数，1000–86400000 毫秒 | `60000` | 第一次可重试失败后等多久 |
 | `queue.maxRetryDelayMs` | 整数，1000–86400000 毫秒 | `3600000` | 等待时长翻倍时的上限，须不小于 `retryDelayMs` |
 
-验证码等需要立即尝试发送的消息可传 `ignoreDnd: true`。这项选择只作用于本次发送。IAM 通过 Reach 发送内置验证码、密码重置和初始设密邀请时会自动开启。见[夜间通知示例](../function/reach.md#reach-quiet-hours)。
+验证码等需要立即尝试发送的消息可传 `ignoreDnd: true`，并用 `sensitive: true` 让发送历史只保存投递元数据。两个选项均只作用于本次发送。IAM 通过 Reach 发送内置验证码、密码重置和初始设密邀请时会自动设置这两个选项。见[夜间通知示例](../function/reach.md#reach-quiet-hours)。
 
 ## 配置示例
 

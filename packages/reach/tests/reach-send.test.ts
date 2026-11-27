@@ -364,6 +364,34 @@ describe('reach.send (DND)', { concurrent: false }, () => {
     }
   })
 
+  it('免打扰时拒绝将敏感通知写入持久队列', async () => {
+    expect(await reach.init({
+      providers: [
+        { name: 'email', type: 'console' },
+      ],
+      dnd: {
+        enabled: true,
+        strategy: 'delay',
+        start: '00:00',
+        end: '23:59',
+      },
+    })).toMatchObject({ success: true })
+
+    expect(await reach.send({
+      provider: 'email',
+      to: 'user@example.invalid',
+      body: 'Private delivery fixture',
+      sensitive: true,
+    })).toMatchObject({
+      success: false,
+      error: { code: HaiReachError.DND_BLOCKED.code },
+    })
+    expect(await reldb.sql.query('SELECT status FROM hai_reach_send_log')).toEqual({
+      success: true,
+      data: [],
+    })
+  })
+
   it.each(['delay', 'discard'] as const)('免打扰策略为 %s 时，可以只对本次发送跳过免打扰', async (strategy) => {
     vi.setSystemTime(new Date('2026-01-01T23:10:00'))
     expect(await reach.init({

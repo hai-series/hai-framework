@@ -234,6 +234,7 @@ await reach.send({
 | `vars`     | `Record<string, string>`  | —    | 模板变量                            |
 | `extra`    | `Record<string, unknown>` | —    | Provider 扩展参数（如短信模板编码） |
 | `ignoreDnd` | `boolean` | — | 默认为 `false`。设为 `true` 时跳过本次免打扰并尝试立即发送 |
+| `sensitive` | `boolean` | — | 默认为 `false`。设为 `true` 时只保存投递元数据，免打扰拦截时返回 `DND_BLOCKED` |
 | `deferPolicy` | `'queue' \| 'reject'` | — | 普通通知默认 `queue`。已有业务队列时用 `reject` 接收 `DND_BLOCKED`，由应用等待 |
 
 ### ReachTemplate（模板绑定 Provider）
@@ -266,7 +267,7 @@ await reach.send({
 
 启用 delay 后，只有数据库确认插入一条 pending 记录才返回 `deferred: true` 和 `queueId`。缺库、断连、插入失败返回失败 HaiResult，不能向用户报告已入队。`queueId` 对应 `hai_reach_send_log.queue_id`，同一行的 `status` 为 pending / processing / sending / unknown / sent / discarded / dead。节点重启后连接同一数据库、配置同名 Provider，可在 DND 时段外恢复投递。即时发送后的普通日志仍为可选，日志失败不会使已发送消息返回失败。
 
-验证码、重置链接等需要即时送出的消息可传 `ignoreDnd: true`。数据库已连接时，渠道受理后尝试保存普通发送历史。
+验证码、重置链接等需要即时送出的消息传 `ignoreDnd: true` 和 `sensitive: true`。数据库已连接时，渠道受理后只保存投递元数据，不保留接收地址、内容和模板变量。
 
 队列 `created_at` / `updated_at` / `locked_until` / `next_attempt_at` 均为 Unix 毫秒 `BIGINT`（SQLite 为 64 位 INTEGER）；仓库把 driver 的字符串/数字归一化为安全整数 number，并拒绝负数、小数和不安全整数。模板仓库的 TIMESTAMP 时间返回 Date。配置数据库后，初始化会准备发送日志表和队列索引。现有表缺少必要字段或未对 `queue_id` 建立唯一约束时，初始化失败。验收 PostgreSQL 或 MySQL 时，用目标数据库验证 Unix 毫秒字段和队列投递。
 
@@ -328,6 +329,7 @@ const result = await reach.send({
   template: 'sms_code',
   vars: { code, minutes },
   ignoreDnd: true,
+  sensitive: true,
 })
 if (!result.success)
   return result
@@ -372,7 +374,7 @@ if (!initializedIam.success)
   throw new Error(initializedIam.error.message)
 ```
 
-`approvedOtpTemplateCode` 对应阿里云审核通过的模板，其变量为 `code`。手机重置需配置 `password_reset_sms` 模板和审核编码。IAM 通过这套内置模板发验证码、密码重置或初始设密邀请时传 `ignoreDnd: true`。显式发送回调可覆盖内置行为。
+`approvedOtpTemplateCode` 对应阿里云审核通过的模板，其变量为 `code`。手机重置需配置 `password_reset_sms` 模板和审核编码。IAM 通过这套内置模板发验证码、密码重置或初始设密邀请时传 `ignoreDnd: true` 和 `sensitive: true`。显式发送回调可覆盖内置行为。
 
 ### 错误处理
 

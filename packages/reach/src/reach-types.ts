@@ -116,6 +116,8 @@ export interface ReachMessage {
   extra?: Record<string, unknown>
   /** 为 true 时，此次调用跳过免打扰并尝试立即发送。默认 false。 */
   ignoreDnd?: boolean
+  /** 敏感消息只记录投递元数据，遇到免打扰限制时拒绝持久排队。默认 false。 */
+  sensitive?: boolean
   /** 遇到免打扰时交给 Reach 队列，或返回 DND_BLOCKED 让已有业务 outbox 延后；默认 queue。 */
   deferPolicy?: 'queue' | 'reject'
 }

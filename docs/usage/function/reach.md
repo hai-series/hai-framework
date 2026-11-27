@@ -88,6 +88,7 @@ finally {
 | `subject / body` | `string` | 可省略 | 直接发送时的标题和正文。标题用于需要主题的渠道，例如邮件。 |
 | `extra` | `Record<string, unknown>` | 可省略 | 传渠道专有字段，例如短信模板编码或签名。 |
 | `ignoreDnd` | `boolean` | `false` | 设为 `true` 时，这一条消息跳过免打扰检查并尝试立即发送。 |
+| `sensitive` | `boolean` | `false` | 设为 `true` 时，历史只保留渠道、模板、状态、时间和投递编号。遇到免打扰直接返回 `DND_BLOCKED`，除非此次发送允许跳过免打扰。 |
 | `deferPolicy` | `'queue' \| 'reject'` | `queue` | 遇到免打扰时由谁安排普通通知。`queue` 让 Reach 按 `dnd.strategy` 决定排队或跳过。`reject` 返回 `DND_BLOCKED`，由已有待发送任务的应用安排下一次发送。 |
 
 <a id="reach-idempotency-key"></a>
@@ -153,11 +154,12 @@ function sendSmsCode(phone: string, code: string) {
     template: 'otp_sms',
     vars: { code },
     ignoreDnd: true,
+    sensitive: true,
   })
 }
 ```
 
-例如阿里云受理时返回 `BizId` 为 `aliyun-42`，调用结果如下。接入数据库时，Reach 会尝试把实际手机号、替换后的正文和变量写进发送历史。[短信发送记录示例](../data/reach.md#sms-code-record)
+例如阿里云受理时返回 `BizId` 为 `aliyun-42`，调用结果如下。接入数据库时，Reach 只尝试保存投递元数据，可用编号向渠道核对。[短信发送记录示例](../data/reach.md#sms-code-record)
 
 ```json
 {
@@ -183,6 +185,7 @@ function sendEmailCode(email: string, code: string) {
     template: 'otp_email',
     vars: { code },
     ignoreDnd: true,
+    sensitive: true,
   })
 }
 ```
@@ -229,7 +232,7 @@ function sendOrderNotice(orderId: string, deferPolicy: 'queue' | 'reject' = 'que
 | 过了今晚就不用发的提醒（`strategy: discard`） | 返回 `DND_BLOCKED`，直接跳过这次发送。 | 按业务规则结束本次提醒。 |
 | 应用自己管理待发送任务（`deferPolicy: reject`） | 返回 `DND_BLOCKED`，由应用保留自己的任务。 | 等时段结束后，由应用再次处理该任务。 |
 
-IAM 通过 Reach 发送内置验证码、密码重置和初始设密邀请时，都会传 `ignoreDnd: true`。使用自定义回调时，由应用决定何时发送。
+IAM 通过 Reach 发送内置验证码、密码重置和初始设密邀请时，都会传 `ignoreDnd: true` 和 `sensitive: true`，历史只保存投递元数据。使用自定义回调时，由应用决定何时发送。
 
 下面用 `delay` 的[订单通知配置](../configuration/reach.md#reach-example-warehouse)，在 23:10 调用前面的函数。
 

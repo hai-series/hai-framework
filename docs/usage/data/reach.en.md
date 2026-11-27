@@ -70,7 +70,7 @@ Use the [queue API](../function/reach.en.md#queue) to look up, reconcile, and re
 
 #### An accepted SMS verification code in send history
 
-After a user requests a sign-in code, the application calls `reach.send()` as in the [SMS verification example](../function/reach.en.md#reach-sms-code). The `otp_sms` template fills `{code}` with the issued code, and `ignoreDnd: true` lets this send proceed during quiet hours. The application or [IAM](iam.en.md) issues and verifies the code.
+After a user requests a sign-in code, the application calls `reach.send()` as in the [SMS verification example](../function/reach.en.md#reach-sms-code). The `otp_sms` template fills `{code}` with the issued code, and `ignoreDnd: true` lets this send proceed during quiet hours. Set `sensitive: true` to keep delivery metadata only. The application or [IAM](iam.en.md) issues and verifies the code.
 
 If the SMS channel accepts the send with `BizId` of `aliyun-42`, the result has `data` of `{"success":true,"messageId":"aliyun-42"}`. With a database connected, Reach attempts to write one row asynchronously. These are selected fields after the write succeeds.
 
@@ -79,19 +79,19 @@ If the SMS channel accepts the send with `BizId` of `aliyun-42`, the result has 
   "id": 41,
   "queue_id": null,
   "provider": "sms",
-  "to_addr": "13900000000",
-  "body": "Your verification code is 123456.",
+  "to_addr": "",
+  "body": null,
   "template": "otp_sms",
-  "vars_json": "{\"code\":\"123456\"}",
+  "vars_json": null,
   "status": "sent",
   "message_id": "aliyun-42"
 }
 ```
 
-Look up the row by SMS channel and `message_id` to see who received the request and what it contained. `body` holds the rendered text. `vars_json` holds the code passed to the template.
+Use the channel and `message_id` to check acceptance. New sensitive history uses an empty string for `to_addr` and null for the subject, body, variables, and provider extras. Apply your retention policy to older histories and backups that may contain sensitive content.
 
 ```sql
-SELECT to_addr, body, vars_json
+SELECT template, status, message_id, created_at
 FROM hai_reach_send_log
 WHERE provider = 'sms' AND template = 'otp_sms' AND message_id = 'aliyun-42';
 ```

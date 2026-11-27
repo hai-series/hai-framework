@@ -87,6 +87,7 @@ Run the remaining examples on the server. Pass the [Reach configuration](../conf
 | `subject / body` | `string` | Optional | Direct-send subject and body. The subject is used by channels such as email. |
 | `extra` | `Record<string, unknown>` | Optional | Provide provider-specific values, such as an SMS template code or signature. |
 | `ignoreDnd` | `boolean` | `false` | Set to `true` to try sending this message immediately during quiet hours. |
+| `sensitive` | `boolean` | `false` | Keep only the channel, template, status, time, and delivery ID in history. Quiet-hour restrictions return `DND_BLOCKED` unless the send is allowed to bypass them. |
 | `deferPolicy` | `'queue' \| 'reject'` | `queue` | Chooses who handles an ordinary notification during quiet hours. `queue` lets Reach follow `dnd.strategy`. `reject` returns `DND_BLOCKED` so the application can reschedule its own job. |
 
 <a id="reach-idempotency-key"></a>
@@ -152,11 +153,12 @@ function sendSmsCode(phone: string, code: string) {
     template: 'otp_sms',
     vars: { code },
     ignoreDnd: true,
+    sensitive: true,
   })
 }
 ```
 
-If Alibaba Cloud accepts the message with `BizId` of `aliyun-42`, the call returns the result below. With a database connected, Reach attempts to save the phone number, rendered body and variables in the send history. [Example SMS send record](../data/reach.en.md#sms-code-record)
+If Alibaba Cloud accepts the message with `BizId` of `aliyun-42`, the call returns the result below. With a database connected, Reach attempts to record delivery metadata only. Use the ID to check acceptance with the provider. [Example SMS send record](../data/reach.en.md#sms-code-record)
 
 ```json
 {
@@ -182,6 +184,7 @@ function sendEmailCode(email: string, code: string) {
     template: 'otp_email',
     vars: { code },
     ignoreDnd: true,
+    sensitive: true,
   })
 }
 ```
@@ -228,7 +231,7 @@ Quiet hours (DND) are when Reach holds or skips ordinary notifications, using th
 | Reminder that can be skipped (`strategy: discard`) | Returns `DND_BLOCKED` and skips this send. | End this reminder according to the application's rules. |
 | Application owns the background job (`deferPolicy: reject`) | Returns `DND_BLOCKED` and leaves job scheduling to the application. | Keep the job and process it after quiet hours. |
 
-IAM passes `ignoreDnd: true` when it sends built-in verification codes, password reset notifications or initial password setup invitations through Reach. With a custom callback, the application chooses when to send.
+IAM passes `ignoreDnd: true` and `sensitive: true` for built-in verification codes, password resets and initial password setup invitations. The history keeps delivery metadata only. With a custom callback, the application chooses when to send.
 
 Use the [queued order notification settings](../configuration/reach.en.md#reach-example-warehouse) and call the previous function at 23:10.
 

@@ -42,4 +42,4 @@ API 空 2xx 表示受理成功；非空 JSON 回执上限 64 KiB。redirect 默�
 
 IAM 通知使用 `otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` 标准模板；将已初始化的 `reach` 传入 `iam.init`。Console Provider 只记录元数据，不输出验证码/令牌，不代替实际邮件/短信发送。
 
-即时发送可传 `ignoreDnd: true`。IAM 的内置验证码、密码重置和初始设密邀请会自动传入。渠道受理后，连接数据库的 Reach 会尝试写一行发送历史，保存收件人、正文和变量。普通通知可用 `deferPolicy: 'reject'` 将免打扰等待交给调用方。
+即时发送可传 `ignoreDnd: true`。验证码、重置链接和设密邀请还应传 `sensitive: true`，历史只写投递元数据，遇到免打扰限制时直接返回 `DND_BLOCKED`。IAM 内置通知会自动传入这两个选项。普通通知可用 `deferPolicy: 'reject'` 将免打扰等待交给调用方。

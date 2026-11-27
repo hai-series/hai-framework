@@ -70,7 +70,7 @@ Reach 使用应用通过 `@h-ai/reldb` 连接的数据库，共有 **2 张表**�
 
 #### 短信验证码受理后写入发送历史
 
-用户申请登录验证码后，应用按[短信验证码示例](../function/reach.md#reach-sms-code)调用 `reach.send()`。`otp_sms` 模板会把 `{code}` 换成实际验证码，`ignoreDnd: true` 让本次发送跳过免打扰。验证码的签发和校验由应用或 [IAM](iam.md) 管理。
+用户申请登录验证码后，应用按[短信验证码示例](../function/reach.md#reach-sms-code)调用 `reach.send()`。`otp_sms` 模板会把 `{code}` 换成实际验证码，发送时用 `ignoreDnd: true` 跳过免打扰，并以 `sensitive: true` 仅保存投递元数据。验证码的签发和校验由应用或 [IAM](iam.md) 管理。
 
 短信渠道受理并返回 `BizId` 为 `aliyun-42` 时，调用结果的 `data` 是 `{"success":true,"messageId":"aliyun-42"}`。接入数据库时，Reach 会尝试异步写一行。下面是写入成功后的部分字段。
 
@@ -79,19 +79,19 @@ Reach 使用应用通过 `@h-ai/reldb` 连接的数据库，共有 **2 张表**�
   "id": 41,
   "queue_id": null,
   "provider": "sms",
-  "to_addr": "13900000000",
-  "body": "Your verification code is 123456.",
+  "to_addr": "",
+  "body": null,
   "template": "otp_sms",
-  "vars_json": "{\"code\":\"123456\"}",
+  "vars_json": null,
   "status": "sent",
   "message_id": "aliyun-42"
 }
 ```
 
-根据短信渠道和 `message_id` 查询这行即可看到发给谁、发了什么。`body` 是替换变量后的正文，`vars_json` 保存传给模板的验证码。
+使用渠道和 `message_id` 核对受理记录。新写入的敏感历史中，`to_addr` 保存空字符串，主题、正文、变量与渠道扩展字段均为空。升级前的历史及备份可能包含敏感内容，应按现有保留策略清理。
 
 ```sql
-SELECT to_addr, body, vars_json
+SELECT template, status, message_id, created_at
 FROM hai_reach_send_log
 WHERE provider = 'sms' AND template = 'otp_sms' AND message_id = 'aliyun-42';
 ```

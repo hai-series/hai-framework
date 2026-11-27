@@ -22,7 +22,7 @@ See the [configuration reference](../../docs/usage/configuration/reach.en.md) fo
 
 ## Features
 
-Pass `ignoreDnd: true` to `reach.send()` to try sending a code immediately. The send history records the recipient and content when the database write succeeds. [Sending examples](../../docs/usage/function/reach.en.md#reach-sms-code) · [SMS history record](../../docs/usage/data/reach.en.md#sms-code-record)
+Pass `ignoreDnd: true` to `reach.send()` to try sending a code immediately. Pass `sensitive: true` to keep only delivery metadata in history. [Sending examples](../../docs/usage/function/reach.en.md#reach-sms-code) · [SMS history record](../../docs/usage/data/reach.en.md#sms-code-record)
 
 [Browse the API list](../../docs/usage/function/reach.en.md#api-reference) for entry points, inputs, results and examples.
 

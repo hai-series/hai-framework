@@ -89,6 +89,7 @@ finally {
 | `subject / body` | `string` | 任意 | 直接送信の件名と本文。件名はメールなどで使用。 |
 | `extra` | `Record<string, unknown>` | 任意 | SMS テンプレートコードや署名など事業者固有の値を指定。 |
 | `ignoreDnd` | `boolean` | `false` | `true` にすると、通知を控える時間帯でもこの通知の即時送信を試みます。 |
+| `sensitive` | `boolean` | `false` | チャネル、テンプレート、状態、時刻、配信 ID のみを履歴に残します。通知を控える時間帯は今回の送信で制限を解除しない限り `DND_BLOCKED` を返します。 |
 | `deferPolicy` | `'queue' \| 'reject'` | `queue` | 通知を控える時間帯の通常通知を誰が処理するか選びます。`queue` は Reach の `dnd.strategy` に従います。`reject` は `DND_BLOCKED` を返し、アプリが自分のタスクを延期できます。 |
 
 <a id="reach-idempotency-key"></a>
@@ -154,11 +155,12 @@ function sendSmsCode(phone: string, code: string) {
     template: 'otp_sms',
     vars: { code },
     ignoreDnd: true,
+    sensitive: true,
   })
 }
 ```
 
-Alibaba Cloud が `BizId` として `aliyun-42` を返す例です。データベースに接続している場合、Reach は電話番号、置換済み本文、変数を送信履歴へ書き込もうとします。[SMS の送信記録例](../data/reach.ja.md#sms-code-record)
+Alibaba Cloud が `BizId` として `aliyun-42` を返す例です。データベースに接続している場合、Reach は配信メタデータだけを書き込みます。送信 ID でチャネル側の受理状況を確認できます。[SMS の送信記録例](../data/reach.ja.md#sms-code-record)
 
 ```json
 {
@@ -184,6 +186,7 @@ function sendEmailCode(email: string, code: string) {
     template: 'otp_email',
     vars: { code },
     ignoreDnd: true,
+    sensitive: true,
   })
 }
 ```
@@ -230,7 +233,7 @@ function sendOrderNotice(orderId: string, deferPolicy: 'queue' | 'reject' = 'que
 | 後から送る必要のないリマインダー（`strategy: discard`） | `DND_BLOCKED` を返して今回の送信を見送ります。 | アプリのルールに従って今回のリマインダーを終了します。 |
 | アプリが送信タスクを管理する通知（`deferPolicy: reject`） | `DND_BLOCKED` を返し、タスク管理はアプリに任せます。 | 自分のタスクを保持し、時間帯が終わってから処理します。 |
 
-IAM が Reach で組み込みの確認コード、パスワード再設定、初期パスワード設定の招待を送る場合は `ignoreDnd: true` を渡します。独自のコールバックを使う場合はアプリが送信時期を決めます。
+IAM が組み込みの確認コード、パスワード再設定、初期設定の招待を送る場合は `ignoreDnd: true` と `sensitive: true` を渡します。履歴に保存するのは配信メタデータだけです。独自のコールバックを使う場合はアプリが送信時期を決めます。
 
 [注文通知を翌朝送る設定](../configuration/reach.ja.md#reach-example-warehouse)を使って、23:10 に先ほどの関数を呼び出します。
 

@@ -177,18 +177,23 @@ async function saveSendRecord(
   queueId?: string,
   queueConfig?: ReachQueueConfig,
 ): Promise<HaiResult<void>> {
+  const metadataOnly = message.sensitive === true
   try {
     const inserted = await repo.create({
       queueId: queueId ?? null,
       provider,
-      toAddr: message.to,
-      subject: message.subject ?? null,
-      body: message.body ?? null,
+      toAddr: metadataOnly ? '' : message.to,
+      subject: metadataOnly
+        ? null
+        : message.subject ?? null,
+      body: metadataOnly
+        ? null
+        : message.body ?? null,
       template: message.template ?? null,
-      varsJson: message.vars
+      varsJson: !metadataOnly && message.vars
         ? JSON.stringify(message.vars)
         : null,
-      extraJson: message.extra
+      extraJson: !metadataOnly && message.extra
         ? JSON.stringify(message.extra)
         : null,
       status,
@@ -457,7 +462,7 @@ export async function executeSend(
   }
 
   if (preprocessed.data.ignoreDnd !== true && isDndBlocked(dndConfig)) {
-    if (message.deferPolicy === 'reject')
+    if (message.sensitive === true || message.deferPolicy === 'reject')
       return core.err(HaiReachError.DND_BLOCKED, reachM('reach_dndBlocked'))
     const strategy = dndConfig?.strategy ?? 'discard'
 
